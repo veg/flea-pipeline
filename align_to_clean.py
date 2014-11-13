@@ -45,24 +45,28 @@ def make_db(infile, dbfile):
 
 def usearch_global(readfile, dbfile, pairfile):
     kwargs = dict(readfile=readfile, dbfile=dbfile, pairfile=pairfile)
-    cmd = "usearch -usearch_global {readfile} -db {dbfile} -id 0.8 -fastapairs {pairfile} -strand both"
+    cmd = ("usearch -usearch_global {readfile} -db {dbfile} -id 0.8"
+           "-userout {pairfile} -userfields query+target -strand both")
+    cmd = cmd.format(**kwargs)
     subprocess.check_call(shlex.split(cmd))
 
 
 def match_reads(clean_filename, dirty_filename):
     """For each dirty read, find the best clean read.
+
+    Uses usearch to build a database of clean reads and run global
+    alignment.
     
     Returns: list of (dirty id, clean id) tuples.
-    
+
     """
     tmpname = uuid.uuid4()
     dbfile = "/tmp/{}.udb".format(tmpname)
     pairfile = "/tmp/{}.fasta".format(tmpname)
     make_db(clean_filename, dbfile)
     usearch_global(dirty_filename, dbfile, pairfile)
-    pair_handle = open(pairfile, "rU")
-    pair_records = SeqIO.parse(pair_handle, "fasta")
-    result = list(a.id, b.id for a, b in grouper(pair_records, 2))
+    with open(pairfile) as f:
+        result = list(line.split("\t") for line in f.readlines())
     os.rm(dbfile)
     os.rm(pairfile)
     return result
