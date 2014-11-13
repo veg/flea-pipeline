@@ -26,4 +26,7 @@ class TestBacktranslate(unittest.TestCase):
 
     def test_missing_arg(self):
         protein = SeqRecord(Seq("MK-V", alphabet=Gapped(IUPAC.protein)))
+        dna = SeqRecord(Seq("ATGAAAGTG", alphabet=IUPAC.unambiguous_dna))
         self.assertRaises(MissingRecord, back_translate_gapped, protein, None)
+        self.assertRaises(MissingRecord, back_translate_gapped, None, dna)
+        self.assertRaises(MissingRecord, back_translate_gapped, None, None)
