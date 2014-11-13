@@ -7,6 +7,7 @@ from Bio.Alphabet import IUPAC
 from Bio.Alphabet import Gapped
 
 from backtranslate import back_translate_gapped
+from backtranslate import MissingRecord
 
 
 class TestBacktranslate(unittest.TestCase):
@@ -22,3 +23,7 @@ class TestBacktranslate(unittest.TestCase):
         expected = SeqRecord(Seq("ATGAAA---GTG", alphabet=Gapped(IUPAC.unambiguous_dna)))
         result = back_translate_gapped(protein, dna)
         self.compare_seqrecords(expected, result)
+
+    def test_missing_arg(self):
+        protein = SeqRecord(Seq("MK-V", alphabet=Gapped(IUPAC.protein)))
+        self.assertRaises(MissingRecord, back_translate_gapped, protein, None)
