@@ -9,13 +9,22 @@ from Bio.Alphabet import Gapped
 def back_translate_gapped(protein, dna):
     """Insert gaps from `protein` into ungapped back-translated `dna`.
 
-    >>> back_translate_gapped("MK-V", "ATGAAAGTG")
-    "ATGAAA---GTG"
+    Params
+    ------
+    protein: SeqRecord
+        Protein, with gaps, to be back-translated
+    dna: SeqRecord
+        DNA, without gaps, that translates to ungapped `protein`
+
+    Returns: SeqRecord
 
     """
     gap_char = protein.seq.alphabet.gap_char
-    gap_codon = dna.seq.alphabet.gap_char * 3
-    dna_str = str(dna.seq.ungap())
+    gap_codon = Gapped(dna.seq.alphabet).gap_char * 3
+    try:
+        dna_str = str(dna.seq.ungap())
+    except ValueError:
+        dna_str = str(dna.seq)
     codons = []
     for a in protein.seq:
         if a == gap_char:
@@ -24,7 +33,7 @@ def back_translate_gapped(protein, dna):
             codons.append(dna_str[:3])
             dna_str = dna_str[3:]
     result = dna[:]
-    result.seq = Seq("".join(codons), alphabet=dna.seq.alphabet)
+    result.seq = Seq("".join(codons), alphabet=Gapped(dna.seq.alphabet))
     return result
 
 
