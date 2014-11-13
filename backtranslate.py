@@ -18,7 +18,6 @@ from itertools import zip_longest
 from warnings import warn
 
 from docopt import docopt
-from docopt import DocoptExit
 
 from Bio import SeqIO
 from Bio.Seq import Seq
