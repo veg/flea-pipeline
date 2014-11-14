@@ -30,4 +30,7 @@ if __name__ == "__main__":
     handle = open(infile, "rU")
     records = SeqIO.parse(handle, "fasta", alphabet=Gapped(IUPAC.unambiguous_dna))
     results = (ungap(r) for r in records)
+    # need to have length multiple of 3, for codon alignment downstream
+    # TODO: warn if any have wrong length.
+    results = (r for r in records if divmod(len(r), 3)[1] == 0)
     SeqIO.write(results, sys.stdout, "fasta")
