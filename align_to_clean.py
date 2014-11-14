@@ -48,7 +48,7 @@ def usearch_global(readfile, dbfile, pairfile):
     """Run usearch, outputting sequence ids for matches."""
     kwargs = dict(readfile=readfile, dbfile=dbfile, pairfile=pairfile)
     cmd = ("usearch -usearch_global {readfile} -db {dbfile} -id 0.8"
-           "-userout {pairfile} -userfields query+target -strand both")
+           " -userout {pairfile} -userfields query+target -strand both")
     cmd = cmd.format(**kwargs)
     subprocess.check_call(shlex.split(cmd))
 
@@ -67,17 +67,17 @@ def match_reads(clean_filename, dirty_filename, outdir):
     make_db(clean_filename, dbfile)
     usearch_global(dirty_filename, dbfile, pairfile)
     with open(pairfile) as f:
-        result = list(line.split("\t") for line in f.readlines())
+        result = list(line.strip().split("\t") for line in f.readlines())
     return result
 
 
 def read_fasta(filename):
     with open(filename, "rU") as handle:
-        return list(SeqIO.parse(translated_handle, "fasta"))
+        return list(SeqIO.parse(handle, "fasta"))
 
 
 def write_fasta(records, filename):
-    with open(filename, "wU") as handle:
+    with open(filename, "w") as handle:
         SeqIO.write(records, handle, "fasta")
 
 def make_record_dict(*records):
@@ -101,10 +101,10 @@ def align_to_clean(clean_record, dirty_records, outdir):
     write_fasta(records, infile)
 
     cmd = "bealign {} {}".format(infile, bamfile)
-    subprocess.call_check(shlex.split(cmd))
+    subprocess.check_call(shlex.split(cmd))
 
     cmd = "bam2msa {} {}".format(bamfile, outfile)
-    subprocess.call_check(shlex.split(cmd))
+    subprocess.check_call(shlex.split(cmd))
     return read_fasta(outfile)
 
 
@@ -115,17 +115,17 @@ def align_all(clean_filename, dirty_filename, pairs, outdir):
     runs BeAlign.
 
     """
-    clean_dict = defaultdict(list)
+    clean_id_to_dirty_ids = defaultdict(list)
     for dirty, clean in pairs:
-        clean_dict[clean].append(dirty)
+        clean_id_to_dirty_ids[clean].append(dirty)
     clean_records = read_fasta(clean_filename)
     dirty_records = read_fasta(dirty_filename)
     record_dict = make_record_dict(clean_records, dirty_records)
 
     result = []
-    for clean_id, dirty_ids in clean_dict.items():
+    for clean_id, dirty_ids in clean_id_to_dirty_ids.items():
         to_align = list(record_dict[i] for i in dirty_ids)
-        result.append(align_to_clean(clean_dict[clean_id], to_align))
+        result.append(align_to_clean(record_dict[clean_id], to_align, outdir))
     return result
 
 
