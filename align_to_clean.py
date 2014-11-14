@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Aligns each read to its best-matched clean read.
+Aligns each read to its best-matched clean read. Prints MSA to STDOUT.
 
 Dependencies:
   - usearch
@@ -20,6 +20,7 @@ import shlex
 import uuid
 import os
 from collections import defaultdict
+import sys
 
 from docopt import docopt
 
@@ -75,6 +76,10 @@ def read_fasta(filename):
         return list(SeqIO.parse(translated_handle, "fasta"))
 
 
+def write_fasta(records, filename):
+    with open(filename, "wU") as handle:
+        SeqIO.write(records, handle, "fasta")
+
 def make_record_dict(*records):
     result = dict()
     for a in records:
@@ -83,12 +88,24 @@ def make_record_dict(*records):
     return result
 
 
-def align_to_clean(clean_record, dirty_records):
-    """
-    Write records to fasta and run BeAlign.
+def align_to_clean(clean_record, dirty_records, outdir):
+    """Write records and run BeAlign. Convert result to FASTA and return list of records."""
+    infile = "bealign_input_{}.fasta".format(clean_record.id)
+    bamfile = "bealign_output_{}.bam".format(clean_record.id)
+    outfile = "bealign_output_{}.fasta".format(clean_record.id)
+    infile = os.path.join(outdir, infile)
+    bamfile = os.path.join(outdir, bamfile)
+    outfile = os.path.join(outdir, outfile)
+    records = [clean_record]
+    records.extend(dirty_records)
+    write_fasta(records, infile)
 
-    """
-    pass
+    cmd = "bealign {} {}".format(infile, bamfile)
+    subprocess.call_check(shlex.split(cmd))
+
+    cmd = "bam2msa {} {}".format(bamfile, outfile)
+    subprocess.call_check(shlex.split(cmd))
+    return read_fasta(outfile)
 
 
 def align_all(clean_filename, dirty_filename, pairs, outdir):
@@ -105,9 +122,11 @@ def align_all(clean_filename, dirty_filename, pairs, outdir):
     dirty_records = read_fasta(dirty_filename)
     record_dict = make_record_dict(clean_records, dirty_records)
 
+    result = []
     for clean_id, dirty_ids in clean_dict.items():
         to_align = list(record_dict[i] for i in dirty_ids)
-        align_to_clean(clean_dict[clean_id], to_align)
+        result.append(align_to_clean(clean_dict[clean_id], to_align))
+    return result
 
 
 if __name__ == "__main__":
@@ -116,4 +135,5 @@ if __name__ == "__main__":
     dirty_filename = args["<dirty_fasta>"]
     outdir = "/tmp/align_{}".format(uuid.uuid4())
     pairs = match_reads(clean_filename, dirty_filename, outdir)
-    align_all(clean_filename, dirty_filename, pairs, outdir)
+    msa = align_all(clean_filename, dirty_filename, pairs, outdir)
+    SeqIO.write(msa, sys.stdout, "fasta")
