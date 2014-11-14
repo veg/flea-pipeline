@@ -120,12 +120,14 @@ def align_all(clean_filename, dirty_filename, pairs, outdir):
         clean_id_to_dirty_ids[clean].append(dirty)
     clean_records = read_fasta(clean_filename)
     dirty_records = read_fasta(dirty_filename)
-    record_dict = make_record_dict(clean_records, dirty_records)
+    clean_record_dict = make_record_dict(clean_records)
+    dirty_record_dict = make_record_dict(dirty_records)
 
     result = []
     for clean_id, dirty_ids in clean_id_to_dirty_ids.items():
-        to_align = list(record_dict[i] for i in dirty_ids)
-        result.append(align_to_clean(record_dict[clean_id], to_align, outdir))
+        target = clean_record_dict[clean_id]
+        to_align = list(dirty_record_dict[i] for i in dirty_ids)
+        result.append(align_to_clean(target, to_align, outdir))
     return result
 
 
