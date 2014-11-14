@@ -64,6 +64,8 @@ def match_reads(clean_filename, dirty_filename, outdir):
     """
     dbfile = os.path.join(outdir, "clean_database.udb")
     pairfile = os.path.join(outdir, "usearch_userout.tsv")
+
+    # FIXME: reuse database
     make_db(clean_filename, dbfile)
     usearch_global(dirty_filename, dbfile, pairfile)
     with open(pairfile) as f:
@@ -125,8 +127,10 @@ def align_all(clean_filename, dirty_filename, pairs, outdir):
 
     result = []
     for clean_id, dirty_ids in clean_id_to_dirty_ids.items():
+        assert len(dirty_ids) == len(set(dirty_ids))
         target = clean_record_dict[clean_id]
         to_align = list(dirty_record_dict[i] for i in dirty_ids)
+        assert divmod(len(target), 3)[1] == 0
         result.append(align_to_clean(target, to_align, outdir))
     return result
 
