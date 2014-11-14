@@ -134,6 +134,7 @@ if __name__ == "__main__":
     clean_filename = args["<clean_fasta>"]
     dirty_filename = args["<dirty_fasta>"]
     outdir = "/tmp/align_{}".format(uuid.uuid4())
+    os.mkdir(outdir)
     pairs = match_reads(clean_filename, dirty_filename, outdir)
     msa = align_all(clean_filename, dirty_filename, pairs, outdir)
     SeqIO.write(msa, sys.stdout, "fasta")
