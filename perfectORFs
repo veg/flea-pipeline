@@ -9,7 +9,7 @@ from Bio.SeqIO.FastaIO import FastaWriter
 from Bio.Alphabet import IUPAC
 
 if len(sys.argv)!=2:
-    print 'Usage: consensus <filename.fasta>\nTakes all sequences with a *perfect* reading frame, and writes them to <filename.fasta.perfect.fasta>'
+    print('Usage: consensus <filename.fasta>\nTakes all sequences with a *perfect* reading frame, and writes them to <filename.fasta.perfect.fasta>')
     sys.exit()
 
 filename = str(sys.argv[1])
@@ -24,9 +24,9 @@ min_pro_len = 750
 
 #THIS ISN'T PERFECT. RATHER THAN REMOVING SEQS WITH AN "X", WE NEED TO PUNCH OUT ANY CODON WITH AN "X" ANYWHERE AND REPLACE WITH "---", OR EVEN BETTER, MODIFY THE CODON TRANSLATE TABLE TO TRANSLATE ANY CODON WITH INCLUDING A NUC "X" TO AN AA "X".
 for record in records :
-    nuc = record.seq.ungap("-").ungap("X")
+    nuc = record.seq.ungap("-")
     print(record.name)
-    print "%s...%s" % (nuc[:15], nuc[-15:])
+    print("%s...%s" % (nuc[:15], nuc[-15:]))
     for frame in range(3):
         trans = nuc[frame:].translate(table)
         for pro in trans.split("*"):
@@ -34,7 +34,7 @@ for record in records :
                 pos = trans.find(pro)
                 start = pro.find("M")
                 if start > -1:
-                      print "%s...%s - length %i, frame %i" % (pro[start:30], pro[-30:], len(pro), frame)
+                      print("%s...%s - length %i, frame %i" % (pro[start:30], pro[-30:], len(pro), frame))
                       nucORF=nuc[pos*3+frame+start*3:pos*3+frame+len(pro)*3]
                       newrecord = SeqRecord(Seq(nucORF.tostring(),IUPAC.unambiguous_dna),id=str(record.name),description="")
                       writer.write_record(newrecord)
