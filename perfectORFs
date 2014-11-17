@@ -1,0 +1,62 @@
+#!/usr/bin/python
+import sys
+from Bio.Seq import Seq
+from Bio import SeqIO
+from Bio.SeqRecord import SeqRecord
+import string
+from Bio.SeqIO.FastaIO import FastaWriter
+
+from Bio.Alphabet import IUPAC
+
+if len(sys.argv)!=2:
+    print 'Usage: consensus <filename.fasta>\nTakes all sequences with a *perfect* reading frame, and writes them to <filename.fasta.perfect.fasta>'
+    sys.exit()
+
+filename = str(sys.argv[1])
+#records = SeqIO.read(open("weeding.fasta", "rU"), "fasta")
+records = SeqIO.parse(open(filename),'fasta')
+
+writer = FastaWriter(open(filename+".perfect.fasta","w"), wrap=None)
+writer.write_header()
+
+table = 1
+min_pro_len = 750
+
+#THIS ISN'T PERFECT. RATHER THAN REMOVING SEQS WITH AN "X", WE NEED TO PUNCH OUT ANY CODON WITH AN "X" ANYWHERE AND REPLACE WITH "---", OR EVEN BETTER, MODIFY THE CODON TRANSLATE TABLE TO TRANSLATE ANY CODON WITH INCLUDING A NUC "X" TO AN AA "X".
+for record in records :
+    nuc = record.seq.ungap("-").ungap("X")
+    print(record.name)
+    print "%s...%s" % (nuc[:15], nuc[-15:])
+    for frame in range(3):
+        trans = nuc[frame:].translate(table)
+        for pro in trans.split("*"):
+            if len(pro) >= min_pro_len:
+                pos = trans.find(pro)
+                start = pro.find("M")
+                if start > -1:
+                      print "%s...%s - length %i, frame %i" % (pro[start:30], pro[-30:], len(pro), frame)
+                      nucORF=nuc[pos*3+frame+start*3:pos*3+frame+len(pro)*3]
+                      newrecord = SeqRecord(Seq(nucORF.tostring(),IUPAC.unambiguous_dna),id=str(record.name),description="")
+                      writer.write_record(newrecord)
+
+#    for strand, nuc in [(+1, record.seq.strip("-")), (-1, record.seq.strip("-").reverse_complement())]:
+
+ 
+#print "Found %i short sequences" % len(short_sequences)
+ 
+#output_handle = open("short_seqs.fasta", "w")
+#SeqIO.write(short_sequences, output_handle, "fasta")
+#output_handle.close()
+
+#seq = Seq("CCTCAGCGAGGACAGCAAGGGACTAGCCAGGAGGGAGAACAGAAACTCCAGAACATCTTGGAAATAGCTCCCAGAAAAGCAAGCAGCCAACCAGGCAGGTTCTGTCCCTTTCACTCACTGGCCCAAGGCGCCACATCTCCCTCCAGAAAAGACACCATGAGCACAGAAAGCATGATCCGCGACGTGGAACTGGCAGAAGAGGCACTCCCCCAAAAGATGGGGGGCTTCCAGAACTCCAGGCGGTGCCTATGTCTCAGCCTCTTCTCATTCCTGCTTGTGGCAGGGGCCACCACGCTCTTCTGTCTACTGAACTTCGGGGTGATCGGTCCCCAAAGGGATGAGAAGTTCCCAAATGGCCTCCCTCTCATCAGTTCTATGGCCCAGACCCTCACACTCAGATCATCTTCTCAAAATTCGAGTGACAAGCCTGTAGCCCACGTCGTAGCAAACCACCAAGTGGAGGAGCAGCTGGAGTGGCTGAGCCAGCGCGCCAACGCCCTCCTGGCCAACGGCATGGATCTCAAAGACAACCAACTAGTGGTGCCAGCCGATGGGTTGTACCTTGTCTACTCCCAGGTTCTCTTCAAGGGACAAGGCTGCCCCGACTACGTGCTCCTCACCCACACCGTCAGCCGATTTGCTATCTCATACCAGGAGAAAGTCAACCTCCTCTCTGCCGTCAAGAGCCCCTGCCCCAAGGACACCCCTGAGGGGGCTGAGCTCAAACCCTGGTATGAGCCCATATACCTGGGAGGAGTCTTCCAGCTGGAGAAGGGGGACCAACTCAGCGCTGAGGTCAATCTGCCCAAGTACTTAGACTTTGCGGAGTCCGGGCAGGTCTACTTTGGAGTCATTGCTCTGTGAAGGGAATGGGTGTTCATCCATTCTCTACCCAGCCCCCACTCTGACCCCTTTACTCTGACCCCTTTATTGTCTACTCCTCAGAGCCCCCAGTCTGTATCCTTCTAACTTAGAAAGGGGATTATGGCTCAGGGTCCAACTCTGTGCTCAGAGCTTTCAACAACTACTCAGAAACACAAGATGCTGGGACAGTGACCTGGACTGTGGGCCTCTCATGCACCACCATCAAGGACTCAAATGGGCTTTCCGAATTCACTGGAGCCTCGAATGTCCATTCCTGAGTTCTGCAAAGGGAGAGTGGTCAGGTTGCCTCTGTCTCAGAATGAGGCTGGATAAGATCTCAGGCCTTCCTACCTTCAGACCTTTCCAGATTCTTCCCTGAGGTGCAATGCACAGCCTTCCTCACAGAGCCAGCCCCCCTCTATTTATATTTGCACTTATTATTTATTATTTATTTATTATTTATTTATTTGCTTATGAATGTATTTATTTGGAAGGCCGGGGTGTCCTGGAGGACCCAGTGTGGGAAGCTGTCTTCAGACAGACATGTTTTCTGTGAAAACGGAGCTGAGCTGTCCCCACCTGGCCTCTCTACCTTGTTGCCTCCTCTTTTGCTTATGTTTAAAACAAAATATTTATCTAACCCAATTGTCTTAATAACGCTGATTTGGTGACCAGGCTGTCGCTACATCACTGAACCTCTGCTCCCCACGGGAGCCGTGACTGTAATCGCCCTACGGGTCATTGAGAGAAATAA")
+
+
+#table = 1
+#min_pro_len = 100
+
+#for strand, nuc in [(+1, seq), (-1, seq.reverse_complement())]:
+#    for frame in range(3):
+#        for pro in nuc[frame:].translate(table).split("*"):
+#            if len(pro) >= min_pro_len:
+#                print "%s...%s - length %i, strand %i, frame %i" % (pro[:30], pro[-3:], len(pro), strand, frame)
+
