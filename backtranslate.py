@@ -24,6 +24,8 @@ from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC
 from Bio.Alphabet import Gapped
 
+from util import insert_gaps
+
 
 class MissingRecord(Exception):
     pass
@@ -46,21 +48,15 @@ def back_translate_gapped(protein, dna):
         raise MissingRecord("One or more arguments is missing")
     if protein.id != dna.id:
         warn("Protein id={} but DNA id={}".format(protein.id, dna.id))
-    gap_char = protein.seq.alphabet.gap_char
-    gap_codon = Gapped(dna.seq.alphabet).gap_char * 3
     try:
         dna_str = str(dna.seq.ungap())
     except ValueError:
         dna_str = str(dna.seq)
-    codons = []
-    for a in protein.seq:
-        if a == gap_char:
-            codons.append(gap_codon)
-        else:
-            codons.append(dna_str[:3])
-            dna_str = dna_str[3:]
+    gap_char = protein.seq.alphabet.gap_char
+    gap_codon = Gapped(dna.seq.alphabet).gap_char * 3
+    result_str = insert_gaps(str(protein.seq), dna_str, gap_char, gap_codon, skip=3)
     result = dna[:]
-    result.seq = Seq("".join(codons), alphabet=Gapped(dna.seq.alphabet))
+    result.seq = Seq(result_str, alphabet=Gapped(dna.seq.alphabet))
     return result
 
 
