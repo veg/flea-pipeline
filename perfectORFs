@@ -22,9 +22,10 @@ writer.write_header()
 table = 1
 min_pro_len = 750
 
-#THIS ISN'T PERFECT. RATHER THAN REMOVING SEQS WITH AN "X", WE NEED TO PUNCH OUT ANY CODON WITH AN "X" ANYWHERE AND REPLACE WITH "---", OR EVEN BETTER, MODIFY THE CODON TRANSLATE TABLE TO TRANSLATE ANY CODON WITH INCLUDING A NUC "X" TO AN AA "X".
-for record in records :
+for record in records:
     nuc = record.seq.ungap("-")
+    new_str = str(nuc).upper().replace("X", "N")
+    nuc = Seq(new_str, alphabet=nuc.alphabet)
     print(record.name)
     print("%s...%s" % (nuc[:15], nuc[-15:]))
     for frame in range(3):
@@ -34,16 +35,16 @@ for record in records :
                 pos = trans.find(pro)
                 start = pro.find("M")
                 if start > -1:
-                      print("%s...%s - length %i, frame %i" % (pro[start:30], pro[-30:], len(pro), frame))
-                      nucORF=nuc[pos*3+frame+start*3:pos*3+frame+len(pro)*3]
-                      newrecord = SeqRecord(Seq(nucORF.tostring(),IUPAC.unambiguous_dna),id=str(record.name),description="")
-                      writer.write_record(newrecord)
+                    print("%s...%s - length %i, frame %i" % (pro[start:30], pro[-30:], len(pro), frame))
+                    nucORF=nuc[pos*3+frame+start*3:pos*3+frame+len(pro)*3]
+                    newrecord = SeqRecord(Seq(nucORF.tostring(),IUPAC.unambiguous_dna),id=str(record.name),description="")
+                    writer.write_record(newrecord)
 
 #    for strand, nuc in [(+1, record.seq.strip("-")), (-1, record.seq.strip("-").reverse_complement())]:
 
- 
+
 #print "Found %i short sequences" % len(short_sequences)
- 
+
 #output_handle = open("short_seqs.fasta", "w")
 #SeqIO.write(short_sequences, output_handle, "fasta")
 #output_handle.close()
