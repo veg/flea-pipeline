@@ -66,7 +66,7 @@ def bealign(ref_record, read_records, outdir):
     records.extend(read_records)
     SeqIO.write(records, infile, "fasta")
 
-    cmd = "bealign {} {}".format(infile, bamfile)
+    cmd = "bealign -R {} {}".format(infile, bamfile)
     subprocess.check_call(shlex.split(cmd))
 
     cmd = "bam2msa {} {}".format(bamfile, outfile)
