@@ -1,4 +1,4 @@
 [ $# -eq 0 ] && { echo "Usage: filterFastq <fastq input> <new name string>"; echo "Known issue: can't have spaces in the fastq filename."; exit 1; }
 alifn="$1"
 newName="$2"
-prinseq -fastq "$alifn" -out_format 1 -min_len 2200 -max_len 2900 -min_qual_mean 25 -seq_id "$newName" -seq_id_mappings
+prinseq -fastq "$alifn" -out_format 1 -out_good $1.good -min_len 2200 -max_len 2900 -min_qual_mean 25 -seq_id "$newName." -seq_id_mappings

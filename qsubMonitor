@@ -1,3 +1,3 @@
 [ $# -eq 0 ] && { echo "Usage: qsubMonitor <job string> <job ID>"; exit 1; }
-echo $1
+$1
 touch $2.complete
