@@ -1,0 +1,29 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+# usage: randseq.pl [fraction] < input.fasta > output.fasta
+my $fraction = (@ARGV ? shift : 0.6321);
+
+# Collect input lines into an array of sequences:
+my @sequences;
+while (<>) {
+    # A leading > starts a new sequence. (The "\" is only there to
+    # avoid confusing the Stack Overflow syntax highlighting.)
+    push @sequences, [] if /^\>/;
+    push @{ $sequences[-1] }, $_;
+}
+
+# Calculate how many sequences we want:
+my $n = @sequences;
+my $k = $fraction;
+warn "Selecting $k out of $n sequences (", 100 * $k / $n, "%).\n";
+
+# Do a partial Fisher-Yates shuffle to select $k random sequences out of $n:
+foreach my $i (0 .. $k-1) {
+    my $j = $i + int rand($n-$i);
+    @sequences[$i,$j] = @sequences[$j,$i];
+}
+
+# Print the output:
+print @$_ for @sequences[0 .. $k-1];
