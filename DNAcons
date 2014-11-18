@@ -1,5 +1,23 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+
+"""
+Prints a gapless consensus sequence with any nucleotides lower that
+50% identity recieving an ambiguous character X.
+
+Sequences must be aligned, and all the same length'
+
+Usage:
+  DNAcons [options] <infile>
+  DNAcons -h | --help
+
+Options:
+  -v --verbose             Print progress to STDERR.
+  -h --help                Show this screen.
+
+"""
+
 import sys
+
 from Bio.Seq import Seq
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
@@ -8,19 +26,21 @@ from Bio import AlignIO
 from Bio.Align import AlignInfo
 from Bio.Alphabet import IUPAC
 
-if len(sys.argv)!=2:
-    print 'Usage: consensus <filename>\nPrints a gapless consensus sequence with any nucleotides lower that 50% identity recieving an ambiguous character X\nSequences must be aligned, and all the same length'
-    sys.exit()
+if __name__ == "__main__":
+    args = docopt(__doc__)
+    filename = args["<infile>"]
+    is_verbose = args["--verbose"]
 
-filename = str(sys.argv[1])
-alignment = AlignIO.read(open(filename), "fasta")
-summary_align = AlignInfo.SummaryInfo(alignment)
-consensus = summary_align.gap_consensus(threshold=0.00).ungap("-")
-#print(consensus)
-#Use the first entry for the name, just so know what is what later
-rec = alignment[0]
-writer = FastaWriter(open(filename+".cons.fasta","w"), wrap=None)
-writer.write_header()
-newrecord = SeqRecord(Seq(str(consensus),IUPAC.unambiguous_dna),id=str(rec.name+"_cons"),description="")
-writer.write_record(newrecord)
-print 'Consensus written with name '+str(rec.name+"_cons")
+    alignment = AlignIO.read(filename, "fasta")
+    summary_align = AlignInfo.SummaryInfo(alignment)
+    consensus = summary_align.gap_consensus(threshold=0.00).ungap("-")
+    # use the first entry for the name, just so know what is what later
+    rec = alignment[0]
+    outfile = "{}.cons.fasta".format(filename)
+    id_str = "{}_cons".format(rec.name)
+    writer = FastaWriter(outfile, wrap=None)
+    writer.write_header()
+    newrecord = SeqRecord(Seq(str(consensus), IUPAC.unambiguous_dna), id=id_str, description="")
+    writer.write_record(newrecord)
+    if is_verbose:
+        sys.stderr.write('Consensus written with name {}.\n'.format(id_str))
