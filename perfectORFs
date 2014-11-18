@@ -58,10 +58,10 @@ if __name__ == "__main__":
     min_pro_len = int(args["--min-length"])
     is_verbose = args["--verbose"]
 
-    perfected = (perfect_record(r, table, min_pro_len, is_verbose)
+    perfected = list(perfect_record(r, table, min_pro_len, is_verbose)
                  for r in SeqIO.parse(infile, 'fasta'))
     n_bad = sum(1 for r in perfected if r is None)
     if is_verbose:
         sys.stderr.write("Done. Number of sequences without ORFs: {}\n".format(n_bad))
-    perfected = (r for r in perfected if r is not None)
+    perfected = list(r for r in perfected if r is not None)
     SeqIO.write(perfected, sys.stdout, "fasta")
