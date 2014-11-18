@@ -29,8 +29,6 @@ do
 sleep 1;
 test=`ls -1 *.complete | wc -l`;
 echo -ne "Alignments complete so far: $test of $keeperCounter \r"
-#echo "Alignments complete so far:"
-#echo $test;
 done
 
 echo "Aligning clusters complete"
