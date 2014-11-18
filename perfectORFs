@@ -1,63 +1,67 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+
+"""
+Takes all sequences with a *perfect* reading frame, and writes them to STDOUT.
+
+Usage:
+  perfectORF [options] <infile>
+  perfectORF -h | --help
+
+Options:
+  -t INT --table=INT       Codon table [default: 1]
+  -m INT --min-length=INT  Minimum protein length [default: 750]
+  -v --verbose             Print progress to STDERR
+  -h --help                Show this screen.
+
+"""
 import sys
+import string
+
+from docopt import docopt
+
 from Bio.Seq import Seq
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
-import string
 from Bio.SeqIO.FastaIO import FastaWriter
-
 from Bio.Alphabet import IUPAC
 
-if len(sys.argv)!=2:
-    print('Usage: consensus <filename.fasta>\nTakes all sequences with a *perfect* reading frame, and writes them to <filename.fasta.perfect.fasta>')
-    sys.exit()
 
-filename = str(sys.argv[1])
-#records = SeqIO.read(open("weeding.fasta", "rU"), "fasta")
-records = SeqIO.parse(open(filename),'fasta')
-
-writer = FastaWriter(open(filename+".perfect.fasta","w"), wrap=None)
-writer.write_header()
-
-table = 1
-min_pro_len = 750
-
-for record in records:
+def perfect_record(record, table, min_pro_len, is_verbose):
+    """Returns the open reading frame, or None if no ORF found."""
     nuc = record.seq.ungap("-")
     new_str = str(nuc).upper().replace("X", "N")
     nuc = Seq(new_str, alphabet=nuc.alphabet)
-    print(record.name)
-    print("%s...%s" % (nuc[:15], nuc[-15:]))
+    if is_verbose:
+        sys.stderr.write(record.name)
+        sys.stderr.write("\n")
+        sys.stderr.write("{}...{}\n".format(nuc[:15], nuc[-15:]))
     for frame in range(3):
         trans = nuc[frame:].translate(table)
         for pro in trans.split("*"):
             if len(pro) >= min_pro_len:
                 pos = trans.find(pro)
-                start = pro.find("M")
-                if start > -1:
-                    print("%s...%s - length %i, frame %i" % (pro[start:30], pro[-30:], len(pro), frame))
-                    nucORF=nuc[pos*3+frame+start*3:pos*3+frame+len(pro)*3]
-                    newrecord = SeqRecord(Seq(nucORF.tostring(),IUPAC.unambiguous_dna),id=str(record.name),description="")
-                    writer.write_record(newrecord)
-
-#    for strand, nuc in [(+1, record.seq.strip("-")), (-1, record.seq.strip("-").reverse_complement())]:
-
-
-#print "Found %i short sequences" % len(short_sequences)
-
-#output_handle = open("short_seqs.fasta", "w")
-#SeqIO.write(short_sequences, output_handle, "fasta")
-#output_handle.close()
-
-#seq = Seq("CCTCAGCGAGGACAGCAAGGGACTAGCCAGGAGGGAGAACAGAAACTCCAGAACATCTTGGAAATAGCTCCCAGAAAAGCAAGCAGCCAACCAGGCAGGTTCTGTCCCTTTCACTCACTGGCCCAAGGCGCCACATCTCCCTCCAGAAAAGACACCATGAGCACAGAAAGCATGATCCGCGACGTGGAACTGGCAGAAGAGGCACTCCCCCAAAAGATGGGGGGCTTCCAGAACTCCAGGCGGTGCCTATGTCTCAGCCTCTTCTCATTCCTGCTTGTGGCAGGGGCCACCACGCTCTTCTGTCTACTGAACTTCGGGGTGATCGGTCCCCAAAGGGATGAGAAGTTCCCAAATGGCCTCCCTCTCATCAGTTCTATGGCCCAGACCCTCACACTCAGATCATCTTCTCAAAATTCGAGTGACAAGCCTGTAGCCCACGTCGTAGCAAACCACCAAGTGGAGGAGCAGCTGGAGTGGCTGAGCCAGCGCGCCAACGCCCTCCTGGCCAACGGCATGGATCTCAAAGACAACCAACTAGTGGTGCCAGCCGATGGGTTGTACCTTGTCTACTCCCAGGTTCTCTTCAAGGGACAAGGCTGCCCCGACTACGTGCTCCTCACCCACACCGTCAGCCGATTTGCTATCTCATACCAGGAGAAAGTCAACCTCCTCTCTGCCGTCAAGAGCCCCTGCCCCAAGGACACCCCTGAGGGGGCTGAGCTCAAACCCTGGTATGAGCCCATATACCTGGGAGGAGTCTTCCAGCTGGAGAAGGGGGACCAACTCAGCGCTGAGGTCAATCTGCCCAAGTACTTAGACTTTGCGGAGTCCGGGCAGGTCTACTTTGGAGTCATTGCTCTGTGAAGGGAATGGGTGTTCATCCATTCTCTACCCAGCCCCCACTCTGACCCCTTTACTCTGACCCCTTTATTGTCTACTCCTCAGAGCCCCCAGTCTGTATCCTTCTAACTTAGAAAGGGGATTATGGCTCAGGGTCCAACTCTGTGCTCAGAGCTTTCAACAACTACTCAGAAACACAAGATGCTGGGACAGTGACCTGGACTGTGGGCCTCTCATGCACCACCATCAAGGACTCAAATGGGCTTTCCGAATTCACTGGAGCCTCGAATGTCCATTCCTGAGTTCTGCAAAGGGAGAGTGGTCAGGTTGCCTCTGTCTCAGAATGAGGCTGGATAAGATCTCAGGCCTTCCTACCTTCAGACCTTTCCAGATTCTTCCCTGAGGTGCAATGCACAGCCTTCCTCACAGAGCCAGCCCCCCTCTATTTATATTTGCACTTATTATTTATTATTTATTTATTATTTATTTATTTGCTTATGAATGTATTTATTTGGAAGGCCGGGGTGTCCTGGAGGACCCAGTGTGGGAAGCTGTCTTCAGACAGACATGTTTTCTGTGAAAACGGAGCTGAGCTGTCCCCACCTGGCCTCTCTACCTTGTTGCCTCCTCTTTTGCTTATGTTTAAAACAAAATATTTATCTAACCCAATTGTCTTAATAACGCTGATTTGGTGACCAGGCTGTCGCTACATCACTGAACCTCTGCTCCCCACGGGAGCCGTGACTGTAATCGCCCTACGGGTCATTGAGAGAAATAA")
+                pro_start = pro.find("M")
+                if pro_start > -1:
+                    if is_verbose:
+                        sys.stderr.write("{}...{} - length {}, frame {}\n".format(pro[pro_start:30], pro[-30:], len(pro), frame))
+                    nuc_start = pos * 3 + frame
+                    nucORF = nuc[nuc_start + pro_start * 3: nuc_start + len(pro) * 3]
+                    newrecord = SeqRecord(Seq(nucORF.tostring(), IUPAC.unambiguous_dna), id=str(record.name), description="")
+                    return newrecord
+    return None
 
 
-#table = 1
-#min_pro_len = 100
+if __name__ == "__main__":
+    args = docopt(__doc__)
+    infile = args["<infile>"]
+    table = int(args["--table"])
+    min_pro_len = int(args["--min-length"])
+    is_verbose = args["--verbose"]
 
-#for strand, nuc in [(+1, seq), (-1, seq.reverse_complement())]:
-#    for frame in range(3):
-#        for pro in nuc[frame:].translate(table).split("*"):
-#            if len(pro) >= min_pro_len:
-#                print "%s...%s - length %i, strand %i, frame %i" % (pro[:30], pro[-3:], len(pro), strand, frame)
-
+    perfected = (perfect_record(r, table, min_pro_len, is_verbose)
+                 for r in SeqIO.parse(infile, 'fasta'))
+    n_bad = sum(1 for r in perfected if r is None)
+    if is_verbose:
+        sys.stderr.write("Done. Number of sequences without ORFs: {}\n".format(n_bad))
+    perfected = (r for r in perfected if r is not None)
+    SeqIO.write(perfected, sys.stdout, "fasta")
