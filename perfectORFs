@@ -34,7 +34,11 @@ def perfect_record(record, table, min_pro_len, is_verbose):
         sys.stderr.write("\n")
         sys.stderr.write("{}...{}\n".format(nuc[:15], nuc[-15:]))
     for frame in range(3):
-        trans = nuc[frame:].translate(table)
+        # trim last few nucleotides so length is multiple of 3
+        nuc_frame = nuc[frame:]
+        new_len = len(nuc_frame) - (len(nuc_frame) % 3)
+        nuc_frame = nuc_frame[:new_len]
+        trans = nuc_frame.translate(table)
         for pro in trans.split("*"):
             if len(pro) >= min_pro_len:
                 pos = trans.find(pro)
@@ -44,7 +48,7 @@ def perfect_record(record, table, min_pro_len, is_verbose):
                         sys.stderr.write("{}...{} - length {}, frame {}\n".format(pro[pro_start:30], pro[-30:], len(pro), frame))
                     nuc_start = pos * 3 + frame
                     nucORF = nuc[nuc_start + pro_start * 3: nuc_start + len(pro) * 3]
-                    newrecord = SeqRecord(Seq(nucORF.tostring(), IUPAC.unambiguous_dna), id=str(record.name), description="")
+                    newrecord = SeqRecord(Seq(str(nucORF), IUPAC.unambiguous_dna), id=str(record.name), description="")
                     return newrecord
     return None
 
