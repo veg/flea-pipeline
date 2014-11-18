@@ -1,0 +1,3 @@
+[ $# -eq 0 ] && { echo "Usage: strandCaller <alignment.fasta>"; exit 1; }
+usearch -usearch_global $1 -db ${HOME}/projects/env_pipeline/References/LANLsubtypeRef.udb -id 0.8 -fastapairs $1.matches.fasta -strand both
+everySecond $1.matches.fasta

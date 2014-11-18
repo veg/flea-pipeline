@@ -1,0 +1,8 @@
+[ $# -eq 0 ] && { echo "Usage: removeSmallClusters <cluster size cutoff (deletes clusters with fewer reads than the cutoff)>"; exit 1; }
+#THIS IS MUCH SLOWER THAN IT NEEDS TO BE. MAYBE POPULATE A LIST AND THEN MOVE THEM ALL AT ONCE?
+mkdir discards
+for k in cluster_*;
+do test=`grep -c ">" $k | cut -d ":" -f2`;
+if (($test < $1)); then mv $k discards/; echo $k " moved";
+fi;
+done;

@@ -1,0 +1,26 @@
+#!/usr/bin/python
+import sys
+from Bio.Seq import Seq
+from Bio import SeqIO
+from Bio.SeqRecord import SeqRecord
+from Bio.SeqIO.FastaIO import FastaWriter
+from Bio import AlignIO
+from Bio.Align import AlignInfo
+from Bio.Alphabet import IUPAC
+
+if len(sys.argv)!=2:
+    print 'Usage: consensus <filename>\nPrints a gapless consensus sequence with any nucleotides lower that 50% identity recieving an ambiguous character X\nSequences must be aligned, and all the same length'
+    sys.exit()
+
+filename = str(sys.argv[1])
+alignment = AlignIO.read(open(filename), "fasta")
+summary_align = AlignInfo.SummaryInfo(alignment)
+consensus = summary_align.gap_consensus(threshold=0.00).ungap("-")
+#print(consensus)
+#Use the first entry for the name, just so know what is what later
+rec = alignment[0]
+writer = FastaWriter(open(filename+".cons.fasta","w"), wrap=None)
+writer.write_header()
+newrecord = SeqRecord(Seq(str(consensus),IUPAC.unambiguous_dna),id=str(rec.name+"_cons"),description="")
+writer.write_record(newrecord)
+print 'Consensus written with name '+str(rec.name+"_cons")

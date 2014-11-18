@@ -1,0 +1,4 @@
+[ $# -eq 0 ] && { echo "Usage: clusterReads <alignment.fasta> <id>"; exit 1; }
+usearch -sortbylength $1 -output "$1.sorted.fasta"
+mkdir $1.clusterdir
+usearch -cluster_smallmem "$1.sorted.fasta" -id $2 -clusters $1.clusterdir/cluster_

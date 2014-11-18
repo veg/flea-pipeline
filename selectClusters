@@ -1,0 +1,12 @@
+[ $# -eq 0 ] && { echo "Usage: selectClusters <cluster LB> <subsample UB>"; exit 1; }
+#THIS IS MUCH SLOWER THAN IT NEEDS TO BE. MAYBE POPULATE A LIST AND THEN MOVE THEM ALL AT ONCE?
+mkdir keepers
+for k in cluster_*;
+do test=`grep -c ">" $k | cut -d ":" -f2`;
+if (($test > $1)); then
+    if (($test < $2)); then
+        cp $k keepers/$k.$test; echo $k " moved";
+        else randomSample $2 <$k >keepers/$k.UB.$2; echo $k " subsampled and moved";
+    fi;
+fi;
+done;
