@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 """
-Takes all sequences with a *perfect* reading frame, and writes them to STDOUT.
+Takes all sequences with *perfect* reading frame, and writes the
+reading frame to STDOUT.
 
 Usage:
   perfectORF [options] <infile>
@@ -45,10 +46,16 @@ def perfect_record(record, table, min_pro_len, is_verbose):
                 pro_start = pro.find("M")
                 if pro_start > -1:
                     if is_verbose:
-                        sys.stderr.write("{}...{} - length {}, frame {}\n".format(pro[pro_start:30], pro[-30:], len(pro), frame))
-                    nuc_start = pos * 3 + frame
-                    nucORF = nuc[nuc_start + pro_start * 3: nuc_start + len(pro) * 3]
-                    newrecord = SeqRecord(Seq(str(nucORF), IUPAC.unambiguous_dna), id=str(record.name), description="")
+                        sys.stderr.write(
+                            "{}...{} - length {}, frame {}\n".format(
+                                pro[pro_start:30], pro[-30:], len(pro), frame))
+                    nuc_start = (pos * 3) + frame
+                    start = nuc_start + (pro_start * 3)
+                    stop = nuc_start + (len(pro) * 3)
+                    orf = nuc[start:stop]
+                    newrecord = SeqRecord(
+                        Seq(str(orf), IUPAC.unambiguous_dna),
+                        id=str(record.name), description="")
                     return newrecord
     return None
 
@@ -64,6 +71,6 @@ if __name__ == "__main__":
                  for r in SeqIO.parse(infile, 'fasta'))
     n_bad = sum(1 for r in perfected if r is None)
     if is_verbose:
-        sys.stderr.write("Done. Number of sequences without ORFs: {}\n".format(n_bad))
+        sys.stderr.write("Done. Sequences without ORFs: {}\n".format(n_bad))
     perfected = list(r for r in perfected if r is not None)
     SeqIO.write(perfected, sys.stdout, "fasta")
