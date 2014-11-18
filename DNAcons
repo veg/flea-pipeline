@@ -40,7 +40,7 @@ if __name__ == "__main__":
     rec = alignment[0]
     outfile = "{}.cons.fasta".format(filename)
     id_str = "{}_cons".format(rec.name)
-    writer = FastaWriter(outfile, wrap=None)
+    writer = FastaWriter(open(outfile, "w"), wrap=None)
     writer.write_header()
     newrecord = SeqRecord(Seq(str(consensus), IUPAC.unambiguous_dna), id=id_str, description="")
     writer.write_record(newrecord)

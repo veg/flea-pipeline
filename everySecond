@@ -32,7 +32,7 @@ if __name__ == "__main__":
     outfile = "{}.seconds.fasta".format(filename)
 
     records = SeqIO.parse(filename,'fasta')
-    writer = FastaWriter(outfile, wrap=None)
+    writer = FastaWriter(open(outfile, "w"), wrap=None)
     writer.write_header()
 
     for rec in islice(records, 0, None, 2):
