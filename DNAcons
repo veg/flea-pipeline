@@ -18,6 +18,8 @@ Options:
 
 import sys
 
+from docopt import docopt
+
 from Bio.Seq import Seq
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
