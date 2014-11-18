@@ -1,29 +1,39 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+"""
+Takes every second sequence from a fasta file (1,3,5,...)
+
+Usage:
+  everySecond [options] <infile>
+  everySecond -h | --help
+
+Options:
+  -v --verbose             Print progress to STDERR.
+  -h --help                Show this screen.
+
+"""
+
 import sys
+
 from Bio.Seq import Seq
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
-import string
 from Bio.SeqIO.FastaIO import FastaWriter
-
 from Bio.Alphabet import IUPAC
 
-if len(sys.argv)!=2:
-    print 'Usage: everySecond <filename>\nTakes every second sequence from a fasta file (1,3,5,...)'
-    sys.exit()
 
-filename = str(sys.argv[1])
+if __name__ == "__main__":
+    args = docopt(__doc__)
+    filename = args["<infile>"]
+    is_verbose = args["--verbose"]
 
-records = SeqIO.parse(open(filename),'fasta')
+    outfile = "{}.seconds.fasta".format(infile)
 
-writer = FastaWriter(open(filename+".seconds.fasta","w"), wrap=None)
-writer.write_header()
+    records = SeqIO.parse(filename,'fasta')
+    writer = FastaWriter(outfile, wrap=None)
+    writer.write_header()
 
-counter = 0
-for rec in records:
-    if counter%2 == 0:
-        #print rec.name
+    for rec in records[::2]:
         rec.seq = rec.seq.ungap("-")
         writer.write_record(rec)
-    counter = counter + 1
-print 'Seconds written to ' + filename+".seconds.fasta"
+    if is_verbose:
+        sys.stderr.write('Every second sequence written to {}\n'.format(outfile))
