@@ -60,7 +60,7 @@ def back_translate_gapped(protein, dna):
     return result
 
 
-def backtranslate(aligned_protein, dna, outfile):
+def backtranslate(protein_filename, dna_filename, outfile):
     try:
         protein_records = SeqIO.parse(protein_filename, "fasta", alphabet=Gapped(IUPAC.protein))
         dna_records = SeqIO.parse(dna_filename, "fasta", alphabet=Gapped(IUPAC.unambiguous_dna))
