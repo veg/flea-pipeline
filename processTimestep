@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 [ $# -eq 0 ] && { echo "Usage: processTimestep <alignment.fasta> <SampleID> <Percent identity> <discard LB> <subsample UB>\n example: processTimestep data.fastq VXX 0.99 5 30"; exit 1; }
 #THIS WILL BE THE MASTER FILE THAT TAKES A .FASTQ, AND OUTPUTS CLUSTERS OF READS
 
