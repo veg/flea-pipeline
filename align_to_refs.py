@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 """
-Aligns each read to its best match in the usearch database. Prints MSA
-to STDOUT.
+Aligns each read to its best match in the usearch database.
 
 Dependencies:
   - usearch
   - balign
 
 Usage:
-  align_to_refs.py <refs_gapped> <refs_ungapped> <refs_db> <reads>
+  align_to_refs.py <reads> <refs> <refs_aligned> <refs_db> <outfile>
   align_to_refs.py -h | --help
 
 Options:
@@ -121,17 +120,25 @@ def add_all_gaps(alignments, gapped_filename):
     return result
 
 
-if __name__ == "__main__":
-    args = docopt(__doc__)
-    refs_gapped = args["<refs_gapped>"]
-    refs_ungapped = args["<refs_ungapped>"]
-    dbfile = args["<refs_db>"]
-    reads_filename = args["<reads>"]
-    outdir = "/tmp/align_{}".format(uuid.uuid4())
-    os.mkdir(outdir)
-    pairs = usearch_global(reads_filename, dbfile, outdir)
-    alignments = align_all(reads_filename, refs_ungapped, pairs, outdir)
-    msa = add_all_gaps(alignments, refs_gapped)
+def align_to_refs(reads_filename, refs_filename, refs_aligned_filename, dbfile,
+                  outfile):
+    """Align all reads to best reference and write full MSA."""
+    tmpdir = "/tmp/align_{}".format(uuid.uuid4())
+    os.mkdir(tmpdir)
+    pairs = usearch_global(reads_filename, dbfile, tmpdir)
+    alignments = align_all(reads_filename, refs_filename, pairs, tmpdir)
+    msa = add_all_gaps(alignments, refs_aligned_filename)
     lens = list(len(r) for r in msa)
     assert all(i == lens[0] for i in lens)
-    SeqIO.write(msa, sys.stdout, "fasta")
+    SeqIO.write(msa, outfile, "fasta")
+
+
+if __name__ == "__main__":
+    args = docopt(__doc__)
+    refs_filename = args["<refs>"]
+    refs_aligned_filename = args["<refs_aligned>"]
+    dbfile = args["<refs_db>"]
+    reads_filename = args["<reads>"]
+    outfile = args["<outfile>"]
+    align_to_refs(reads_filename, refs_filename, refs_aligned_filename, dbfile,
+                  outfile)
