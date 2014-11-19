@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 """
-Back translate protein to DNA. Prints results to STDOUT.
+Back translate protein to DNA.
 
 Assumes sequences are in order in each file.
 
 Usage:
-  backtranslate.py <gapped_protein_fasta> <ungapped_dna_fasta>
+  backtranslate.py <aligned_protein> <dna> <outfile>
   backtranslate.py -h | --help
 
 Options:
@@ -62,16 +62,17 @@ def back_translate_gapped(protein, dna):
 
 if __name__ == "__main__":
     args = docopt(__doc__)
-    translated_filename = args["<gapped_protein_fasta>"]
-    gapless_filename = args["<ungapped_dna_fasta>"]
+    protein_filename = args["<aligned_protein>"]
+    dna_filename = args["<dna>"]
+    outfile = args["<outfile>"]
     try:
-        translated_records = SeqIO.parse(translated_filename, "fasta", alphabet=Gapped(IUPAC.protein))
-        gapless_records = SeqIO.parse(gapless_filename, "fasta", alphabet=Gapped(IUPAC.unambiguous_dna))
-        result_iter = (back_translate_gapped(a, b) for a, b in zip_longest(translated_records, gapless_records))
-        SeqIO.write(result_iter, sys.stdout, "fasta")
+        protein_records = SeqIO.parse(protein_filename, "fasta", alphabet=Gapped(IUPAC.protein))
+        dna_records = SeqIO.parse(dna_filename, "fasta", alphabet=Gapped(IUPAC.unambiguous_dna))
+        result_iter = (back_translate_gapped(a, b) for a, b in zip_longest(protein_records, dna_records))
+        SeqIO.write(result_iter, outfile, "fasta")
     except MissingRecord:
         # manually delete generators to avoid extra exception messages
-        del translated_records
-        del gapless_records
+        del protein_records
+        del dna_records
         sys.stderr.write("Input files contain different numbers of sequences.\n")
         sys.exit(1)
