@@ -65,10 +65,8 @@ if __name__ == "__main__":
     translated_filename = args["<gapped_protein_fasta>"]
     gapless_filename = args["<ungapped_dna_fasta>"]
     try:
-        translated_handle = open(translated_filename, "rU")
-        gapless_handle = open(gapless_filename, "rU")
-        translated_records = SeqIO.parse(translated_handle, "fasta", alphabet=Gapped(IUPAC.protein))
-        gapless_records = SeqIO.parse(gapless_handle, "fasta", alphabet=Gapped(IUPAC.unambiguous_dna))
+        translated_records = SeqIO.parse(translated_filename, "fasta", alphabet=Gapped(IUPAC.protein))
+        gapless_records = SeqIO.parse(gapless_filename, "fasta", alphabet=Gapped(IUPAC.unambiguous_dna))
         result_iter = (back_translate_gapped(a, b) for a, b in zip_longest(translated_records, gapless_records))
         SeqIO.write(result_iter, sys.stdout, "fasta")
     except MissingRecord:
@@ -77,6 +75,3 @@ if __name__ == "__main__":
         del gapless_records
         sys.stderr.write("Input files contain different numbers of sequences.\n")
         sys.exit(1)
-    finally:
-        translated_handle.close()
-        gapless_handle.close()
