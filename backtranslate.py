@@ -60,11 +60,7 @@ def back_translate_gapped(protein, dna):
     return result
 
 
-if __name__ == "__main__":
-    args = docopt(__doc__)
-    protein_filename = args["<aligned_protein>"]
-    dna_filename = args["<dna>"]
-    outfile = args["<outfile>"]
+def backtranslate(aligned_protein, dna, outfile):
     try:
         protein_records = SeqIO.parse(protein_filename, "fasta", alphabet=Gapped(IUPAC.protein))
         dna_records = SeqIO.parse(dna_filename, "fasta", alphabet=Gapped(IUPAC.unambiguous_dna))
@@ -74,5 +70,16 @@ if __name__ == "__main__":
         # manually delete generators to avoid extra exception messages
         del protein_records
         del dna_records
+        raise MissingRecord
+
+
+if __name__ == "__main__":
+    args = docopt(__doc__)
+    protein_filename = args["<aligned_protein>"]
+    dna_filename = args["<dna>"]
+    outfile = args["<outfile>"]
+    try:
+        backtranslate(protein_filename, dna_filename, outfile)
+    except MissingRecord:
         sys.stderr.write("Input files contain different numbers of sequences.\n")
         sys.exit(1)

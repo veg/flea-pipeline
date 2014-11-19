@@ -19,10 +19,14 @@ from Bio import SeqIO
 from Bio.Alphabet import IUPAC
 
 
+def translate(infile, outfile):
+    records = SeqIO.parse(infile, "fasta", alphabet=IUPAC.unambiguous_dna)
+    result = (record.translate() for r in records)
+    SeqIO.write(records, outfile, "fasta")
+
+
 if __name__ == "__main__":
     args = docopt(__doc__)
     infile = args["<infile>"]
     outfile = args["<outfile>"]
-    records = SeqIO.parse(infile, "fasta", alphabet=IUPAC.unambiguous_dna)
-    result = (record.translate() for r in records)
-    SeqIO.write(records, outfile, "fasta")
+    translate(infile, outfile)
