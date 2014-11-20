@@ -2,7 +2,7 @@ Dependencies
 ------------
 - usearch
 - mafft
-- BioExt
+- BioExt's bealign
 - others?
 
 Installation
@@ -19,4 +19,7 @@ them?
 
 Usage
 -----
-Run the whole pipeline with `processEnv`.
+Run the whole pipeline with `env_pipeline.py <file>`.
+
+The `<file>` argument is a file containing a list of fasta files, and
+their sequence ids.
