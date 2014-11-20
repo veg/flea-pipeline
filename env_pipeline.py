@@ -5,8 +5,11 @@ Runs the complete pipeline on a set of fasta files.
 
 Input is a file with the following format:
 
-<filename> <sequence id>
+<file_1> <id_1>
+<file_2> <id_2>
 ...
+<file_n> <id_n>
+
 
 Usage:
   env_pipeline [options] <file>
