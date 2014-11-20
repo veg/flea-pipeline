@@ -19,6 +19,13 @@ them?
 
 Usage
 -----
+
+For now, we assume this is running on silverback. All the python
+dependencies are already installed in a virtual environment. Just
+activate it like so:
+
+`source /opt/talign/env/bin/activate`
+
 Run the whole pipeline with `env_pipeline.py <file>`.
 
 The `<file>` argument is a file containing a list of fasta files, and
