@@ -3,8 +3,13 @@
 """
 Runs the complete pipeline on a set of fasta files.
 
+Input is a file with the following format:
+
+<filename> <sequence id>
+...
+
 Usage:
-  env_pipeline [options] <fasta_files> <seq_ids>
+  env_pipeline [options] <file>
   env_pipeline -h | --help
 
 Options:
@@ -74,12 +79,13 @@ if __name__ == "__main__":
     subsample_ub = args["--subsample-ub"]
     is_verbose = args["--verbose"]
 
-    files = readlines(args["<fasta_files>"])
-    seq_ids = readlines(args["<seq_ids>"])
-
-    if len(files) != len(seq_ids):
-        raise Exception("Number of fasta files does not equal"
-                        " number of sequence ids.")
+    lines = readlines(args["<file>"])
+    pairs = list(line.split() for line in lines)
+    for p in pairs:
+        if len(p) != 2:
+            raise Exception("Cannot parse {}".format(args["<file>"]))
+    files = list(f for f, _ in pairs)
+    seq_ids = list(i for _, i in pairs)
 
     # TODO: do this in parallel
     for f, seq_id in zip(files, seq_ids):
