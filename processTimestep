@@ -20,7 +20,8 @@ selectClusters $4 $5
 echo "STEP 5: CLUSTER ALIGNMENT"
 cd keepers
 keeperCounter=0
-for k in cluster_*; do keeperCounter=$[$keeperCounter+1]; echo "alignAndTouch `pwd`/$k `pwd`/$k.complete" | qsub -l walltime=48:00:00; done
+# for k in cluster_*; do keeperCounter=$[$keeperCounter+1]; echo "alignAndTouch `pwd`/$k `pwd`/$k.complete" | qsub -l walltime=48:00:00; done
+for k in cluster_*; do keeperCounter=$[$keeperCounter+1]; alignAndTouch `pwd`/$k `pwd`/$k.complete; done
 echo "Number of alignments:"
 echo $keeperCounter
 echo "Aligning clusters"
