@@ -115,6 +115,6 @@ if __name__ == "__main__":
     for f in files:
         # TODO: fix these names
         infile = "".join([f, ".pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta"])
-        outfile = add_suffix(f, "_ALIGNED")
+        outfile = add_suffix(f, "ALIGNED")
         align_to_refs(infile, all_orfs_file, backtranslated,
                       db_file, outfile)
