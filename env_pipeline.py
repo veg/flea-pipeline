@@ -82,6 +82,8 @@ if __name__ == "__main__":
     subsample_ub = args["--subsample-ub"]
     is_verbose = args["--verbose"]
 
+    # FIXME: for now, filenames cannot have spaces. Make this more
+    # robust. For instance use tab-seperated values.
     lines = readlines(args["<file>"])
     pairs = list(line.split() for line in lines)
     for p in pairs:
@@ -94,8 +96,8 @@ if __name__ == "__main__":
     for f, seq_id in zip(files, seq_ids):
         cmd = ("processTimestep {f} {seq_id} {percent_identity}"
                " {discard_lb} {subsample_ub}")
-        # TODO: this is a hack
-        call(cmd.format(**vars()))
+        call(cmd.format(f=f, seq_id=seq_id, percent_identity=percent_identity,
+                        discard_lb=discard_lb, subsample_up=subsample_up))
 
     # append all perfect orfs and make database
     perfect_files = list("{}.collapsed.fasta.perfect.fasta".format(i)
