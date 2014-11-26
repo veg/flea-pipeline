@@ -28,6 +28,9 @@ from subprocess import check_call
 import shlex
 from os import path
 
+#FIX THIS PLS
+import os
+
 from docopt import docopt
 
 from translate import translate
@@ -97,7 +100,7 @@ if __name__ == "__main__":
         cmd = ("processTimestep {f} {seq_id} {percent_identity}"
                " {discard_lb} {subsample_ub}")
         call(cmd.format(f=f, seq_id=seq_id, percent_identity=percent_identity,
-                        discard_lb=discard_lb, subsample_up=subsample_up))
+                        discard_lb=discard_lb, subsample_ub=subsample_ub))
 
     # append all perfect orfs and make database
     perfect_files = list("{}.collapsed.fasta.perfect.fasta".format(i)
@@ -120,6 +123,9 @@ if __name__ == "__main__":
     for f in files:
         # TODO: fix these names
         infile = "".join([f, ".pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta"])
-        outfile = add_suffix(f, "ALIGNED")
+        outfile = "".join([f, "_ALIGNED.fasta"])
         align_to_refs(infile, all_orfs_file, backtranslated,
                       db_file, outfile)
+    #FIX THIS HORRIBLE NONSENSE PLS                  
+    os.system("cat *ALIGNED.fasta >allTimepoints.ALIGNED.fasta")
+    os.system("trees ALIGNED")
