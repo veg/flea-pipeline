@@ -30,15 +30,19 @@ from os import path
 import csv
 import json
 from collections import namedtuple
+from datetime import datetime
 
 #FIX THIS PLS
 import os
 
 from docopt import docopt
 
+from Bio import SeqIO
+
 from translate import translate
 from backtranslate import backtranslate
 from align_to_refs import align_to_refs
+from DNAcons import dnacons
 
 
 def add_suffix(filename, suffix):
@@ -71,6 +75,19 @@ def cat_files(files, outfile, chunk=2**14):
                 out_handle.write(data)
             else:
                 break
+
+
+def mrca(infile, recordfile, outfile, oldest_id):
+    """Writes records from `infile` to `recordfile` that have an ID
+    corresponding to `oldest_id`. Then runs DNAcons, writing result to
+    `outfile`.
+
+    """
+    len_id = len(oldest_id)
+    records = SeqIO.parse(infile, "fasta")
+    oldest_records = (r for r in records if r.id.startswith(oldest_id))
+    SeqIO.write(oldest_records, recordfile, "fasta")
+    dnacons(recordfile, id_str="mrca", outfile=outfile)
 
 
 Timepoint = namedtuple('Timepoint', ['file', 'id', 'date'])
@@ -121,6 +138,15 @@ if __name__ == "__main__":
     translate(all_orfs_file, translated_file)
     call("mafft --auto {}".format(translated_file), stdout=open(aligned_file, "w"))
     backtranslate(aligned_file, all_orfs_file, backtranslated_file)
+
+    # get a DNA consensus for perfect ORF corresponding to earliest date
+    strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
+    oldest_timepoint = min(timepoints, key=strptime)
+    oldest_records_filename = add_suffix(backtranslated_file,
+                                         "oldest_{}".format(oldest_timepoint.id))
+    mrca_filename = os.path.join(data_dir, "mrca.seq")
+    mrca(backtranslated_file, oldest_records_filename, mrca_filename,
+         oldest_timepoint.id)
 
     # run alignment in each timestep
     for t  in timepoints:

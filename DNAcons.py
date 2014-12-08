@@ -7,12 +7,14 @@ Prints a gapless consensus sequence with any nucleotides lower that
 Sequences must be aligned, and all the same length'
 
 Usage:
-  DNAcons [options] <infile>
-  DNAcons -h | --help
+  DNAcons.py [options] <infile>
+  DNAcons.py -h | --help
 
 Options:
-  -v --verbose             Print progress to STDERR.
-  -h --help                Show this screen.
+  -v --verbose           Print progress to STDERR.
+  --id=<STRING>          Record id for the fasta output
+  -o --outfile=<STRING>  Name of output file.
+  -h --help              Show this screen.
 
 """
 
@@ -28,21 +30,30 @@ from Bio import AlignIO
 from Bio.Align import AlignInfo
 from Bio.Alphabet import IUPAC
 
-if __name__ == "__main__":
-    args = docopt(__doc__)
-    filename = args["<infile>"]
-    is_verbose = args["--verbose"]
 
+def dnacons(filename, id_str=None, outfile=None, verbose=False):
     alignment = AlignIO.read(filename, "fasta")
     summary_align = AlignInfo.SummaryInfo(alignment)
     consensus = summary_align.gap_consensus(threshold=0.00).ungap("-")
     # use the first entry for the name, just so know what is what later
     rec = alignment[0]
-    outfile = "{}.cons.fasta".format(filename)
-    id_str = "{}_cons".format(rec.name)
+    if id_str is None:
+        id_str = "{}_cons".format(rec.name)
+    if outfile is None:
+        outfile = "{}.cons.fasta".format(filename)
     writer = FastaWriter(open(outfile, "w"), wrap=None)
     writer.write_header()
     newrecord = SeqRecord(Seq(str(consensus), IUPAC.unambiguous_dna), id=id_str, description="")
     writer.write_record(newrecord)
-    if is_verbose:
+    if verbose:
         sys.stderr.write('Consensus written with name {}.\n'.format(id_str))
+
+
+if __name__ == "__main__":
+    args = docopt(__doc__)
+    filename = args["<infile>"]
+    verbose = args["--verbose"]
+    id_str = args["--id"]
+    outfile = args["--outfile"]
+    dnacons(filename, id_str, outfile, verbose=verbose)
+
