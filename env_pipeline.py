@@ -27,6 +27,8 @@ Options:
 from subprocess import check_call
 import shlex
 from os import path
+import csv
+from collections import namedtuple
 
 #FIX THIS PLS
 import os
@@ -36,13 +38,6 @@ from docopt import docopt
 from translate import translate
 from backtranslate import backtranslate
 from align_to_refs import align_to_refs
-
-
-def readlines(f):
-    """Returns list of non-empty lines in file."""
-    with open(f) as handle:
-        lines = handle.readlines()
-        return list(line.strip() for line in lines if line)
 
 
 def add_suffix(filename, suffix):
@@ -77,6 +72,9 @@ def cat_files(files, outfile, chunk=2**14):
                 break
 
 
+Timepoint = namedtuple('Timepoint', ['file', 'id', 'date'])
+
+
 if __name__ == "__main__":
     args = docopt(__doc__)
 
@@ -87,25 +85,21 @@ if __name__ == "__main__":
 
     # FIXME: for now, filenames cannot have spaces. Make this more
     # robust. For instance use tab-seperated values.
-    lines = readlines(args["<file>"])
-    pairs = list(line.split() for line in lines)
-    for p in pairs:
-        if len(p) != 2:
-            raise Exception("Cannot parse {}".format(args["<file>"]))
-    files = list(f for f, _ in pairs)
-    seq_ids = list(i for _, i in pairs)
+    with open(args["<file>"], newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=' ')
+        timepoints = list(Timepoint(f, i, d) for f, i, d in reader)
 
     # TODO: do this in parallel
-    for f, seq_id in zip(files, seq_ids):
+    for t in timepoints:
         cmd = ("processTimestep {f} {seq_id} {percent_identity}"
                " {discard_lb} {subsample_ub}")
-        call(cmd.format(f=f, seq_id=seq_id, percent_identity=percent_identity,
+        call(cmd.format(f=t.file, seq_id=t.id, percent_identity=percent_identity,
                         discard_lb=discard_lb, subsample_ub=subsample_ub))
 
     # append all perfect orfs and make database
-    perfect_files = list("{}.collapsed.fasta.perfect.fasta".format(i)
-                         for i in seq_ids)
-    data_dir = path.dirname(path.abspath(files[0]))  # assume all are in same directory
+    perfect_files = list("{}.collapsed.fasta.perfect.fasta".format(t.id)
+                         for t in timepoints)
+    data_dir = path.dirname(path.abspath(timepoints[0].file))  # assume all are in same directory
     all_orfs_file = path.join(data_dir, "all_perfect_orfs.fasta")
     db_file = path.join(data_dir, "all_perfect_orfs.udb")
     cat_files(perfect_files, all_orfs_file)
@@ -120,10 +114,10 @@ if __name__ == "__main__":
     backtranslate(aligned_file, all_orfs_file, backtranslated_file)
 
     # run alignment in each timestep
-    for f in files:
+    for t  in timepoints:
         # TODO: fix these names
-        infile = "".join([f, ".pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta"])
-        outfile = "".join([f, "_ALIGNED.fasta"])
+        infile = "".join([t.file, ".pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta"])
+        outfile = "".join([t.file, "_ALIGNED.fasta"])
         align_to_refs(infile, all_orfs_file, backtranslated_file,
                       db_file, outfile)
     #FIX THIS HORRIBLE NONSENSE PLS                  
