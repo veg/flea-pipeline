@@ -25,12 +25,14 @@ Options:
 """
 
 from subprocess import check_call
+from subprocess import Popen, PIPE, STDOUT
 import shlex
 from os import path
 import csv
 import json
 from collections import namedtuple
 from datetime import datetime
+import sys
 
 #FIX THIS PLS
 import os
@@ -101,6 +103,9 @@ if __name__ == "__main__":
     subsample_ub = args["--subsample-ub"]
     is_verbose = args["--verbose"]
 
+    # FIXME: parts of this script assumes CWD is the data
+    # directory. Make it not rely on that.
+
     # FIXME: for now, filenames cannot have spaces. Make this more
     # robust. For instance use tab-seperated values.
     with open(args["<file>"], newline='') as csvfile:
@@ -149,12 +154,30 @@ if __name__ == "__main__":
          oldest_timepoint.id)
 
     # run alignment in each timestep
+    timestep_aligned_files = []
     for t  in timepoints:
         # TODO: fix these names
         infile = "".join([t.file, ".pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta"])
         outfile = "".join([t.file, "_ALIGNED.fasta"])
         align_to_refs(infile, all_orfs_file, backtranslated_file,
                       db_file, outfile)
+        timestep_aligned_files.append(outfile)
+
+    # concatenate all aligned timesteps
+    final_alignment_file = os.path.join(data_dir, "allTimepoints.ALIGNED.fasta")
+    cat_files(timestep_aligned_files, final_alignment_file)
+
+    # get HXB2 coordinates -> merged.prot.parts
+    script_dir = os.path.split(__file__)[0]
+    script_name = 'HXB2partsSplitter.bf'
+    hxb2_script = os.path.join(script_dir, script_name)
+    cmd = 'HYPHYMP {}'.format(hxb2_script)
+    p = Popen(shlex.split(cmd), stdin=PIPE)
+    script_input = " {}\n".format(final_alignment_file).encode()
+    p.communicate(input=script_input)
+    returncode = p.wait()
+    if not returncode:
+        sys.stderr.write("{} failed.".format(script_name))
+
     #FIX THIS HORRIBLE NONSENSE PLS
-    os.system("cat *ALIGNED.fasta >allTimepoints.ALIGNED.fasta")
     os.system("trees ALIGNED")
