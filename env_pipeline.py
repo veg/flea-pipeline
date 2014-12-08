@@ -168,6 +168,7 @@ if __name__ == "__main__":
     cat_files(timestep_aligned_files, final_alignment_file)
 
     # get HXB2 coordinates -> merged.prot.parts
+    # TODO: result is saved in script directory, not data directory
     script_dir = os.path.split(__file__)[0]
     script_name = 'HXB2partsSplitter.bf'
     hxb2_script = os.path.join(script_dir, script_name)
