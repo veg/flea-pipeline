@@ -112,19 +112,19 @@ if __name__ == "__main__":
     call("usearch -makeudb_usearch {} -output {}".format(all_orfs_file, db_file))
 
     # codon alignment of all perfect orfs
-    translated = add_suffix(all_orfs_file, "translated")
-    aligned = add_suffix(translated, "aligned")
-    backtranslated = add_suffix(aligned, "backtranslated")
-    translate(all_orfs_file, translated)
-    call("mafft --auto {}".format(translated), stdout=open(aligned, "w"))
-    backtranslate(aligned, all_orfs_file, backtranslated)
+    translated_file = add_suffix(all_orfs_file, "translated")
+    aligned_file = add_suffix(translated_file, "aligned")
+    backtranslated_file = add_suffix(aligned_file, "backtranslated")
+    translate(all_orfs_file, translated_file)
+    call("mafft --auto {}".format(translated_file), stdout=open(aligned_file, "w"))
+    backtranslate(aligned_file, all_orfs_file, backtranslated_file)
 
     # run alignment in each timestep
     for f in files:
         # TODO: fix these names
         infile = "".join([f, ".pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta"])
         outfile = "".join([f, "_ALIGNED.fasta"])
-        align_to_refs(infile, all_orfs_file, backtranslated,
+        align_to_refs(infile, all_orfs_file, backtranslated_file,
                       db_file, outfile)
     #FIX THIS HORRIBLE NONSENSE PLS                  
     os.system("cat *ALIGNED.fasta >allTimepoints.ALIGNED.fasta")
