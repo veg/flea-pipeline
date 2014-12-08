@@ -90,8 +90,11 @@ if __name__ == "__main__":
         reader = csv.reader(csvfile, delimiter=' ')
         timepoints = list(Timepoint(f, i, d) for f, i, d in reader)
 
+    # assume all are in same directory
+    data_dir = path.dirname(path.abspath(timepoints[0].file))
+
     # write the dates file for frontend
-    dates_file = add_suffix(args["<file>"], "dates")
+    dates_file = os.path.join(data_dir, "merged.dates")
     with open(dates_file, "w") as handle:
         json.dump({t.id: t.date for t in timepoints}, handle,
                   separators=(",\n", ":"))
@@ -106,7 +109,6 @@ if __name__ == "__main__":
     # append all perfect orfs and make database
     perfect_files = list("{}.collapsed.fasta.perfect.fasta".format(t.id)
                          for t in timepoints)
-    data_dir = path.dirname(path.abspath(timepoints[0].file))  # assume all are in same directory
     all_orfs_file = path.join(data_dir, "all_perfect_orfs.fasta")
     db_file = path.join(data_dir, "all_perfect_orfs.udb")
     cat_files(perfect_files, all_orfs_file)
@@ -127,6 +129,6 @@ if __name__ == "__main__":
         outfile = "".join([t.file, "_ALIGNED.fasta"])
         align_to_refs(infile, all_orfs_file, backtranslated_file,
                       db_file, outfile)
-    #FIX THIS HORRIBLE NONSENSE PLS                  
+    #FIX THIS HORRIBLE NONSENSE PLS
     os.system("cat *ALIGNED.fasta >allTimepoints.ALIGNED.fasta")
     os.system("trees ALIGNED")
