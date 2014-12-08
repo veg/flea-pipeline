@@ -115,12 +115,6 @@ if __name__ == "__main__":
     # assume all are in same directory
     data_dir = path.dirname(path.abspath(timepoints[0].file))
 
-    # write the dates file for frontend
-    dates_file = os.path.join(data_dir, "merged.dates")
-    with open(dates_file, "w") as handle:
-        json.dump({t.id: t.date for t in timepoints}, handle,
-                  separators=(",\n", ":"))
-
     # TODO: do this in parallel
     for t in timepoints:
         cmd = ("processTimestep {f} {seq_id} {percent_identity}"
@@ -143,6 +137,16 @@ if __name__ == "__main__":
     translate(all_orfs_file, translated_file)
     call("mafft --auto {}".format(translated_file), stdout=open(aligned_file, "w"))
     backtranslate(aligned_file, all_orfs_file, backtranslated_file)
+
+    # write the dates file for frontend - all perfect sequences
+    # NOTE: we assume the first part of the record id is the timestamp
+    # id, followed by a dot.
+    dates_file = os.path.join(data_dir, "merged.dates")
+    records = list(SeqIO.parse(backtranslated_file, "fasta"))
+    id_to_date = {t.id : t.date for t in timepoints}
+    with open(dates_file, "w") as handle:
+        outdict = {r.id: id_to_date[r.id.split(".")[0]] for r in records}
+        json.dump(outdict, handle, separators=(",\n", ":"))
 
     # get a DNA consensus for perfect ORF corresponding to earliest date
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
