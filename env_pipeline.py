@@ -28,6 +28,7 @@ from subprocess import check_call
 import shlex
 from os import path
 import csv
+import json
 from collections import namedtuple
 
 #FIX THIS PLS
@@ -88,6 +89,12 @@ if __name__ == "__main__":
     with open(args["<file>"], newline='') as csvfile:
         reader = csv.reader(csvfile, delimiter=' ')
         timepoints = list(Timepoint(f, i, d) for f, i, d in reader)
+
+    # write the dates file for frontend
+    dates_file = add_suffix(args["<file>"], "dates")
+    with open(dates_file, "w") as handle:
+        json.dump({t.id: t.date for t in timepoints}, handle,
+                  separators=(",\n", ":"))
 
     # TODO: do this in parallel
     for t in timepoints:
