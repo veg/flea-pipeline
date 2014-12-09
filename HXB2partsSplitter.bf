@@ -6,7 +6,9 @@ LoadFunctionLibrary ("ReadDelimitedFiles");
 _use_copy_numbers = "_([0-9]+)$";
 fprintf(stdout,"\nPlease enter the path of the final nucleotide alignment:");
 fscanf  (stdin, "String", _nucSequences);
-//_nucSequences = "all_perfect_orfs_translated_aligned_backtranslated.fasta";
+
+fprintf(stdout,"\nOutput file:");
+fscanf  (stdin, "String", _outputFile);
 
 DataSet         allData         = ReadDataFile (_nucSequences);
 DataSetFilter   codonData       = CreateFilter (allData,3,"","",GeneticCodeExclusions);
@@ -34,7 +36,7 @@ for (k = 0; k < Columns (_HXB_aa_offset_matrix); k += 1) {
   }
 }
 dict[""+(Columns(_HXB_aa_offset_matrix)-1)]=Rows(hxb2coord);
-fprintf(merged.prot.parts,CLEAR_FILE,dict,"\n\n");
+fprintf(_outputFile,CLEAR_FILE,dict,"\n\n");
 
 function defineSenseCodonToAA ()
 {	

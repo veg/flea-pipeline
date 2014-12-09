@@ -116,6 +116,7 @@ if __name__ == "__main__":
     data_dir = path.dirname(path.abspath(timepoints[0].file))
 
     # TODO: do this in parallel
+    # FIXME: HYPHY does not like dots in sequence names.
     for t in timepoints:
         cmd = ("processTimestep {f} {seq_id} {percent_identity}"
                " {discard_lb} {subsample_ub}")
@@ -178,7 +179,8 @@ if __name__ == "__main__":
     hxb2_script = os.path.join(script_dir, script_name)
     cmd = 'HYPHYMP {}'.format(hxb2_script)
     p = Popen(shlex.split(cmd), stdin=PIPE)
-    script_input = " {}\n".format(final_alignment_file).encode()
+    merged_prot_parts_filename = os.path.join(data_dir, "merged.prot.parts")
+    script_input = " {}\n{}\n".format(final_alignment_file, merged_prot_parts_filename).encode()
     p.communicate(input=script_input)
     returncode = p.wait()
     if not returncode:
