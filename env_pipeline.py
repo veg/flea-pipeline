@@ -92,6 +92,19 @@ def mrca(infile, recordfile, outfile, oldest_id):
     dnacons(recordfile, id_str="mrca", outfile=outfile)
 
 
+def run_hyphy_script(script_file, *args, hyphy=None):
+    if hyphy is None:
+        hyphy = "HYPHYMP"
+    cmd = '{} {}'.format(hyphy, script_file)
+    p = Popen(shlex.split(cmd), stdin=PIPE)
+    script_input = "".join("{}\n".format(i) for i in args)
+    p.communicate(input=script_input.encode())
+    returncode = p.wait()
+    if returncode != 0:
+        raise Exception("HYPHY command failed: cmd='{}'."
+                        " args={}".format(script_file, args))
+
+
 Timepoint = namedtuple('Timepoint', ['file', 'id', 'date'])
 
 
@@ -112,15 +125,16 @@ if __name__ == "__main__":
         reader = csv.reader(csvfile, delimiter=' ')
         timepoints = list(Timepoint(f, i, d) for f, i, d in reader)
 
-    # assume all are in same directory
     data_dir = path.dirname(path.abspath(timepoints[0].file))
+    script_dir = os.path.split(__file__)[0]
 
     # TODO: do this in parallel
     # FIXME: HYPHY does not like dots in sequence names.
     for t in timepoints:
         cmd = ("processTimestep {f} {seq_id} {percent_identity}"
                " {discard_lb} {subsample_ub}")
-        call(cmd.format(f=t.file, seq_id=t.id, percent_identity=percent_identity,
+        call(cmd.format(f=t.file, seq_id=t.id,
+                        percent_identity=percent_identity,
                         discard_lb=discard_lb, subsample_ub=subsample_ub))
 
     # append all perfect orfs and make database
@@ -131,22 +145,37 @@ if __name__ == "__main__":
     cat_files(perfect_files, all_orfs_file)
     call("usearch -makeudb_usearch {} -output {}".format(all_orfs_file, db_file))
 
+    # make hyphy input and output directory
+    hyphy_data_dir = os.path.join(data_dir, "hyphy_data")
+    hyphy_input_dir = os.path.join(hyphy_data_dir, "input")
+    hyphy_results_dir = os.path.join(hyphy_data_dir, "results")
+
+    def mkdir(d):
+        try:
+            os.mkdir(d)
+        except FileExistsError:
+            pass
+
+    mkdir(hyphy_data_dir)
+    mkdir(hyphy_input_dir)
+    mkdir(hyphy_results_dir)
+
     # codon alignment of all perfect orfs
     translated_file = add_suffix(all_orfs_file, "translated")
-    aligned_file = add_suffix(translated_file, "aligned")
-    backtranslated_file = add_suffix(aligned_file, "backtranslated")
+    aligned_file = os.path.join(hyphy_input_dir, "merged.prot")
+    backtranslated_file = os.path.join(hyphy_input_dir, "merged.fas")
     translate(all_orfs_file, translated_file)
     call("mafft --auto {}".format(translated_file), stdout=open(aligned_file, "w"))
     backtranslate(aligned_file, all_orfs_file, backtranslated_file)
 
     # write the dates file for frontend - all perfect sequences
     # NOTE: we assume the first part of the record id is the timestamp
-    # id, followed by a dot.
-    dates_file = os.path.join(data_dir, "merged.dates")
+    # id, followed by an underscore.
+    dates_file = os.path.join(hyphy_input_dir, "merged.dates")
     records = list(SeqIO.parse(backtranslated_file, "fasta"))
     id_to_date = {t.id : t.date for t in timepoints}
     with open(dates_file, "w") as handle:
-        outdict = {r.id: id_to_date[r.id.split(".")[0]] for r in records}
+        outdict = {r.id: id_to_date[r.id.split("_")[0]] for r in records}
         json.dump(outdict, handle, separators=(",\n", ":"))
 
     # get a DNA consensus for perfect ORF corresponding to earliest date
@@ -154,7 +183,7 @@ if __name__ == "__main__":
     oldest_timepoint = min(timepoints, key=strptime)
     oldest_records_filename = add_suffix(backtranslated_file,
                                          "oldest_{}".format(oldest_timepoint.id))
-    mrca_filename = os.path.join(data_dir, "mrca.seq")
+    mrca_filename = os.path.join(hyphy_input_dir, "mrca.seq")
     mrca(backtranslated_file, oldest_records_filename, mrca_filename,
          oldest_timepoint.id)
 
@@ -173,18 +202,22 @@ if __name__ == "__main__":
     cat_files(timestep_aligned_files, final_alignment_file)
 
     # get HXB2 coordinates -> merged.prot.parts
-    # TODO: result is saved in script directory, not data directory
-    script_dir = os.path.split(__file__)[0]
-    script_name = 'HXB2partsSplitter.bf'
-    hxb2_script = os.path.join(script_dir, script_name)
-    cmd = 'HYPHYMP {}'.format(hxb2_script)
-    p = Popen(shlex.split(cmd), stdin=PIPE)
-    merged_prot_parts_filename = os.path.join(data_dir, "merged.prot.parts")
-    script_input = " {}\n{}\n".format(final_alignment_file, merged_prot_parts_filename).encode()
-    p.communicate(input=script_input)
-    returncode = p.wait()
-    if not returncode:
-        sys.stderr.write("{} failed.".format(script_name))
+    hxb2_script = os.path.join(script_dir, 'HXB2partsSplitter.bf')
+    merged_prot_parts_filename = os.path.join(hyphy_input_dir, "merged.prot.parts")
+    run_hyphy_script(hxb2_script, final_alignment_file, merged_prot_parts_filename)
+
+    # evolutionary history
+    evolutionary_history_script = os.path.join(script_dir, "obtainEvolutionaryHistory.bf")
+    run_hyphy_script(evolutionary_history_script, hyphy_data_dir)
+
+    # amino acid frequencies
+    aa_freqs_script = os.path.join(script_dir, "aminoAcidFrequencies.bf")
+    run_hyphy_script(aa_freqs_script, hyphy_data_dir)
+
+    # fubar
+    fubar_script = os.path.join(script_dir, "runFUBAR.bf")
+    run_hyphy_script(fubar_script, hyphy_data_dir)
+
 
     #FIX THIS HORRIBLE NONSENSE PLS
-    os.system("trees ALIGNED")
+    # os.system("trees ALIGNED")
