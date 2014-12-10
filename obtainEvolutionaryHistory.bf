@@ -260,6 +260,37 @@ function makePartitionBuiltTreeFitMG (dataID, sites, sequences, prefix, rootOn, 
     
 }
 
+//THIS WAS LEGACY FOR DEBUGGING. WILL LIKELY BE NEEDED IN HERE LATER.
+function		isoElectricPointFIX (seq) {
+	COUNT_GAPS_IN_FREQUENCIES = 0;
+	
+	DataSet 			protSeq = ReadFromString ("$BASESET:BASE20\n>1\n" + seq);
+	DataSetFilter		protFil = CreateFilter	 (protSeq,1);
+	
+	HarvestFrequencies (freqs,protFil,1,1,1);
+	
+	freqs = freqs*protFil.sites;
+	
+	expression = "0+"  + freqs[6 ] + "/(1+10^(pH-6.04))"  + /* H */
+				 "+" + freqs[8 ] + "/(1+10^(pH-10.54))" + /* K */
+				 "+" + freqs[14] + "/(1+10^(pH-12.48))" + /* R */
+				 
+				 "-" + freqs[2 ] + "/(1+10^(3.9-pH))"   + /* D */
+				 "-" + freqs[3 ] + "/(1+10^(4.07-pH))"   + /* E */
+				 "-" + freqs[1 ] + "/(1+10^(8.18-pH))"   + /* C */
+				 "-" + freqs[19] + "/(1+10^(10.46-pH))"   ; /* Y */
+	
+	pH :> 0;
+	pH :< 14;
+	pH = 6.5;
+	
+
+	ExecuteCommands ("function ComputePI (pH){ return -Abs(`expression`); }");
+	Optimize 		(res, ComputePI(pH));
+		
+	return res[0][0];
+}
+
 //----------------------------------------------------------------------------------------
 
 function translateFilterToAA (filtername, store_here) {
@@ -356,12 +387,17 @@ function pairwiseCodon (seq1, seq2) {
 //----------------------------------------------------------------------------------------
 
 lfunction phenotypeASequence (seq) {
-
+    //CHECK THAT THIS COUNTS X CHARS AS ACTUAL AMINO ACIDS
     l = Abs (seq^{{"[\\?X\\-]",""}});
-    pngs = countPNGS (seq);
-    iep = isoElectricPoint (seq);
+    if(l>0)
+    {
+    	pngs = countPNGS (seq);
+    	//fprintf(stdout,seq,"\n");
+    	iep = isoElectricPoint (seq);
     
-    return {"Length": l, "PNGS": pngs, "Isoelectric Point": iep};
+    	return {"Length": l, "PNGS": pngs, "Isoelectric Point": iep};
+//HACK ALERT: JUST RETURNING NEUTRAL ISOELECTRIC POINT FOR "------" STRINGS. SHOULD RATHER HAVE THEM NOT COUNTED IN THE AVERAGE LATER.
+    }else {return {"Length": 0, "PNGS": 0, "Isoelectric Point": 7};}
 }
 
 //----------------------------------------------------------------------------------------
