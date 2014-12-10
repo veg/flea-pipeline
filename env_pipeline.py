@@ -187,24 +187,10 @@ if __name__ == "__main__":
     mrca(backtranslated_file, oldest_records_filename, mrca_filename,
          oldest_timepoint.id)
 
-    # run alignment in each timestep
-    timestep_aligned_files = []
-    for t  in timepoints:
-        # TODO: fix these names
-        infile = "".join([t.file, ".pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta"])
-        outfile = "".join([t.file, "_ALIGNED.fasta"])
-        align_to_refs(infile, all_orfs_file, backtranslated_file,
-                      db_file, outfile)
-        timestep_aligned_files.append(outfile)
-
-    # concatenate all aligned timesteps
-    final_alignment_file = os.path.join(data_dir, "allTimepoints.ALIGNED.fasta")
-    cat_files(timestep_aligned_files, final_alignment_file)
-
     # get HXB2 coordinates -> merged.prot.parts
     hxb2_script = os.path.join(script_dir, 'HXB2partsSplitter.bf')
     merged_prot_parts_filename = os.path.join(hyphy_input_dir, "merged.prot.parts")
-    run_hyphy_script(hxb2_script, final_alignment_file, merged_prot_parts_filename)
+    run_hyphy_script(hxb2_script, backtranslated_file, merged_prot_parts_filename)
 
     # evolutionary history
     evolutionary_history_script = os.path.join(script_dir, "obtainEvolutionaryHistory.bf")
@@ -217,6 +203,20 @@ if __name__ == "__main__":
     # fubar
     fubar_script = os.path.join(script_dir, "runFUBAR.bf")
     run_hyphy_script(fubar_script, hyphy_data_dir)
+
+    # # run alignment in each timestep
+    # timestep_aligned_files = []
+    # for t in timepoints:
+    #     # TODO: fix these names
+    #     infile = "".join([t.file, ".pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta"])
+    #     outfile = "".join([t.file, "_ALIGNED.fasta"])
+    #     align_to_refs(infile, all_orfs_file, backtranslated_file,
+    #                   db_file, outfile)
+    #     timestep_aligned_files.append(outfile)
+
+    # # concatenate all aligned timesteps
+    # final_alignment_file = os.path.join(data_dir, "allTimepoints.ALIGNED.fasta")
+    # cat_files(timestep_aligned_files, final_alignment_file)
 
 
     #FIX THIS HORRIBLE NONSENSE PLS
