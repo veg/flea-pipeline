@@ -89,7 +89,7 @@ def mrca(infile, recordfile, outfile, oldest_id):
     records = SeqIO.parse(infile, "fasta")
     oldest_records = (r for r in records if r.id.startswith(oldest_id))
     SeqIO.write(oldest_records, recordfile, "fasta")
-    dnacons(recordfile, id_str="mrca", outfile=outfile)
+    dnacons(recordfile, id_str="mrca", ungap=False, outfile=outfile)
 
 
 def run_hyphy_script(script_file, *args, hyphy=None):

@@ -11,10 +11,11 @@ Usage:
   DNAcons.py -h | --help
 
 Options:
-  -v --verbose           Print progress to STDERR.
+  -v --verbose           Print progress to STDERR
+  --keep-gaps            Do not ungap the consensus
   --id=<STRING>          Record id for the fasta output
-  -o --outfile=<STRING>  Name of output file.
-  -h --help              Show this screen.
+  -o --outfile=<STRING>  Name of output file
+  -h --help              Show this screen
 
 """
 
@@ -31,10 +32,13 @@ from Bio.Align import AlignInfo
 from Bio.Alphabet import IUPAC
 
 
-def dnacons(filename, id_str=None, outfile=None, verbose=False):
+def dnacons(filename, id_str=None, outfile=None, ungap=True, verbose=False):
     alignment = AlignIO.read(filename, "fasta")
     summary_align = AlignInfo.SummaryInfo(alignment)
-    consensus = summary_align.gap_consensus(threshold=0.00).ungap("-")
+    consensus = summary_align.gap_consensus(threshold=0.00)
+    if ungap:
+        consensus = consensus.ungap("-")
+
     # use the first entry for the name, just so know what is what later
     rec = alignment[0]
     if id_str is None:
@@ -55,5 +59,7 @@ if __name__ == "__main__":
     verbose = args["--verbose"]
     id_str = args["--id"]
     outfile = args["--outfile"]
-    dnacons(filename, id_str, outfile, verbose=verbose)
+    keep_gap = args["--keep-gaps"]
+    ungap = not keep_gap
+    dnacons(filename, id_str, outfile, ungap=ungap, verbose=verbose)
 
