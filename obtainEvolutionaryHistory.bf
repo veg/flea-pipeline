@@ -20,6 +20,7 @@ fprintf(stdout,"\n", basePath, "\n");
 _nucSequences = "`basePath`/input/merged.fas";
 _dates        = "`basePath`/input/merged.dates";
 _regions      = "`basePath`/input/merged.prot.parts";
+_earlyCons    = "`basePath`/input/earlyCons.seq";
 _mrcaTo       = "`basePath`/input/mrca.seq";
 _ratesTo	  = "`basePath`/results/rates_pheno.tsv";
 _treesTo	  = "`basePath`/results/trees.json";
@@ -133,10 +134,16 @@ for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
             
             fprintf (_ratesTo, CLEAR_FILE, Join ("\t", headers), "\n");
             
-            fprintf (_mrcaTo, CLEAR_FILE, ">mrca\n", rootSeq);
+            //BM: IMPORTING OUR PIPELINE MRCA AND USING THAT INSTEAD
+            DataSet earlyCons = ReadDataFile (_earlyCons);
+            DataSetFilter dsfEarlyCons = CreateFilter(earlyCons,1);
+            GetDataInfo (earlyConsSeq, dsfEarlyCons, 0);
             
-            
-            seqArrayJSON["MRCA"] =  translateCodonToAA (rootSeq, _c2p_mapping, 0);
+            fprintf (_mrcaTo, CLEAR_FILE, ">mrca\n", earlyConsSeq);
+            seqArrayJSON["MRCA"] =  translateCodonToAA (earlyConsSeq, _c2p_mapping, 0);
+            //BM: DONE
+            //fprintf (_mrcaTo, CLEAR_FILE, ">mrca\n", rootSeq);
+            //seqArrayJSON["MRCA"] =  translateCodonToAA (rootSeq, _c2p_mapping, 0);
             
         }
         
@@ -156,15 +163,37 @@ for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
     }
 }
 
+//BM: ARRANGING TO ROOT ON SEQUENCE CLOSEST TO CONSENSUS FROM EARLIEST TIMEPOINT
+//DataSet earlyCons = ReadDataFile (_earlyCons);
+//DataSet allWithEarlyCons = Combine(earlyCons,allData);
+//DataSetFilter dsfAllWithEarlyCons = CreateFilter(allWithEarlyCons,1);
+//currentDist = 1;
+//bestInd=-1;
+//for(i=1;i<dsfAllWithEarlyCons.species;i=i+1)
+//{
+//	GetDataInfo (siteDifferenceCount, dsfAllWithEarlyCons, 0, i, 0);
+	//fprintf(stdout,"siteDiff:",siteDifferenceCount,"\n");
+//	tot=1-(+({1,4}["siteDifferenceCount[_MATRIX_ELEMENT_COLUMN_][_MATRIX_ELEMENT_COLUMN_]"]))/(+siteDifferenceCount);
+//	//fprintf(stdout,"tot:",tot,"\n");
+//	if(tot<currentDist){bestInd=i; currentDist=tot;}
+//}
+//fprintf(stdout,"bestInd:",bestInd,"\n");
+//GetString(closestForRoot,dsfAllWithEarlyCons,bestInd);
+//fprintf(stdout,"closestForRoot:",closestForRoot,"\n");
+//BM: OVER
+
 thisDate = "Combined";
 tools.addKeyIfMissing (treeArrayJSON, thisDate, {});
 tools.addKeyIfMissing (seqArrayJSON, thisDate, {});
 
 fprintf (stdout, "[WORKING ON `thisDate`]\n");
-    	
-timepoint_info = makePartitionBuiltTreeFitMG ("allData", "", 
-	"",
-	"everything", rootSeq, 1);
+
+//BM: CHANGING THIS LINE TO POINT TO ROOT
+//OK, IT APPEARS THAT WE CAN'T ACTUALLY DO THAT WITHOUT EVERYTHNG BREAKING. BLEAK.
+//OK, TRYING TO PASS IT A SEQUENCE INSTEAD OF AN ID
+timepoint_info = makePartitionBuiltTreeFitMG ("allData", "", "","everything", earlyConsSeq, 1);
+//timepoint_info = makePartitionBuiltTreeFitMG ("allData", "", "","everything", rootSeq, 1);
+//timepoint_info = makePartitionBuiltTreeFitMG ("allData", "", "","everything", closestForRoot, 1);
 
 thisRegion = all_segments [0];
 

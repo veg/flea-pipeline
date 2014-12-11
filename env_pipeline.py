@@ -183,7 +183,7 @@ if __name__ == "__main__":
     oldest_timepoint = min(timepoints, key=strptime)
     oldest_records_filename = add_suffix(backtranslated_file,
                                          "oldest_{}".format(oldest_timepoint.id))
-    mrca_filename = os.path.join(hyphy_input_dir, "mrca.seq")
+    mrca_filename = os.path.join(hyphy_input_dir, "earlyCons.seq")
     mrca(backtranslated_file, oldest_records_filename, mrca_filename,
          oldest_timepoint.id)
 
