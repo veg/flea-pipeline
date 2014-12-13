@@ -1,3 +1,6 @@
 [ $# -eq 0 ] && { echo "Usage: strandCaller <alignment.fasta>"; exit 1; }
-usearch -usearch_global $1 -db /home/ben/EnvPipeline/References/LANLsubtypeRef.udb -id 0.8 -fastapairs $1.matches.fasta -strand both
+usearch -usearch_global $1 -db /home/ben/EnvPipeline/References/ContaminantRef.udb -id 0.98 -notmatched $1.noContam.fasta -matched $1.contaminated.fasta -strand both
+echo "PRINTING CONTAMINANT SEQUENCES [IF ANY]:"
+grep ">" $1.contaminated.fasta | tr '\n' ' '
+usearch -usearch_global $1.noContam.fasta -db /home/ben/EnvPipeline/References/LANLsubtypeRef.udb -id 0.8 -fastapairs $1.matches.fasta -strand both
 everySecond $1.matches.fasta
