@@ -39,9 +39,12 @@ echo "Aligning clusters complete"
 echo "STEP 6: CREATING HQ CONSENSUS SEQS"
 for k in cluster_*.mafft.fasta; do DNAcons.py `pwd`/$k; done
 
-echo "Collecting consensuses into $2.collapsed.fasta."
-cat *.cons.fasta >../../$2.collapsed.fasta
+echo "Collecting consensuses into $2"
+cat *.cons.fasta >../../$2
 cd ../../
+
+echo "Removing duplicate consensuses"
+keepUniques $2
 
 echo "STEP 7: IDENTIFYING PRESERVED READING FRAMES"
 perfectORFs $2.collapsed.fasta
