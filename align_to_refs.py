@@ -7,11 +7,12 @@ Dependencies:
   - balign
 
 Usage:
-  align_to_refs.py <reads> <refs> <refs_aligned> <refs_db> <outfile>
+  align_to_refs.py [options] <reads> <refs> <refs_aligned> <refs_db> <outfile>
   align_to_refs.py -h | --help
 
 Options:
-  -h --help      Show this screen.
+  --keep     Keep the temporary alignment directory.
+  -h --help  Show this screen.
 
 """
 import itertools
@@ -21,6 +22,7 @@ import uuid
 import os
 from collections import defaultdict
 import sys
+import shutil
 
 from docopt import docopt
 
@@ -121,7 +123,7 @@ def add_all_gaps(alignments, gapped_filename):
 
 
 def align_to_refs(reads_filename, refs_filename, refs_aligned_filename, dbfile,
-                  outfile):
+                  outfile, keep):
     """Align all reads to best reference and write full MSA."""
     tmpdir = "/tmp/align_{}".format(uuid.uuid4())
     os.mkdir(tmpdir)
@@ -131,6 +133,8 @@ def align_to_refs(reads_filename, refs_filename, refs_aligned_filename, dbfile,
     lens = list(len(r) for r in msa)
     assert all(i == lens[0] for i in lens)
     SeqIO.write(msa, outfile, "fasta")
+    if not keep:
+        shutil.rmtree(tmpdir)
 
 
 if __name__ == "__main__":
@@ -140,5 +144,6 @@ if __name__ == "__main__":
     dbfile = args["<refs_db>"]
     reads_filename = args["<reads>"]
     outfile = args["<outfile>"]
+    keep = args["--keep"]
     align_to_refs(reads_filename, refs_filename, refs_aligned_filename, dbfile,
-                  outfile)
+                  outfile, keep)
