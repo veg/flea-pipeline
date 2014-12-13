@@ -85,7 +85,7 @@ if __name__ == "__main__":
                                remote_host=remote_host,
                                remote_dir=REMOTE_DIR,
                                name=name, dest=dest)
-    call(rsync_cmd)
-    call(html_cmd)
+    r1 = call(rsync_cmd)
+    r2 = call(html_cmd)
 
-    print("view results at http://test.datamonkey.org/vev/veg-hiv-env/{}.html".format(name))
+    print("view results at http://test.datamonkey.org/veg/veg-hiv-env/{}.html".format(name))
