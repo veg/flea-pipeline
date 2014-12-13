@@ -30,9 +30,11 @@ import shlex
 from os import path
 import csv
 import json
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from datetime import datetime
 import sys
+import uuid
+import shutil
 
 #FIX THIS PLS
 import os
@@ -43,7 +45,7 @@ from Bio import SeqIO
 
 from translate import translate
 from backtranslate import backtranslate
-from align_to_refs import align_to_refs
+from align_to_refs import align_to_refs, usearch_global
 from DNAcons import dnacons
 
 
@@ -137,8 +139,34 @@ if __name__ == "__main__":
                         percent_identity=percent_identity,
                         discard_lb=discard_lb, subsample_ub=subsample_ub))
 
+    # add copy number to consensus sequence ids
+    consensus_counts = defaultdict(lambda: 1)
+    tmpdir = "/tmp/align_{}".format(uuid.uuid4())
+    os.mkdir(tmpdir)
+    for t in timepoints:
+        infile = "".join([t.file, ".pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta"])
+        perfect_file = "{}.collapsed.fasta.perfect.fasta".format(t.id)
+        t_db_file = path.join(data_dir, "{}.udb".format(perfect_file))
+        call("usearch -makeudb_usearch {} -output {}".format(perfect_file, t_db_file))
+        pairs = usearch_global(infile, t_db_file, tmpdir)
+        for raw_id, ref_id in pairs:
+            consensus_counts[str(ref_id).upper()] += 1
+    shutil.rmtree(tmpdir)
+    for t in timepoints:
+        infile = "{}.collapsed.fasta.perfect.fasta".format(t.id)
+        outfile = "{}.collapsed.fasta.perfect.fasta.copynumber.fasta".format(t.id)
+        records = list(SeqIO.parse(infile, 'fasta'))
+        def record_generator():
+            for r in records:
+                str_id = str(r.id).upper()
+                r.id = "{}_{}".format(str_id, consensus_counts[str_id])
+                r.name = ""
+                r.description = ""
+                yield r
+        SeqIO.write(record_generator(), outfile, 'fasta')
+
     # append all perfect orfs and make database
-    perfect_files = list("{}.collapsed.fasta.perfect.fasta".format(t.id)
+    perfect_files = list("{}.collapsed.fasta.perfect.fasta.copynumber.fasta".format(t.id)
                          for t in timepoints)
     all_orfs_file = path.join(data_dir, "all_perfect_orfs.fasta")
     db_file = path.join(data_dir, "all_perfect_orfs.udb")
