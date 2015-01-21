@@ -30,3 +30,9 @@ def insert_gaps(source, target, src_gap, target_gap, skip):
             target = target[skip:]
     return "".join(result)
     
+
+def grouper(iterable, n, fillvalue=None):
+    "Collect data into fixed-length chunks or blocks"
+    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx
+    args = [iter(iterable)] * n
+    return izip_longest(fillvalue=fillvalue, *args)
