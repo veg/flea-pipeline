@@ -12,10 +12,12 @@ echo "STEP 1: QUALITY FILTERING"
 filterFastq $1.pbformatfixed.fastq $2
 echo "STEP 2: STRAND CALLING"
 strandCaller $1.pbformatfixed.fastq.good.fasta
+echo "correcting frame shifts"
+correct_shifts.py $1.pbformatfixed.fastq.good.fasta.matches.fasta $1.pbformatfixed.fastq.good.fasta.matches.fasta.unshifted.fasta
 echo "STEP 3: READ COLLAPSING"
-clusterReads $1.pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta $3
+clusterReads $1.pbformatfixed.fastq.good.fasta.matches.fasta.unshifted.fasta $3
 echo "STEP 4: CLUSTER PICKING"
-cd $1.pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta.clusterdir
+cd $1.pbformatfixed.fastq.good.fasta.matches.fasta.unshifted.fasta.clusterdir
 selectClusters $4 $5
 echo "STEP 5: CLUSTER ALIGNMENT"
 cd keepers

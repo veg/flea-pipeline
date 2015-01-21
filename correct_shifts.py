@@ -28,6 +28,7 @@ from Bio import SeqIO
 from Bio.SeqIO.FastaIO import FastaWriter
 
 from util import grouper
+from util import new_record_seq_str
 
 
 def first_index(target, it):
@@ -55,22 +56,16 @@ def correct_shifts(seq, ref, gap_char=None):
                 if k != 0:
                     result.append(seq_part)
             else:
-                return None  # not possible to fix
+                return ''  # not possible to fix
         elif k == 0:  # gap in sequence
             result.append('X' * len(seq_part))
     return ''.join(result)
 
 
-def correct_shifts_record(seq_record, ref_record):
-    result = seq_record.copy()
-    result.seq = correct_shifts(seq_record.seq, ref_record.seq)
-    return result
-
-
 def correct_shifts_fasta(infile, outfile):
-    pairs = grouper(SeqIO.read(infile, 'fasta'), 2)
-    results = (correct_shifts(seq, ref) for seq, ref in pairs)
-    results = (r for r in results if r is not None)
+    pairs = grouper(SeqIO.parse(infile, 'fasta'), 2)
+    results = (new_record_seq_str(seq, correct_shifts(seq.seq, ref.seq)) for seq, ref in pairs)
+    results = (r for r in results if str(r.seq))
     SeqIO.write(results, outfile, 'fasta')
 
 

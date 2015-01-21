@@ -1,5 +1,9 @@
 """Utility functions used in more than one script."""
 
+from itertools import zip_longest
+
+from Bio.Seq import Seq
+
 
 def insert_gaps(source, target, src_gap, target_gap, skip):
     """Inserts `target_gap` into target string at same positions as
@@ -35,4 +39,10 @@ def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
     # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx
     args = [iter(iterable)] * n
-    return izip_longest(fillvalue=fillvalue, *args)
+    return zip_longest(fillvalue=fillvalue, *args)
+
+
+def new_record_seq_str(record, seqstr):
+    record = record[:]
+    record.seq = Seq(seqstr, alphabet=record.seq.alphabet)
+    return record

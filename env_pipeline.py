@@ -144,7 +144,7 @@ if __name__ == "__main__":
     tmpdir = "/tmp/align_{}".format(uuid.uuid4())
     os.mkdir(tmpdir)
     for t in timepoints:
-        infile = "".join([t.file, ".pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta"])
+        infile = "".join([t.file, ".pbformatfixed.fastq.good.fasta.matches.fasta.unshifted.fasta"])
         perfect_file = "{}.collapsed.fasta.perfect.fasta".format(t.id)
         t_db_file = path.join(data_dir, "{}.udb".format(perfect_file))
         call("usearch -makeudb_usearch {} -output {}".format(perfect_file, t_db_file))
@@ -236,7 +236,7 @@ if __name__ == "__main__":
     # timestep_aligned_files = []
     # for t in timepoints:
     #     # TODO: fix these names
-    #     infile = "".join([t.file, ".pbformatfixed.fastq.good.fasta.matches.fasta.seconds.fasta"])
+    #     infile = "".join([t.file, ".pbformatfixed.fastq.good.fasta.matches.fasta.unshifted.fasta"])
     #     outfile = "".join([t.file, "_ALIGNED.fasta"])
     #     align_to_refs(infile, all_orfs_file, backtranslated_file,
     #                   db_file, outfile)

@@ -13,7 +13,7 @@ class TestCorrectShifts(unittest.TestCase):
             ('ACGT', 'AC-T', 'ACT'),
             ('ACGTT', 'AC--T', 'ACT'),
             ('ACAAAGT', 'AC---GT', 'ACAAAGT'),
-            ('ACAAAAGT', 'AC----GT', None),
+            ('ACAAAAGT', 'AC----GT', ''),
             ('ACAAACCCGT', 'AC------GT', 'ACAAACCCGT'),
             ('AG-GTTT', 'ACC-TTT', 'AGXTTT'),
         )
