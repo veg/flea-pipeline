@@ -24,7 +24,7 @@ import shlex
 
 from docopt import docopt
 
-REMOTE_DIR = "/var/www/html/veg/veg-hiv-env/"
+REMOTE_DIR = "/var/www/html/veg/FLEA/"
 
 RSYNC_CMD = "rsync {src} {remote_user}@{remote_host}:{dest_path}"
 
@@ -88,4 +88,4 @@ if __name__ == "__main__":
     r1 = call(rsync_cmd)
     r2 = call(html_cmd)
 
-    print("view results at http://test.datamonkey.org/veg/veg-hiv-env/{}.html".format(name))
+    print("view results at http://test.datamonkey.org/veg/FLEA/{}.html".format(name))
