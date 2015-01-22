@@ -77,8 +77,37 @@ from correct_shifts import correct_shifts_fasta
 from perfectORFs import perfect_file
 
 
-def call(cmd, **kwargs):
-    check_call(shlex.split(cmd), **kwargs)
+def call(cmd_str, *args, stdout=None):
+    """Call a command in the shell. Captures STDOUT and STDERR.
+
+    If *args are given, they are passed as strings to STDIN.
+
+    Raises an exception if return code != 0.
+
+    """
+    if stdout is None:
+        stdout = PIPE
+    if args:
+        stdin = PIPE
+    else:
+        stdin = None
+    process = Popen(cmd_str, stdin=stdin, stdout=stdout, stderr=PIPE, shell=True)
+    if args:
+        script_input = "".join("{}\n".format(i) for i in args)
+        script_input = script_input.encode()
+    else:
+        script_input = None
+    stdout_str, stderr_str = process.communicate(input=script_input)
+    if process.returncode != 0:
+        raise Exception("Failed to run '{}'\n{}{}Non-zero exit status {}".format(
+                cmd_str, stdout_str, stderr_str, process.returncode))
+
+
+def run_hyphy_script(script_file, *args, hyphy=None):
+    if hyphy is None:
+        hyphy = "HYPHYMP"
+    cmd = '{} {}'.format(hyphy, script_file)
+    call(cmd, *args)
 
 
 def flatten(it):
@@ -113,19 +142,6 @@ def mrca(infile, recordfile, outfile, oldest_id):
     oldest_records = (r for r in records if r.id.startswith(oldest_id))
     SeqIO.write(oldest_records, recordfile, "fasta")
     dnacons(recordfile, id_str="mrca", ungap=False, outfile=outfile)
-
-
-def run_hyphy_script(script_file, *args, hyphy=None):
-    if hyphy is None:
-        hyphy = "HYPHYMP"
-    cmd = '{} {}'.format(hyphy, script_file)
-    p = Popen(shlex.split(cmd), stdin=PIPE)
-    script_input = "".join("{}\n".format(i) for i in args)
-    p.communicate(input=script_input.encode())
-    returncode = p.wait()
-    if returncode != 0:
-        raise Exception("HYPHY command failed: cmd='{}'."
-                        " args={}".format(script_file, args))
 
 
 def strlist(arg):
