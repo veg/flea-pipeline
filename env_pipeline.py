@@ -19,7 +19,7 @@ Options:
   --percent-identity=FLOAT  Percent identity for clustering [default: 0.99]
   --discard-lb=INT          Lower bound for selecting clusters [default: 5]
   --subsample-ub=INT        Upper bound for selecting clusters [default: 30]
-  -v --verbose              Print progress.
+  -v INT --verbosity=INT    Verbosity level, 0-5 [default: 1]
   -h --help                 Show this screen.
 
 """
@@ -169,7 +169,7 @@ args = docopt(__doc__)
 percent_identity = args["--percent-identity"]
 discard_lb = int(args["--discard-lb"])
 subsample_ub = int(args["--subsample-ub"])
-is_verbose = args["--verbose"]
+verbosity = int(args["--verbosity"])
 
 # FIXME: for now, filenames cannot have spaces. Make this more
 # robust. For instance use tab-seperated values.
@@ -422,7 +422,7 @@ def run_fubar(infile, outfile):
     run_hyphy_script(fubar_script, hyphy_data_dir)
 
 
-pipeline_run([run_fubar, aa_freqs, evo_history], verbose=5, touch_files_only=True)
+pipeline_run([run_fubar, aa_freqs, evo_history], verbose=verbosity)
 
 # # # run alignment in each timestep
 # # timestep_aligned_files = []
