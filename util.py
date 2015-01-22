@@ -8,7 +8,7 @@ from itertools import filterfalse
 from Bio.Seq import Seq
 
 
-def call(cmd_str, *args, stdout=None):
+def call(cmd_str, stdin=None, stdout=None):
     """Call a command in the shell. Captures STDOUT and STDERR.
 
     If *args are given, they are passed as strings to STDIN.
@@ -16,19 +16,15 @@ def call(cmd_str, *args, stdout=None):
     Raises an exception if return code != 0.
 
     """
-    if stdout is None:
-        stdout = PIPE
-    if args:
+    if isinstance(stdin, str):
+        in_str = stdin.encode()
         stdin = PIPE
     else:
-        stdin = None
+        in_str = None
+    if stdout is None:
+        stdout = PIPE
     process = Popen(cmd_str, stdin=stdin, stdout=stdout, stderr=PIPE, shell=True)
-    if args:
-        script_input = "".join("{}\n".format(i) for i in args)
-        script_input = script_input.encode()
-    else:
-        script_input = None
-    stdout_str, stderr_str = process.communicate(input=script_input)
+    stdout_str, stderr_str = process.communicate(input=in_str)
     if process.returncode != 0:
         raise Exception("Failed to run '{}'\n{}{}Non-zero exit status {}".format(
                 cmd_str, stdout_str, stderr_str, process.returncode))
@@ -38,7 +34,11 @@ def hyphy_call(script_file, *args, hyphy=None):
     if hyphy is None:
         hyphy = "HYPHYMP"
     cmd = '{} {}'.format(hyphy, script_file)
-    call(cmd, *args)
+    if args:
+        in_str = "".join("{}\n".format(i) for i in args)
+    else:
+        in_str = None
+    call(cmd, stdin=in_str)
 
 
 def insert_gaps(source, target, src_gap, target_gap, skip):

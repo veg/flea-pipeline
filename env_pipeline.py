@@ -14,7 +14,6 @@ Usage:
 """
 
 # TODO:
-# - final alignment and trees
 # - run jobs on cluster
 # - logging
 # - update to latest versions of dependencies
@@ -56,6 +55,7 @@ from ruffus import formatter
 from ruffus import merge
 from ruffus import cmdline
 from ruffus import add_inputs
+from ruffus import active_if
 
 from translate import translate
 from backtranslate import backtranslate
@@ -76,6 +76,11 @@ parser.add_argument('--min-cluster', default=5, type=int,
                     help='Minimum cluster size; smaller clusters are discarded.')
 parser.add_argument('--max-cluster', default=30, type=int,
                     help='Maximum cluster size; larger clusters are subsampled.')
+parser.add_argument('--align-full', action='store_true',
+                    help='Generate full alignment of all sequences.')
+parser.add_argument('--trees', action='store_true',
+                    help='Generate trees.')
+
 
 options = parser.parse_args()
 if options.min_cluster < 1:
@@ -118,11 +123,11 @@ def maybe(fun):
 
 
 def check_suffix(name, suffix):
-    assert name[-len(suffix):] == suffix
+    assert(name[-len(suffix):] == suffix)
 
 
 def check_basename(name, bn):
-    assert os.path.basename(name) == bn
+    assert(os.path.basename(name) == bn)
 
 
 Timepoint = namedtuple('Timepoint', ['file', 'id', 'date'])
@@ -378,6 +383,7 @@ def run_fubar(infile, outfile):
     hyphy_call(hyphy_script('runFUBAR.bf'), hyphy_data_dir)
 
 
+@active_if(options.align_full)
 @transform(shift_correction,
            suffix('.shift-corrected.fasta'),
            add_inputs([cat_all_perfect, backtranslate_alignment, make_full_db]),
@@ -394,12 +400,19 @@ def align_full_timestep(infiles, outfile):
     align_to_refs(shift_corrected, perfect, perfect_aligned, dbfile, outfile)
 
 
-@merge(align_full_timestep, 'allTimepoints.ALIGNED.fasta')
+@active_if(options.align_full)
+@merge(align_full_timestep, 'all_timepoints.aligned.fasta')
 def merge_all_timepoints(infiles, outfile):
     cat_files(infiles, outfile)
 
 
-# #FIX THIS HORRIBLE NONSENSE PLS
-# # os.system("trees ALIGNED")
+@active_if(options.align_full and options.trees)
+@transform([align_full_timestep, merge_all_timepoints],
+           suffix('.fasta'), '.tre')
+def infer_trees(infile, outfile):
+    with open(infile, 'rb') as in_handle:
+        with open(outfile, 'w') as out_handle:
+            call('FastTreeMP -nt -gtr -nosupport', stdin=in_handle, stdout=out_handle)
+
 
 cmdline.run(options)
