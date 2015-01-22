@@ -33,6 +33,7 @@ from Bio.Alphabet import IUPAC
 from Bio.Alphabet import Gapped
 
 from util import insert_gaps
+from util import call
 
 
 def usearch_global(readfile, dbfile, identity=0.8):
@@ -47,7 +48,7 @@ def usearch_global(readfile, dbfile, identity=0.8):
         cmd = ("usearch -usearch_global {readfile} -db {dbfile} -id {identity}"
                " -userout {outfile} -userfields query+target -strand both")
         cmd = cmd.format(**kwargs)
-        subprocess.check_call(shlex.split(cmd))
+        call(cmd)
         with open(outfile) as f:
             result = list(line.strip().split("\t") for line in f.readlines())
         return result

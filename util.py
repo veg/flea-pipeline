@@ -1,10 +1,44 @@
 """Utility functions used in more than one script."""
 
+from subprocess import Popen, PIPE, STDOUT
 from itertools import zip_longest
 from itertools import tee
 from itertools import filterfalse
 
 from Bio.Seq import Seq
+
+
+def call(cmd_str, *args, stdout=None):
+    """Call a command in the shell. Captures STDOUT and STDERR.
+
+    If *args are given, they are passed as strings to STDIN.
+
+    Raises an exception if return code != 0.
+
+    """
+    if stdout is None:
+        stdout = PIPE
+    if args:
+        stdin = PIPE
+    else:
+        stdin = None
+    process = Popen(cmd_str, stdin=stdin, stdout=stdout, stderr=PIPE, shell=True)
+    if args:
+        script_input = "".join("{}\n".format(i) for i in args)
+        script_input = script_input.encode()
+    else:
+        script_input = None
+    stdout_str, stderr_str = process.communicate(input=script_input)
+    if process.returncode != 0:
+        raise Exception("Failed to run '{}'\n{}{}Non-zero exit status {}".format(
+                cmd_str, stdout_str, stderr_str, process.returncode))
+
+
+def hyphy_call(script_file, *args, hyphy=None):
+    if hyphy is None:
+        hyphy = "HYPHYMP"
+    cmd = '{} {}'.format(hyphy, script_file)
+    call(cmd, *args)
 
 
 def insert_gaps(source, target, src_gap, target_gap, skip):

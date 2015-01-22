@@ -37,8 +37,6 @@ Options:
 # - replace unnecessary dependencies
 # - update README
 
-from subprocess import check_call
-from subprocess import Popen, PIPE, STDOUT
 import shlex
 from os import path
 import csv
@@ -75,39 +73,7 @@ from align_to_refs import align_to_refs, usearch_global
 from DNAcons import dnacons
 from correct_shifts import correct_shifts_fasta
 from perfectORFs import perfect_file
-
-
-def call(cmd_str, *args, stdout=None):
-    """Call a command in the shell. Captures STDOUT and STDERR.
-
-    If *args are given, they are passed as strings to STDIN.
-
-    Raises an exception if return code != 0.
-
-    """
-    if stdout is None:
-        stdout = PIPE
-    if args:
-        stdin = PIPE
-    else:
-        stdin = None
-    process = Popen(cmd_str, stdin=stdin, stdout=stdout, stderr=PIPE, shell=True)
-    if args:
-        script_input = "".join("{}\n".format(i) for i in args)
-        script_input = script_input.encode()
-    else:
-        script_input = None
-    stdout_str, stderr_str = process.communicate(input=script_input)
-    if process.returncode != 0:
-        raise Exception("Failed to run '{}'\n{}{}Non-zero exit status {}".format(
-                cmd_str, stdout_str, stderr_str, process.returncode))
-
-
-def run_hyphy_script(script_file, *args, hyphy=None):
-    if hyphy is None:
-        hyphy = "HYPHYMP"
-    cmd = '{} {}'.format(hyphy, script_file)
-    call(cmd, *args)
+from util import call, hyphy_call
 
 
 def flatten(it):
@@ -334,8 +300,8 @@ def make_perfect_db(infile, outfile):
          '{NAME[0]}.copynumber.fasta')
 def add_copynumber(infiles, outfile):
     rawfile, perfectfile, dbfile = infiles
-    assert(perfectfile[:-len('.perfect.fasta')] == 'perfect.fasta')
-    assert(dbfile[:-len('.udb')] == '.udb')
+    assert(perfectfile[-len('.perfect.fasta'):] == '.perfect.fasta')
+    assert(dbfile[-len('.udb'):] == '.udb')
     pairs = usearch_global(rawfile, dbfile)
     consensus_counts = defaultdict(lambda: 1)
     for raw_id, ref_id in pairs:
@@ -397,7 +363,7 @@ def write_mrca(infile, outfile):
 @transform(backtranslate_alignment, formatter(), hyphy_input('merged.prot.parts'))
 def write_hxb2_coords(infile, outfile):
     hxb2_script = os.path.join(script_dir, 'HXB2partsSplitter.bf')
-    run_hyphy_script(hxb2_script, infile, outfile)
+    hyphy_call(hxb2_script, infile, outfile)
 
 
 @merge([write_dates, write_hxb2_coords, backtranslate_alignment],
@@ -408,21 +374,21 @@ def write_hxb2_coords(infile, outfile):
 def evo_history(infiles, outfile):
     evolutionary_history_script = os.path.join(script_dir,
                                                "obtainEvolutionaryHistory.bf")
-    run_hyphy_script(evolutionary_history_script, hyphy_data_dir)
+    hyphy_call(evolutionary_history_script, hyphy_data_dir)
 
 
 @merge([write_dates, backtranslate_alignment, write_mrca],
        hyphy_results('frequences.json'))
 def aa_freqs(infile, outfile):
     aa_freqs_script = os.path.join(script_dir,"aminoAcidFrequencies.bf")
-    run_hyphy_script(aa_freqs_script, hyphy_data_dir)
+    hyphy_call(aa_freqs_script, hyphy_data_dir)
 
 
 @merge([write_dates, evo_history, backtranslate_alignment],
        hyphy_results('rates.json'))
 def run_fubar(infile, outfile):
     fubar_script = os.path.join(script_dir, "runFUBAR.bf")
-    run_hyphy_script(fubar_script, hyphy_data_dir)
+    hyphy_call(fubar_script, hyphy_data_dir)
 
 
 pipeline_run([run_fubar, aa_freqs, evo_history], verbose=verbosity)
