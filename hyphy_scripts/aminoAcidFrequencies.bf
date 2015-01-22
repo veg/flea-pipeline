@@ -56,7 +56,7 @@ if (Abs(_use_copy_numbers)) {
 
 for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
     thisDate = uniqueDates["INDEXORDER"][date_index];
-    
+
     sequences = _selectSequencesByDate (thisDate, dateInfo, inputSequenceOrder);
 
     for (s = 0; s < codonData.sites; s += 1) {
@@ -65,7 +65,7 @@ for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
         }
         aa_counts = {};
         for (q = 0; q < Columns (sequences); q+=1) {
-        
+
             GetDataInfo (char, codonData, sequences[q], codonMap[s]);
             total = +char;
             if (total > 0 && total < Rows (char)) {
@@ -85,20 +85,20 @@ fprintf (_frequencies_to, CLEAR_FILE, bySite);
 /*----------------------------------------------------------------------------------------------------------*/
 
 function defineSenseCodonToAA ()
-{	
-	codonToAAMap = {};
-	
-	p2 = 0;
-	for (p1=0; p1<64; p1 += 1)
-	{
-	    if (_Genetic_Code[p1] == 10) {
-	        continue;
-	    }
-		codonToAAMap[p2] = _hyphyAAOrdering[_Genetic_Code[p1]];
-		p2 += 1;
-	}
-	
-	
-	
-	return codonToAAMap;
+{
+        codonToAAMap = {};
+
+        p2 = 0;
+        for (p1=0; p1<64; p1 += 1)
+        {
+            if (_Genetic_Code[p1] == 10) {
+                continue;
+            }
+                codonToAAMap[p2] = _hyphyAAOrdering[_Genetic_Code[p1]];
+                p2 += 1;
+        }
+
+
+
+        return codonToAAMap;
 }

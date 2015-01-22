@@ -22,8 +22,14 @@ Usage:
 # - replace unnecessary dependencies
 # - update README
 
+# FIXME: for now, filenames cannot have spaces. Make this more
+# robust. For instance use tab-seperated values.
+
+# FIXME: HYPHY does not like dots in sequence names.
+
+
 import shlex
-from os import path
+import os
 import csv
 import json
 from collections import namedtuple, defaultdict
@@ -34,9 +40,6 @@ import shutil
 import re
 from random import sample
 from functools import wraps
-
-#FIX THIS PLS
-import os
 
 from docopt import docopt
 
@@ -113,11 +116,6 @@ def maybe(fun):
 Timepoint = namedtuple('Timepoint', ['file', 'id', 'date'])
 
 
-# FIXME: for now, filenames cannot have spaces. Make this more
-# robust. For instance use tab-seperated values.
-
-# FIXME: HYPHY does not like dots in sequence names.
-
 with open(options.file, newline='') as csvfile:
     reader = csv.reader(csvfile, delimiter=' ')
     timepoints = list(Timepoint(f, i, d) for f, i, d in reader)
@@ -125,11 +123,21 @@ with open(options.file, newline='') as csvfile:
 seq_ids = {t.file: t.id for t in timepoints}
 start_files = list(t.file for t in timepoints)
 
-data_dir = path.dirname(path.abspath(timepoints[0].file))
+# useful directories
+data_dir = os.path.dirname(os.path.abspath(timepoints[0].file))
 script_dir = os.path.split(__file__)[0]
+hyphy_script_dir = os.path.join(script_dir, 'hyphy_scripts')
 hyphy_data_dir = os.path.join(data_dir, "hyphy_data")
 hyphy_input_dir = os.path.join(hyphy_data_dir, "input")
 hyphy_results_dir = os.path.join(hyphy_data_dir, "results")
+ref_dir = '/home/keren/projects/env_pipeline/References'
+
+contaminant_db = os.path.join(ref_dir, 'ContaminantRef.udb')
+lanl_db = os.path.join(ref_dir, 'LANLsubtypeRef.udb')
+
+
+def hyphy_script(name):
+    return os.path.join(hyphy_script_dir, name)
 
 
 def hyphy_input(s):
@@ -138,10 +146,6 @@ def hyphy_input(s):
 
 def hyphy_results(s):
     return os.path.join(hyphy_results_dir, s)
-
-
-contaminant_db = '/home/keren/projects/env_pipeline/References/ContaminantRef.udb'
-lanl_db = '/home/keren/projects/env_pipeline/References/LANLsubtypeRef.udb'
 
 
 @transform(start_files, suffix(".fastq"), '.filtered.fasta')
@@ -324,7 +328,7 @@ def write_mrca(infile, outfile):
 
 @transform(backtranslate_alignment, formatter(), hyphy_input('merged.prot.parts'))
 def write_hxb2_coords(infile, outfile):
-    hxb2_script = os.path.join(script_dir, 'HXB2partsSplitter.bf')
+    hxb2_script = hyphy_script('HXB2partsSplitter.bf')
     hyphy_call(hxb2_script, infile, outfile)
 
 
@@ -334,23 +338,19 @@ def write_hxb2_coords(infile, outfile):
                                                     'trees.json',
                                                     'sequences.json')))
 def evo_history(infiles, outfile):
-    evolutionary_history_script = os.path.join(script_dir,
-                                               "obtainEvolutionaryHistory.bf")
-    hyphy_call(evolutionary_history_script, hyphy_data_dir)
+    hyphy_call(hyphy_script("obtainEvolutionaryHistory.bf"), hyphy_data_dir)
 
 
 @merge([write_dates, backtranslate_alignment, write_mrca],
        hyphy_results('frequences.json'))
 def aa_freqs(infile, outfile):
-    aa_freqs_script = os.path.join(script_dir,"aminoAcidFrequencies.bf")
-    hyphy_call(aa_freqs_script, hyphy_data_dir)
+    hyphy_call(hyphy_script("aminoAcidFrequencies.bf"), hyphy_data_dir)
 
 
 @merge([write_dates, evo_history, backtranslate_alignment],
        hyphy_results('rates.json'))
 def run_fubar(infile, outfile):
-    fubar_script = os.path.join(script_dir, "runFUBAR.bf")
-    hyphy_call(fubar_script, hyphy_data_dir)
+    hyphy_call(hyphy_script('runFUBAR.bf'), hyphy_data_dir)
 
 
 cmdline.run(options)
