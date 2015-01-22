@@ -1,3 +1,0 @@
-[ $# -eq 0 ] && { echo "Usage: keepUniques <alignment.fasta>"; exit 1; }
-usearch -sortbylength $1 -output "$1.sorted.fasta"
-usearch -cluster_smallmem "$1.sorted.fasta" -id 1 -centroids "$1.collapsed.fasta"

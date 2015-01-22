@@ -1,4 +1,0 @@
-[ $# -eq 0 ] && { echo "Usage: alignAndTouch <input.fasta> <TouchFile> <Percent identity>"; exit 1; }
-mafft $1 >$1.mafft.fasta
-touch $2
-

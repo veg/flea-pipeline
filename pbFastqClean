@@ -1,4 +1,0 @@
-[ $# -eq 0 ] && { echo "Usage: pbFastqClean <reference fastq>"; exit 1; }
-alifn="$PWD/$1"
-outname="$PWD/$1.pbformatfixed.fastq"
-seqtk seq -l 0 "$alifn" >"$outname"

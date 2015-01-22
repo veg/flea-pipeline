@@ -5,7 +5,7 @@ Takes all sequences with *perfect* reading frame, and writes the
 reading frame to <infile>.perfect.fasta.
 
 Usage:
-  perfectORF [options] <infile>
+  perfectORF [options] <infile> <outfile>
   perfectORF -h | --help
 
 Options:
@@ -25,12 +25,12 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet import IUPAC
 
 
-def perfect_record(record, table, min_pro_len, is_verbose):
+def perfect_record(record, table, min_pro_len, verbose):
     """Returns the open reading frame, or None if no ORF found."""
     nuc = record.seq.ungap("-")
     new_str = str(nuc).upper().replace("X", "N")
     nuc = Seq(new_str, alphabet=nuc.alphabet)
-    if is_verbose:
+    if verbose:
         sys.stderr.write(record.name)
         sys.stderr.write("\n")
         sys.stderr.write("{}...{}\n".format(nuc[:15], nuc[-15:]))
@@ -45,7 +45,7 @@ def perfect_record(record, table, min_pro_len, is_verbose):
                 pos = trans.find(pro)
                 pro_start = pro.find("M")
                 if pro_start > -1:
-                    if is_verbose:
+                    if verbose:
                         sys.stderr.write(
                             "{}...{} - length {}, frame {}\n".format(
                                 pro[pro_start:30], pro[-30:], len(pro), frame))
@@ -60,18 +60,20 @@ def perfect_record(record, table, min_pro_len, is_verbose):
     return None
 
 
-if __name__ == "__main__":
-    args = docopt(__doc__)
-    infile = args["<infile>"]
-    table = int(args["--table"])
-    min_pro_len = int(args["--min-length"])
-    is_verbose = args["--verbose"]
-
-    perfected = list(perfect_record(r, table, min_pro_len, is_verbose)
+def perfect_file(infile, outfile, min_len, table=1, verbose=False):
+    perfected = list(perfect_record(r, table, min_len, verbose)
                  for r in SeqIO.parse(infile, 'fasta'))
     n_bad = sum(1 for r in perfected if r is None)
-    if is_verbose:
+    if verbose:
         sys.stderr.write("Done. Sequences without ORFs: {}\n".format(n_bad))
     perfected = list(r for r in perfected if r is not None)
-    outfile = "{}.perfect.fasta".format(infile)
     SeqIO.write(perfected, outfile, "fasta")
+
+
+if __name__ == "__main__":
+    args = docopt(__doc__)
+    perfect_file(args["<infile>"],
+                 args['<outfile'],
+                 int(args["--min-length"]),
+                 int(args["--table"]),
+                 args["--verbose"])
