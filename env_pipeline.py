@@ -334,6 +334,8 @@ def make_perfect_db(infile, outfile):
          '{NAME[0]}.copynumber.fasta')
 def add_copynumber(infiles, outfile):
     rawfile, perfectfile, dbfile = infiles
+    assert(perfectfile[:-len('.perfect.fasta')] == 'perfect.fasta')
+    assert(dbfile[:-len('.udb')] == '.udb')
     pairs = usearch_global(rawfile, dbfile)
     consensus_counts = defaultdict(lambda: 1)
     for raw_id, ref_id in pairs:
