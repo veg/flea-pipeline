@@ -70,10 +70,10 @@ def bealign(ref_record, read_records, outdir):
     records.extend(read_records)
     SeqIO.write(records, infile, "fasta")
 
-    cmd = "bealign -R {} {}".format(infile, bamfile)
+    cmd = "bealign.py -R {} {}".format(infile, bamfile)
     subprocess.check_call(shlex.split(cmd))
 
-    cmd = "bam2msa {} {}".format(bamfile, outfile)
+    cmd = "bam2msa.py {} {}".format(bamfile, outfile)
     subprocess.check_call(shlex.split(cmd))
     return list(SeqIO.parse(outfile, "fasta"))
 
@@ -126,7 +126,7 @@ def add_all_gaps(alignments, gapped_filename):
 
 
 def align_to_refs(reads_filename, refs_filename, refs_aligned_filename, dbfile,
-                  outfile, keep):
+                  outfile, keep=False):
     """Align all reads to best reference and write full MSA."""
     tmpdir = "/tmp/align_{}".format(uuid.uuid4())
     os.mkdir(tmpdir)

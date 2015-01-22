@@ -15,7 +15,6 @@ Usage:
 
 # TODO:
 # - final alignment and trees
-# - hardcoded paths
 # - run jobs on cluster
 # - logging
 # - update to latest versions of dependencies
@@ -56,6 +55,7 @@ from ruffus import mkdir
 from ruffus import formatter
 from ruffus import merge
 from ruffus import cmdline
+from ruffus import add_inputs
 
 from translate import translate
 from backtranslate import backtranslate
@@ -115,6 +115,14 @@ def maybe(fun):
         else:
             fun(infiles, outfiles)
     return newf
+
+
+def check_suffix(name, suffix):
+    assert name[-len(suffix):] == suffix
+
+
+def check_basename(name, bn):
+    assert os.path.basename(name) == bn
 
 
 Timepoint = namedtuple('Timepoint', ['file', 'id', 'date'])
@@ -267,17 +275,17 @@ def perfect_orfs(infile, outfile):
 
 
 @transform(perfect_orfs, suffix('.fasta'), '.udb')
-def make_perfect_db(infile, outfile):
+def make_individual_dbs(infile, outfile):
     call("usearch -makeudb_usearch {} -output {}".format(infile, outfile))
 
 
-@collate([perfect_orfs, make_perfect_db, shift_correction],
+@collate([perfect_orfs, make_individual_dbs, shift_correction],
          formatter(r'(?P<NAME>.+).filtered'),
          '{NAME[0]}.copynumber.fasta')
 def add_copynumber(infiles, outfile):
     rawfile, perfectfile, dbfile = infiles
-    assert(perfectfile[-len('.perfect.fasta'):] == '.perfect.fasta')
-    assert(dbfile[-len('.udb'):] == '.udb')
+    check_suffix(perfectfile, '.perfect.fasta')
+    check_suffix(dbfile, '.udb')
     pairs = usearch_global(rawfile, dbfile)
     consensus_counts = defaultdict(lambda: 1)
     for raw_id, ref_id in pairs:
@@ -300,6 +308,11 @@ def cat_all_perfect(infiles, outfile):
     cat_files(infiles, outfile)
 
 
+@transform(cat_all_perfect, suffix('.fasta'), '.udb')
+def make_full_db(infile, outfile):
+    call("usearch -makeudb_usearch {} -output {}".format(infile, outfile))
+
+
 @transform(cat_all_perfect, suffix('.fasta'), '.translated')
 def translate_perfect(infile, outfile):
     translate(infile, outfile)
@@ -315,7 +328,7 @@ def codon_align_perfect(infile, outfile):
        hyphy_input('merged.fas'))
 def backtranslate_alignment(infiles, outfile):
     perfect, aligned = infiles
-    assert(os.path.basename(perfect) == 'all_perfect_orfs.fasta')
+    check_basename(perfect, 'all_perfect_orfs.fasta')
     backtranslate(aligned, perfect, outfile)
 
 
@@ -365,22 +378,28 @@ def run_fubar(infile, outfile):
     hyphy_call(hyphy_script('runFUBAR.bf'), hyphy_data_dir)
 
 
-cmdline.run(options)
+@transform(shift_correction,
+           suffix('.shift-corrected.fasta'),
+           add_inputs([cat_all_perfect, backtranslate_alignment, make_full_db]),
+           '.shift-corrected.aligned.fasta')
+def align_full_timestep(infiles, outfile):
+    print(infiles)
+    shift_corrected, (perfect, perfect_aligned, dbfile) = infiles
 
-# # # run alignment in each timestep
-# # timestep_aligned_files = []
-# # for t in timepoints:
-# #     # TODO: fix these names
-# #     infile = "".join([t.file, ".pbformatfixed.fastq.good.fasta.matches.fasta.unshifted.fasta"])
-# #     outfile = "".join([t.file, "_ALIGNED.fasta"])
-# #     align_to_refs(infile, all_orfs_file, backtranslated_file,
-# #                   db_file, outfile)
-# #     timestep_aligned_files.append(outfile)
+    check_suffix(shift_corrected, '.shift-corrected.fasta')
+    check_basename(perfect, 'all_perfect_orfs.fasta')
+    check_suffix(dbfile, '.udb')
+    check_basename(perfect_aligned, 'merged.fas')
 
-# # # concatenate all aligned timesteps
-# # final_alignment_file = os.path.join(data_dir, "allTimepoints.ALIGNED.fasta")
-# # cat_files(timestep_aligned_files, final_alignment_file)
+    align_to_refs(shift_corrected, perfect, perfect_aligned, dbfile, outfile)
+
+
+@merge(align_full_timestep, 'allTimepoints.ALIGNED.fasta')
+def merge_all_timepoints(infiles, outfile):
+    cat_files(infiles, outfile)
 
 
 # #FIX THIS HORRIBLE NONSENSE PLS
 # # os.system("trees ALIGNED")
+
+cmdline.run(options)
