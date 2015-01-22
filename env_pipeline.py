@@ -125,7 +125,7 @@ start_files = list(t.file for t in timepoints)
 
 # useful directories
 data_dir = os.path.dirname(os.path.abspath(timepoints[0].file))
-script_dir = os.path.split(__file__)[0]
+script_dir = os.path.abspath(os.path.split(__file__)[0])
 hyphy_script_dir = os.path.join(script_dir, 'hyphy_scripts')
 hyphy_data_dir = os.path.join(data_dir, "hyphy_data")
 hyphy_input_dir = os.path.join(hyphy_data_dir, "input")

@@ -3,7 +3,6 @@ LoadFunctionLibrary ("lib/dates.bf");
 LoadFunctionLibrary ("DescriptiveStatistics");
 LoadFunctionLibrary ("CodonTools");
 LoadFunctionLibrary ("ReadDelimitedFiles");
-LoadFunctionLibrary ("lib/dates.bf");
 
 _use_copy_numbers = "_([0-9]+)$";
 //_use_copy_numbers = "IFIUSETHISASONEOFMYSEQUENCENAMESTHENIAMATOTALWANKERWHOISASKINGFORSHITTOBREAK$";
