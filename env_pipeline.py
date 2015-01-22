@@ -123,25 +123,14 @@ with open(options.file, newline='') as csvfile:
     timepoints = list(Timepoint(f, i, d) for f, i, d in reader)
 
 seq_ids = {t.file: t.id for t in timepoints}
-
 start_files = list(t.file for t in timepoints)
 
 data_dir = path.dirname(path.abspath(timepoints[0].file))
 script_dir = os.path.split(__file__)[0]
-# # make hyphy input and output directory
 hyphy_data_dir = os.path.join(data_dir, "hyphy_data")
 hyphy_input_dir = os.path.join(hyphy_data_dir, "input")
 hyphy_results_dir = os.path.join(hyphy_data_dir, "results")
 
-def _mkdir(d):
-    try:
-        os.mkdir(d)
-    except FileExistsError:
-        pass
-
-_mkdir(hyphy_data_dir)
-_mkdir(hyphy_input_dir)
-_mkdir(hyphy_results_dir)
 
 def hyphy_input(s):
     return os.path.join(hyphy_input_dir, s)
@@ -288,6 +277,8 @@ def add_copynumber(infiles, outfile):
     SeqIO.write(record_generator(), outfile, 'fasta')
 
 
+@mkdir(hyphy_input_dir)
+@mkdir(hyphy_results_dir)
 @merge(add_copynumber, "all_perfect_orfs.fasta")
 def cat_all_perfect(infiles, outfile):
     cat_files(infiles, outfile)
