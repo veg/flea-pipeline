@@ -180,11 +180,11 @@ _mkdir(hyphy_data_dir)
 _mkdir(hyphy_input_dir)
 _mkdir(hyphy_results_dir)
 
-def hin(s):
+def hyphy_input(s):
     return os.path.join(hyphy_input_dir, s)
 
 
-def hout(s):
+def hyphy_results(s):
     return os.path.join(hyphy_results_dir, s)
 
 
@@ -338,7 +338,7 @@ def translate_perfect(infile, outfile):
     translate(infile, outfile)
 
 
-@transform(translate_perfect, formatter(), hin('merged.prot'))
+@transform(translate_perfect, formatter(), hyphy_input('merged.prot'))
 def codon_align_perfect(infile, outfile):
     with open(outfile, 'w') as handle:
         call("mafft --auto {}".format(infile), stdout=handle)
@@ -346,13 +346,13 @@ def codon_align_perfect(infile, outfile):
 
 @collate([cat_all_perfect, codon_align_perfect],
          formatter(r'(?P<NAME>all_perfect_orfs)'),
-         hin('merged.fas'))
+         hyphy_input('merged.fas'))
 def backtranslate_alignment(infiles, outfile):
     aligned, perfect = infiles
     backtranslate(aligned, perfect, outfile)
 
 
-@transform(backtranslate_alignment, formatter(), hin('merged.dates'))
+@transform(backtranslate_alignment, formatter(), hyphy_input('merged.dates'))
 def write_dates(infile, outfile):
     # NOTE: we assume the first part of the record id is the timestamp
     # id, followed by an underscore.
@@ -363,7 +363,7 @@ def write_dates(infile, outfile):
         json.dump(outdict, handle, separators=(",\n", ":"))
 
 
-@transform(backtranslate_alignment, formatter(), hin('earlyCons.seq'))
+@transform(backtranslate_alignment, formatter(), hyphy_input('earlyCons.seq'))
 def write_mrca(infile, outfile):
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
     oldest_timepoint = min(timepoints, key=strptime)
@@ -371,7 +371,7 @@ def write_mrca(infile, outfile):
     mrca(infile, oldest_records_filename, outfile, oldest_timepoint.id)
 
 
-@transform(backtranslate_alignment, formatter(), hin('merged.prot.parts'))
+@transform(backtranslate_alignment, formatter(), hyphy_input('merged.prot.parts'))
 def write_hxb2_coords(infile, outfile):
     hxb2_script = os.path.join(script_dir, 'HXB2partsSplitter.bf')
     run_hyphy_script(hxb2_script, infile, outfile)
@@ -379,23 +379,25 @@ def write_hxb2_coords(infile, outfile):
 
 @collate([write_dates, write_hxb2_coords, backtranslate_alignment],
          formatter(),
-         list(hout(f) for f in ('rates_pheno.tsv',
-                                'trees.json',
-                                'sequences.json')) + ['mrca.seq'])
+         [hyphy_input('mrca.seq')] + list(hyphy_results(f)
+                                          for f in ('rates_pheno.tsv',
+                                                    'trees.json',
+                                                    'sequences.json')))
 def evo_history(infiles, outfile):
-    evolutionary_history_script = os.path.join(script_dir, "obtainEvolutionaryHistory.bf")
+    evolutionary_history_script = os.path.join(script_dir,
+                                               "obtainEvolutionaryHistory.bf")
     run_hyphy_script(evolutionary_history_script, hyphy_data_dir)
 
 
 @collate([write_dates, backtranslate_alignment, write_mrca],
-         formatter(), hout('frequences.json'))
+         formatter(), hyphy_results('frequences.json'))
 def aa_freqs(infile, outfile):
     aa_freqs_script = os.path.join(script_dir, "aminoAcidFrequencies.bf")
     run_hyphy_script(aa_freqs_script, hyphy_data_dir)
 
 
 @transform([write_dates, evo_history, backtranslate_alignment],
-           formatter(), hout('rates.json'))
+           formatter(), hyphy_results('rates.json'))
 def run_fubar(infile, outfile):
     fubar_script = os.path.join(script_dir, "runFUBAR.bf")
     run_hyphy_script(fubar_script, hyphy_data_dir)
