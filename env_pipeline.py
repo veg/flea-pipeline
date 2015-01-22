@@ -40,6 +40,7 @@ import shutil
 import re
 from random import sample
 from functools import wraps
+from configparser import ConfigParser, ExtendedInterpolation
 
 from docopt import docopt
 
@@ -67,6 +68,8 @@ from util import call, hyphy_call, flatten, cat_files, touch, strlist
 
 parser = cmdline.get_argparse(description='Run complete env pipeline')
 parser.add_argument('file')
+parser.add_argument('--config', type=str,
+                    help='Configuration file.')
 parser.add_argument('--id', default='0.99', type=str,
                     help='Percent identity for clustering.')
 parser.add_argument('--min-cluster', default=5, type=int,
@@ -79,6 +82,7 @@ if options.min_cluster < 1:
     raise Exception('Bad minimum cluster size: {}'. format(options.min_cluster))
 if options.max_cluster < 1:
     raise Exception('Bad maximum cluster size: {}'. format(options.max_cluster))
+
 
 # standard python logger which can be synchronised across concurrent
 # Ruffus tasks
@@ -130,10 +134,17 @@ hyphy_script_dir = os.path.join(script_dir, 'hyphy_scripts')
 hyphy_data_dir = os.path.join(data_dir, "hyphy_data")
 hyphy_input_dir = os.path.join(hyphy_data_dir, "input")
 hyphy_results_dir = os.path.join(hyphy_data_dir, "results")
-ref_dir = '/home/keren/projects/env_pipeline/References'
 
-contaminant_db = os.path.join(ref_dir, 'ContaminantRef.udb')
-lanl_db = os.path.join(ref_dir, 'LANLsubtypeRef.udb')
+
+config = ConfigParser(interpolation=ExtendedInterpolation())
+try:
+    configfile = parser.config
+except AttributeError:
+    configfile = os.path.join(script_dir, 'config')
+config.read(configfile)
+
+contaminant_db = config['Paths']['contaminants_db']
+reference_db = config['Paths']['reference_db']
 
 
 def hyphy_script(name):
@@ -169,14 +180,15 @@ def filter_contaminants(infile, outfiles):
 
 @transform(filter_contaminants, suffix('.uncontaminated.fasta'),
            '.uncontaminated.matches.fasta')
-def filter_lanl(infiles, outfile):
+def filter_uncontaminated(infiles, outfile):
     uncontam, _ = infiles
     call('usearch -usearch_global {uncontam} -db {db} -id 0.8'
          ' -fastapairs {outfile} -strand both'.format(uncontam=uncontam,
-                                                     db=lanl_db, outfile=outfile))
+                                                     db=reference_db,
+                                                      outfile=outfile))
 
 
-@transform(filter_lanl, suffix('.fasta'), '.shift-corrected.fasta')
+@transform(filter_uncontaminated, suffix('.fasta'), '.shift-corrected.fasta')
 def shift_correction(infile, outfile):
     n_seqs, n_fixed = correct_shifts_fasta(infile, outfile)
     n_dropped = n_seqs - n_fixed

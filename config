@@ -1,0 +1,4 @@
+[Paths]
+reference_dir: /path/to/ref/dif
+contaminants_db: ${reference_dir}/ContaminantRef.udb
+reference_db: ${reference_dir}/LANLsubtypeRef.udb

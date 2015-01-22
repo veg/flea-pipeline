@@ -1,21 +1,27 @@
-Dependencies
-------------
+Python dependencies
+-------------------
+- BioPython
+- docopt
+- ruffus
+
+
+3rd party dependencies
+----------------------
 - usearch
 - mafft
 - BioExt's bealign
-- others?
 
-Installation
-------------
-Still need to write a Makefile.
 
-For now, make scripts available on the PATH.
+Setup
+-----
+TODO: script to download/build references.
 
-Also, change path to references in strandCaller. (TODO: make this more
-portable).
+1. Download contaminants references files.
 
-TODO: should we add references to repo, or include script to download
-them?
+2. Generate usearch databases for each. (http://www.drive5.com/usearch/manual/cmd_makeudb_usearch.html)
+
+3. Edit paths in `config` to point to those databases.
+
 
 Usage
 -----
