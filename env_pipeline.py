@@ -179,12 +179,6 @@ contaminant_db = '/home/keren/projects/env_pipeline/References/ContaminantRef.ud
 lanl_db = '/home/keren/projects/env_pipeline/References/LANLsubtypeRef.udb'
 
 
-# @transform(start_files, suffix(".fastq"), '.clean.fastq')
-# def clean_fastq(infile, outfile):
-#     with open(outfile, 'w') as handle:
-#         call('seqtk seq -l 0 {}'.format(infile), stdout=handle)
-
-
 @transform(start_files, suffix(".fastq"), '.filtered.fasta')
 def filter_fastq(infile, outfile):
     outfile = outfile[:-len('.fasta')]  # prinseq appends the extension
