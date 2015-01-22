@@ -25,12 +25,17 @@ Options:
 """
 
 # TODO:
+# - final alignment and trees
+# - hardcoded paths
+# - run jobs on cluster
+# - update interface
 # - for some reason clustering gets redone unnecessarily
 # - order of inputs in tasks seems wrong sometimes
 # - suppress job output
 # - logging
 # - update to latest versions of dependencies
 # - replace unnecessary dependencies
+# - update README
 
 from subprocess import check_call
 from subprocess import Popen, PIPE, STDOUT
@@ -188,8 +193,8 @@ def hyphy_results(s):
     return os.path.join(hyphy_results_dir, s)
 
 
-contaminant_db = '/home/kemal/projects/env/References/ContaminantRef.udb'
-lanl_db = '/home/kemal/projects/env/References/LANLsubtypeRef.udb'
+contaminant_db = '/home/keren/projects/env_pipeline/References/ContaminantRef.udb'
+lanl_db = '/home/keren/projects/env_pipeline/References/LANLsubtypeRef.udb'
 
 
 # @transform(start_files, suffix(".fastq"), '.clean.fastq')
@@ -344,9 +349,8 @@ def codon_align_perfect(infile, outfile):
         call("mafft --auto {}".format(infile), stdout=handle)
 
 
-@collate([cat_all_perfect, codon_align_perfect],
-         formatter(r'(?P<NAME>all_perfect_orfs)'),
-         hyphy_input('merged.fas'))
+@merge([cat_all_perfect, codon_align_perfect],
+       hyphy_input('merged.fas'))
 def backtranslate_alignment(infiles, outfile):
     aligned, perfect = infiles
     backtranslate(aligned, perfect, outfile)
@@ -377,8 +381,7 @@ def write_hxb2_coords(infile, outfile):
     run_hyphy_script(hxb2_script, infile, outfile)
 
 
-@collate([write_dates, write_hxb2_coords, backtranslate_alignment],
-         formatter(),
+@merge([write_dates, write_hxb2_coords, backtranslate_alignment],
          [hyphy_input('mrca.seq')] + list(hyphy_results(f)
                                           for f in ('rates_pheno.tsv',
                                                     'trees.json',
@@ -389,21 +392,21 @@ def evo_history(infiles, outfile):
     run_hyphy_script(evolutionary_history_script, hyphy_data_dir)
 
 
-@collate([write_dates, backtranslate_alignment, write_mrca],
-         formatter(), hyphy_results('frequences.json'))
+@merge([write_dates, backtranslate_alignment, write_mrca],
+       hyphy_results('frequences.json'))
 def aa_freqs(infile, outfile):
-    aa_freqs_script = os.path.join(script_dir, "aminoAcidFrequencies.bf")
+    aa_freqs_script = os.path.join(script_dir,"aminoAcidFrequencies.bf")
     run_hyphy_script(aa_freqs_script, hyphy_data_dir)
 
 
-@transform([write_dates, evo_history, backtranslate_alignment],
-           formatter(), hyphy_results('rates.json'))
+@merge([write_dates, evo_history, backtranslate_alignment],
+       hyphy_results('rates.json'))
 def run_fubar(infile, outfile):
     fubar_script = os.path.join(script_dir, "runFUBAR.bf")
     run_hyphy_script(fubar_script, hyphy_data_dir)
 
 
-pipeline_run([run_fubar, aa_freqs, evo_history], verbose=5)
+pipeline_run([run_fubar, aa_freqs, evo_history], verbose=5, touch_files_only=True)
 
 # # # run alignment in each timestep
 # # timestep_aligned_files = []
