@@ -29,6 +29,8 @@ from Bio.SeqIO.FastaIO import FastaWriter
 
 from util import grouper
 from util import new_record_seq_str
+from util import partition
+from util import genlen
 
 
 def first_index(target, it):
@@ -63,14 +65,26 @@ def correct_shifts(seq, ref, gap_char=None):
 
 
 def correct_shifts_fasta(infile, outfile):
+    """Correct all the pairs in a fasta file.
+
+    Returns (n_seqs, n_fixed)
+
+    """
+    ldict = {}
     pairs = grouper(SeqIO.parse(infile, 'fasta'), 2)
     results = (new_record_seq_str(seq, correct_shifts(seq.seq, ref.seq)) for seq, ref in pairs)
-    results = (r for r in results if str(r.seq))
-    SeqIO.write(results, outfile, 'fasta')
+
+    results = genlen(results, ldict, 'n_seqs')
+    fixed = genlen(filter(lambda r: r.seq, results), ldict, 'n_fixed')
+    SeqIO.write(fixed, outfile, 'fasta')
+    return ldict['n_seqs'], ldict['n_fixed']
 
 
 if __name__ == "__main__":
     args = docopt(__doc__)
     infile = args["<infile>"]
     outfile = args["<outfile>"]
-    correct_shifts_fasta(infile, outfile)
+    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile)
+    n_dropped = n_seqs - n_fixed
+    percent = 100 * n_dropped / n_seqs
+    sys.stderr.write('correction done; discarded {}/{} ({:.2f}%)\n'.format(n_dropped, n_seqs, percent))

@@ -1,6 +1,8 @@
 """Utility functions used in more than one script."""
 
 from itertools import zip_longest
+from itertools import tee
+from itertools import filterfalse
 
 from Bio.Seq import Seq
 
@@ -40,6 +42,29 @@ def grouper(iterable, n, fillvalue=None):
     # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx
     args = [iter(iterable)] * n
     return zip_longest(fillvalue=fillvalue, *args)
+
+
+def partition(pred, iterable):
+    'Use a predicate to partition entries into false entries and true entries'
+    # partition(is_odd, range(10)) --> 0 2 4 6 8   and  1 3 5 7 9
+    t1, t2 = tee(iterable)
+    return filterfalse(pred, t1), filter(pred, t2)
+
+
+def genlen(gen, ldict, name):
+    """A bit of a hack to get the length of a generator after its been run.
+
+    ldict = {}
+    list(genlen((i for i in range(3)), ldict, 'mylen')
+    assert(ldict['mylen'] == 3
+
+    """
+    ldict[name] = 0
+    def f():
+        while True:
+            yield next(gen)
+            ldict[name] += 1
+    return f()
 
 
 def new_record_seq_str(record, seqstr):
