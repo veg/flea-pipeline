@@ -13,7 +13,7 @@ filterFastq $1.pbformatfixed.fastq $2
 echo "STEP 2: STRAND CALLING"
 strandCaller $1.pbformatfixed.fastq.good.fasta
 echo "correcting frame shifts"
-correct_shifts.py $1.pbformatfixed.fastq.good.fasta.matches.fasta $1.pbformatfixed.fastq.good.fasta.matches.fasta.unshifted.fasta
+correct_shifts.py -v $1.pbformatfixed.fastq.good.fasta.matches.fasta $1.pbformatfixed.fastq.good.fasta.matches.fasta.unshifted.fasta > $1.correction_summary
 echo "STEP 3: READ COLLAPSING"
 clusterReads $1.pbformatfixed.fastq.good.fasta.matches.fasta.unshifted.fasta $3
 echo "STEP 4: CLUSTER PICKING"

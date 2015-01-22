@@ -6,18 +6,18 @@ aligned in-frame reference.
 The input file should contain pairs of aligned sequences and references.
 
 Discards sequences that cannot be corrected, because they contain
-indels of length >3 that are not multiples of three.
+insertions of length >3 that is not a multiples of three.
 
 Usage:
   correct_shifts.py [options] <infile> <outfile>
   correct_shifts.py -h
 
 Options:
+  -v --verbose           Print summary [default: False]
   -h --help              Show this screen
 
 """
 
-import sys
 from itertools import groupby
 from itertools import zip_longest
 from functools import partial
@@ -89,4 +89,5 @@ if __name__ == "__main__":
     n_seqs, n_fixed = correct_shifts_fasta(infile, outfile)
     n_dropped = n_seqs - n_fixed
     percent = 100 * n_dropped / n_seqs
-    sys.stderr.write('correction done; discarded {}/{} ({:.2f}%)\n'.format(n_dropped, n_seqs, percent))
+    if args['--verbose']:
+        print('discarded {}/{} ({:.2f}%) sequences'.format(n_dropped, n_seqs, percent))
