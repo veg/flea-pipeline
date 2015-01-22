@@ -47,20 +47,22 @@ def correct_shifts(seq, ref, gap_char=None):
         gap_char = '-'
     result = []
     for k, g in groupby(zip_longest(seq, ref), key=partial(first_index, gap_char)):
+        # k tells us where the gap is
         group = list(g)
         if any(c is None for subgroup in group for c in subgroup):
             raise ValueError('sequence and reference have different lengths')
-        seq_part, ref_part = tuple(''.join(chars) for chars in zip(*group))
+        subseq, subref = tuple(''.join(chars) for chars in zip(*group))
         if k == -1:  # match
-            result.extend(seq_part)
-        elif len(seq_part) >= 3:
-            if len(seq_part) % 3 == 0:
-                if k != 0:
-                    result.append(seq_part)
+            result.extend(subseq)
+        elif k == 0:  # deletion
+            result.append('X' * (len(subseq) % 3))
+        else:  # insertion
+            if len(subseq) % 3 == 0:
+                result.append(subseq)  # keep codon insertions
+            elif len(subseq) < 3:
+                continue  # discard other insertions
             else:
-                return ''  # not possible to fix
-        elif k == 0:  # gap in sequence
-            result.append('X' * len(seq_part))
+                return ''  # give up
     return ''.join(result)
 
 

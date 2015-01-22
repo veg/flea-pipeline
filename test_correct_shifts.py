@@ -9,12 +9,21 @@ class TestCorrectShifts(unittest.TestCase):
 
     def test_correct_shifts(self):
         cases = (
+            # deletions
             ('AC-T', 'ACGT', 'ACXT'),
+            ('AC--T', 'ACGGT', 'ACXXT'),
+            ('AC---T', 'ACGGGT', 'ACT'),
+            ('AC----T', 'ACGGGGT', 'ACXT'),
+
+            # insertions
             ('ACGT', 'AC-T', 'ACT'),
             ('ACGTT', 'AC--T', 'ACT'),
+            ('ACGTGT', 'AC---T', 'ACGTGT'),
             ('ACAAAGT', 'AC---GT', 'ACAAAGT'),
             ('ACAAAAGT', 'AC----GT', ''),
             ('ACAAACCCGT', 'AC------GT', 'ACAAACCCGT'),
+
+            # both
             ('AG-GTTT', 'ACC-TTT', 'AGXTTT'),
         )
         for seq, ref, expected in cases:
@@ -24,3 +33,6 @@ class TestCorrectShifts(unittest.TestCase):
         seq = 'ACC'
         ref = 'AC'
         self.assertRaises(ValueError, correct_shifts, seq, ref)
+
+
+unittest.main()
