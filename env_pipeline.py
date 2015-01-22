@@ -368,7 +368,8 @@ def codon_align_perfect(infile, outfile):
 @merge([cat_all_perfect, codon_align_perfect],
        hyphy_input('merged.fas'))
 def backtranslate_alignment(infiles, outfile):
-    aligned, perfect = infiles
+    perfect, aligned = infiles
+    assert(os.path.basename(perfect) == 'all_perfect_orfs.fasta')
     backtranslate(aligned, perfect, outfile)
 
 

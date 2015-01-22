@@ -62,8 +62,10 @@ def back_translate_gapped(protein, dna):
 
 def backtranslate(protein_filename, dna_filename, outfile):
     try:
-        protein_records = SeqIO.parse(protein_filename, "fasta", alphabet=Gapped(IUPAC.protein))
-        dna_records = SeqIO.parse(dna_filename, "fasta", alphabet=Gapped(IUPAC.unambiguous_dna))
+        protein_records = SeqIO.parse(protein_filename, "fasta",
+                                      alphabet=Gapped(IUPAC.protein))
+        dna_records = SeqIO.parse(dna_filename, "fasta",
+                                  alphabet=Gapped(IUPAC.unambiguous_dna))
         result_iter = (back_translate_gapped(a, b) for a, b in zip_longest(protein_records, dna_records))
         SeqIO.write(result_iter, outfile, "fasta")
     except MissingRecord:
