@@ -105,3 +105,30 @@ def new_record_seq_str(record, seqstr):
     record = record[:]
     record.seq = Seq(seqstr, alphabet=record.seq.alphabet)
     return record
+
+
+def flatten(it):
+    return (b for a in it for b in a)
+
+
+def cat_files(files, outfile, chunk=2**14):
+    """Concatenate multiple files in chunks."""
+    out_handle = open(outfile, "w")
+    for f in files:
+        handle = open(f)
+        while True:
+            data = handle.read(chunk)
+            if data:
+                out_handle.write(data)
+            else:
+                break
+
+
+def touch(f):
+    call('touch {}'.format(f))
+
+
+def strlist(arg):
+    if isinstance(arg, str):
+        return [arg]
+    return arg

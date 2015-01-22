@@ -1,26 +1,15 @@
 #!/usr/bin/env python
-
 """
 Runs the complete pipeline on a set of fasta files.
 
-Input is a file with the following format:
+Input is a file with the following space-seperated informatoin on each
+line for each time point:
 
-<file_1> <id_1>
-<file_2> <id_2>
-...
-<file_n> <id_n>
-
+<file> <id> <date>
 
 Usage:
   env_pipeline [options] <file>
   env_pipeline -h | --help
-
-Options:
-  --percent-identity=FLOAT  Percent identity for clustering [default: 0.99]
-  --discard-lb=INT          Lower bound for selecting clusters [default: 5]
-  --subsample-ub=INT        Upper bound for selecting clusters [default: 30]
-  -v INT --verbosity=INT    Verbosity level, 0-5 [default: 1]
-  -h --help                 Show this screen.
 
 """
 
@@ -28,10 +17,6 @@ Options:
 # - final alignment and trees
 # - hardcoded paths
 # - run jobs on cluster
-# - update interface
-# - for some reason clustering gets redone unnecessarily
-# - order of inputs in tasks seems wrong sometimes
-# - suppress job output
 # - logging
 # - update to latest versions of dependencies
 # - replace unnecessary dependencies
@@ -66,6 +51,7 @@ from ruffus import collate
 from ruffus import mkdir
 from ruffus import formatter
 from ruffus import merge
+from ruffus import cmdline
 
 from translate import translate
 from backtranslate import backtranslate
@@ -73,28 +59,29 @@ from align_to_refs import align_to_refs, usearch_global
 from DNAcons import dnacons
 from correct_shifts import correct_shifts_fasta
 from perfectORFs import perfect_file
-from util import call, hyphy_call
+from util import call, hyphy_call, flatten, cat_files, touch, strlist
 
 
-def flatten(it):
-    return (b for a in it for b in a)
+parser = cmdline.get_argparse(description='Run complete env pipeline')
+parser.add_argument('file')
+parser.add_argument('--id', default='0.99', type=str,
+                    help='Percent identity for clustering.')
+parser.add_argument('--min-cluster', default=5, type=int,
+                    help='Minimum cluster size; smaller clusters are discarded.')
+parser.add_argument('--max-cluster', default=30, type=int,
+                    help='Maximum cluster size; larger clusters are subsampled.')
 
+options = parser.parse_args()
+if options.min_cluster < 1:
+    raise Exception('Bad minimum cluster size: {}'. format(options.min_cluster))
+if options.max_cluster < 1:
+    raise Exception('Bad maximum cluster size: {}'. format(options.max_cluster))
 
-def cat_files(files, outfile, chunk=2**14):
-    """Concatenate multiple files in chunks."""
-    out_handle = open(outfile, "w")
-    for f in files:
-        handle = open(f)
-        while True:
-            data = handle.read(chunk)
-            if data:
-                out_handle.write(data)
-            else:
-                break
-
-
-def touch(f):
-    call('touch {}'.format(f))
+# standard python logger which can be synchronised across concurrent
+# Ruffus tasks
+logger, logger_mutex = cmdline.setup_logging(__name__,
+                                             options.log_file,
+                                             options.verbose)
 
 
 def mrca(infile, recordfile, outfile, oldest_id):
@@ -110,13 +97,9 @@ def mrca(infile, recordfile, outfile, oldest_id):
     dnacons(recordfile, id_str="mrca", ungap=False, outfile=outfile)
 
 
-def strlist(arg):
-    if isinstance(arg, str):
-        return [arg]
-    return arg
-
-
 def maybe(fun):
+    """Modify a task to create empty output files if any input file is
+    empty."""
     @wraps(fun)
     def newf(infiles, outfiles):
         if any(os.stat(f).st_size == 0 for f in strlist(infiles)):
@@ -130,19 +113,12 @@ def maybe(fun):
 Timepoint = namedtuple('Timepoint', ['file', 'id', 'date'])
 
 
-args = docopt(__doc__)
-
-percent_identity = args["--percent-identity"]
-discard_lb = int(args["--discard-lb"])
-subsample_ub = int(args["--subsample-ub"])
-verbosity = int(args["--verbosity"])
-
 # FIXME: for now, filenames cannot have spaces. Make this more
 # robust. For instance use tab-seperated values.
 
 # FIXME: HYPHY does not like dots in sequence names.
 
-with open(args['<file>'], newline='') as csvfile:
+with open(options.file, newline='') as csvfile:
     reader = csv.reader(csvfile, delimiter=' ')
     timepoints = list(Timepoint(f, i, d) for f, i, d in reader)
 
@@ -230,7 +206,8 @@ def cluster(infile, outfiles, *args):
     outdir = '{}.clusters'.format(infile[:-len('.fasta')])
     outpattern = os.path.join(outdir, 'cluster_')
     call('usearch -cluster_smallmem {infile} -id {identity}'
-         ' -clusters {outpattern}'.format(infile=infile, identity=percent_identity, outpattern=outpattern))
+         ' -clusters {outpattern}'.format(infile=infile, identity=options.id,
+                                          outpattern=outpattern))
 
     # TODO: put this in own function
     r = re.compile(r'^cluster_[0-9]+$')
@@ -243,11 +220,11 @@ def cluster(infile, outfiles, *args):
 @transform(cluster, suffix('.fasta'), '.keep.fasta')
 def select_cluster(infile, outfile):
     records = list(SeqIO.parse(infile, 'fasta'))
-    if len(records) < discard_lb:
+    if len(records) < options.min_cluster:
         # empty keep file; needed for pipeline sanity
         touch(outfile)
-    if len(records) > subsample_ub:
-        records = sample(records, subsample_ub)
+    if len(records) > options.max_cluster:
+        records = sample(records, options.max_cluster)
     SeqIO.write(records, outfile, 'fasta')
 
 
@@ -385,7 +362,7 @@ def run_fubar(infile, outfile):
     hyphy_call(fubar_script, hyphy_data_dir)
 
 
-pipeline_run([run_fubar, aa_freqs, evo_history], verbose=verbosity)
+cmdline.run(options)
 
 # # # run alignment in each timestep
 # # timestep_aligned_files = []
