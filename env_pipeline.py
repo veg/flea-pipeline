@@ -63,7 +63,7 @@ from translate import translate
 from backtranslate import backtranslate
 from align_to_refs import align_to_refs, usearch_global
 from DNAcons import dnacons
-from correct_shifts import correct_shifts_fasta
+from correct_shifts import correct_shifts_fasta, write_correction_result
 from perfectORFs import perfect_file
 from util import call, qsub, hyphy_call, flatten, cat_files, touch, strlist
 
@@ -172,27 +172,27 @@ def filter_contaminants(infile, outfiles):
                                 uncontam=uncontam, contam=contam))
 
 
+def db_search_pairs(infile, outfile, dbfile, identity):
+    call('usearch -usearch_global {infile} -db {db} -id {id}'
+         ' -fastapairs {outfile} -strand both'.format(
+            infile=infile, db=dbfile, id=identity, outfile=outfile))
+
+
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(filter_contaminants, suffix('.uncontaminated.fasta'),
            '.uncontaminated.matches.fasta')
 def filter_uncontaminated(infiles, outfile):
     uncontam, _ = infiles
-    call('usearch -usearch_global {uncontam} -db {db} -id {id}'
-         ' -fastapairs {outfile} -strand both'.format(
-            uncontam=uncontam, db=config['Paths']['reference_db'],
-            id=config['Parameters']['reference_identity'],
-            outfile=outfile))
+    db_search_pairs(uncontam, outfile, config['Paths']['reference_db'],
+                    config['Parameters']['reference_identity'])
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(filter_uncontaminated, suffix('.fasta'), '.shift-corrected.fasta')
 def shift_correction(infile, outfile):
-    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile)
-    n_dropped = n_seqs - n_fixed
-    percent = 100 * n_dropped / n_seqs
-    sumfile = '.'.join([outfile, 'summary'])
-    with open(sumfile, 'w') as handle:
-        handle.write('discarded {}/{} ({:.2f}%) sequences\n'.format(n_dropped, n_seqs, percent))
+    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep=True)
+    sumfile = '{}.summary'.format(outfile)
+    write_correction_result(n_seqs, n_fixed, sumfile)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
@@ -269,7 +269,22 @@ def cat_clusters(infiles, outfile):
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
-@transform(cat_clusters, suffix('.fasta'), '.sorted.fasta')
+@transform(cat_clusters, suffix('.fasta'), '.ref_pairs.fasta')
+def consensus_db_search(infile, outfile):
+    db_search_pairs(infile, outfile, config['Paths']['reference_db'],
+                    config['Parameters']['reference_identity'])
+
+
+@jobs_limit(n_local_jobs, 'local_jobs')
+@transform(consensus_db_search, suffix('.fasta'), '.shift-corrected.fasta')
+def consensus_shift_correction(infile, outfile):
+    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep=False)
+    sumfile = '{}.summary'.format(outfile)
+    write_correction_result(n_seqs, n_fixed, sumfile)
+
+
+@jobs_limit(n_local_jobs, 'local_jobs')
+@transform(consensus_shift_correction, suffix('.fasta'), '.sorted.fasta')
 def sort_consensus(infile, outfile):
     call('usearch -sortbylength {} -output {}'.format(infile, outfile))
 
@@ -423,7 +438,8 @@ def run_fubar(infile, outfile):
            add_inputs([cat_all_perfect, backtranslate_alignment, make_full_db]),
            '.shift-corrected.aligned.fasta')
 def align_full_timestep(infiles, outfile):
-    print(infiles)
+    raise Exception('Update the pipeline code to run HYPHY scripts on the output'
+                    ' of this task before running it.')
     shift_corrected, (perfect, perfect_aligned, dbfile) = infiles
 
     check_suffix(shift_corrected, '.shift-corrected.fasta')

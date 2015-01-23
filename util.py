@@ -165,3 +165,14 @@ def strlist(arg):
     if isinstance(arg, str):
         return [arg]
     return arg
+
+
+def write_to_handle(handle, output):
+    if isinstance(handle, str):
+        handle = open(handle, 'w')
+        do_close = True
+    try:
+        handle.write(output)
+    finally:
+        if do_close:
+            handle.close()

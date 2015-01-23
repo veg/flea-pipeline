@@ -22,6 +22,7 @@ Options:
 from itertools import groupby
 from itertools import zip_longest
 from functools import partial
+import sys
 
 from docopt import docopt
 
@@ -32,6 +33,7 @@ from util import grouper
 from util import new_record_seq_str
 from util import partition
 from util import genlen
+from util import write_to_handle
 
 
 def first_index(target, it):
@@ -87,13 +89,19 @@ def correct_shifts_fasta(infile, outfile, keep=True):
     return ldict['n_seqs'], ldict['n_fixed']
 
 
+def write_correction_result(n_seqs, n_fixed, handle):
+    n_dropped = n_seqs - n_fixed
+    percent = 100 * n_dropped / n_seqs
+    do_close = False
+    write_to_handle(handle, 'discarded {}/{} ({:.2f}%)'
+                    ' sequences'.format(n_dropped, n_seqs, percent))
+
+
 if __name__ == "__main__":
     args = docopt(__doc__)
     infile = args["<infile>"]
     outfile = args["<outfile>"]
     keep = args['<--keep-inserts>']
     n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep)
-    n_dropped = n_seqs - n_fixed
-    percent = 100 * n_dropped / n_seqs
     if args['--verbose']:
-        print('discarded {}/{} ({:.2f}%) sequences'.format(n_dropped, n_seqs, percent))
+        write_correction_result(n_seqs, n_fixed, sys.stdout)
