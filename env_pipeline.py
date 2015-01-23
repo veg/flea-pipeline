@@ -14,6 +14,8 @@ Usage:
 """
 
 # TODO:
+# - check everywhere usearch is used; summarize # seqs lost
+# - are identities re-used correctly?
 # - decorator to ensure output not empty
 # - rename files; flea and test subdirectories
 # - logging
@@ -315,7 +317,8 @@ def add_copynumber(infiles, outfile):
     rawfile, perfectfile, dbfile = infiles
     check_suffix(perfectfile, '.perfect.fasta')
     check_suffix(dbfile, '.udb')
-    pairs = usearch_global(rawfile, dbfile)
+    identity = config['Parameters']['reference_identity']
+    pairs = usearch_global(rawfile, dbfile, identity)
     consensus_counts = defaultdict(lambda: 1)
     for raw_id, ref_id in pairs:
         consensus_counts[str(ref_id).upper()] += 1
@@ -446,8 +449,9 @@ def align_full_timestep(infiles, outfile):
     check_basename(perfect, 'all_perfect_orfs.fasta')
     check_suffix(dbfile, '.udb')
     check_basename(perfect_aligned, 'merged.fas')
-
-    align_to_refs(shift_corrected, perfect, perfect_aligned, dbfile, outfile)
+    identity = config['Parameters']['reference_identity']
+    align_to_refs(shift_corrected, perfect, perfect_aligned, dbfile,
+                  outfile, identity)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')

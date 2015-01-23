@@ -36,7 +36,7 @@ from util import insert_gaps
 from util import call
 
 
-def usearch_global(readfile, dbfile, identity=0.8):
+def usearch_global(readfile, dbfile, identity):
     """Run usearch_global against database.
 
     Returns: list of (read id, ref id) tuples.
@@ -126,11 +126,11 @@ def add_all_gaps(alignments, gapped_filename):
 
 
 def align_to_refs(reads_filename, refs_filename, refs_aligned_filename, dbfile,
-                  outfile, keep=False):
+                  outfile, identity, keep=False):
     """Align all reads to best reference and write full MSA."""
     tmpdir = "/tmp/align_{}".format(uuid.uuid4())
     os.mkdir(tmpdir)
-    pairs = usearch_global(reads_filename, dbfile)
+    pairs = usearch_global(reads_filename, dbfile, identity)
     alignments = align_all(reads_filename, refs_filename, pairs, tmpdir)
     msa = add_all_gaps(alignments, refs_aligned_filename)
     lens = list(len(r) for r in msa)
