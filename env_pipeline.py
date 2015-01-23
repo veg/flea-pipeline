@@ -14,7 +14,7 @@ Usage:
 """
 
 # TODO:
-# - run jobs on cluster
+# - decorator to ensure output not empty
 # - logging
 # - update to latest versions of dependencies
 # - replace unnecessary dependencies
@@ -109,6 +109,12 @@ if options.config is None:
 else:
     configfile = options.config
 config.read(configfile)
+
+
+if options.jobs is None:
+    options.jobs = int(config['Jobs']['jobs'])
+max_n_jobs = options.jobs
+n_cluster_jobs = int(config['Jobs']['remote_jobs'])
 
 
 def hyphy_script(name):
@@ -224,7 +230,7 @@ def select_cluster(infile, outfile):
     SeqIO.write(records, outfile, 'fasta')
 
 
-@jobs_limit(int(config['Jobs']['cluster_jobs']))
+@jobs_limit(n_cluster_jobs)
 @transform(select_cluster, suffix('.fasta'), '.aligned.fasta')
 @maybe
 def align_cluster(infile, outfile):
@@ -248,6 +254,10 @@ def cluster_consensus(infile, outfile):
 @collate(cluster_consensus, formatter(), '{subdir[0][0]}.consensus.fasta')
 def cat_clusters(infiles, outfile):
     cat_files(infiles, outfile)
+    statinfo = os.stat(outfile)
+    if statinfo.st_size == 0:
+        raise Exception('A timepoint has no consensus sequences:'
+                        ' "{}"'.format(outfile))
 
 
 @transform(cat_clusters, suffix('.fasta'), '.sorted.fasta')
@@ -416,6 +426,4 @@ def infer_trees(infile, outfile):
 
 
 if __name__ == '__main__':
-    if options.jobs is None:
-        options.jobs = int(config['Jobs']['jobs'])
-    cmdline.run(options)
+    cmdline.run(options, multiprocess=max_n_jobs)
