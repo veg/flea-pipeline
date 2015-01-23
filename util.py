@@ -4,6 +4,8 @@ from subprocess import Popen, PIPE, STDOUT
 from itertools import zip_longest
 from itertools import tee
 from itertools import filterfalse
+import time
+import os
 
 from Bio.Seq import Seq
 
@@ -27,7 +29,37 @@ def call(cmd_str, stdin=None, stdout=None):
     stdout_str, stderr_str = process.communicate(input=in_str)
     if process.returncode != 0:
         raise Exception("Failed to run '{}'\n{}{}Non-zero exit status {}".format(
-                cmd_str, stdout_str, stderr_str, process.returncode))
+                cmd_str, stdout_str.decode(), stderr_str.decode(), process.returncode))
+
+
+def qsub(cmd, sentinel, walltime=3600, sleep=1):
+    """A blocking qsub.
+
+    sentinel: file to be created when task is done. Cannot exist.
+    walltime: seconds
+
+    """
+    if walltime < 1:
+        raise Exception('walltime={} < 1'.format(walltime))
+    if os.path.exists(sentinel):
+        raise Exception('sentinel already exists!')
+    mycmd = '{}; echo $? > {}'.format(cmd, sentinel)
+    fwalltime = time.strftime('%H:%M:%S', time.gmtime(walltime))
+    qsub_cmd = 'qsub -V -l walltime={}'.format(fwalltime)
+    full_cmd = 'echo "{}" | {}'.format(mycmd, qsub_cmd)
+    call(full_cmd)
+    run_time = 0
+    while run_time < walltime:
+        time.sleep(sleep)
+        run_time += sleep
+        if os.path.exists(sentinel):
+            break
+    # check result status
+    time.sleep(1)
+    with open(sentinel) as handle:
+        code = handle.read().strip()
+        if code != '0':
+            raise Exception('qsub job "{}" exited with code "{}"'.format(full_cmd, code))
 
 
 def hyphy_call(script_file, *args, hyphy=None):

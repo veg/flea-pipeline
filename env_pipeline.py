@@ -56,6 +56,7 @@ from ruffus import merge
 from ruffus import cmdline
 from ruffus import add_inputs
 from ruffus import active_if
+from ruffus import jobs_limit
 
 from translate import translate
 from backtranslate import backtranslate
@@ -63,13 +64,16 @@ from align_to_refs import align_to_refs, usearch_global
 from DNAcons import dnacons
 from correct_shifts import correct_shifts_fasta
 from perfectORFs import perfect_file
-from util import call, hyphy_call, flatten, cat_files, touch, strlist
+from util import call, qsub, hyphy_call, flatten, cat_files, touch, strlist
 
 
-parser = cmdline.get_argparse(description='Run complete env pipeline')
+parser = cmdline.get_argparse(description='Run complete env pipeline',
+                              ignored_args=['jobs'])
 parser.add_argument('file')
 parser.add_argument('--config', type=str,
                     help='Configuration file.')
+parser.add_argument('-j', '--jobs', type=int,
+                    help='Number of simultaneous local jobs.')
 parser.add_argument('--id', default='0.99', type=str,
                     help='Percent identity for clustering.')
 parser.add_argument('--min-cluster', default=5, type=int,
@@ -96,42 +100,7 @@ logger, logger_mutex = cmdline.setup_logging(__name__,
                                              options.verbose)
 
 
-def mrca(infile, recordfile, outfile, oldest_id):
-    """Writes records from `infile` to `recordfile` that have an ID
-    corresponding to `oldest_id`. Then runs DNAcons, writing result to
-    `outfile`.
-
-    """
-    len_id = len(oldest_id)
-    records = SeqIO.parse(infile, "fasta")
-    oldest_records = (r for r in records if r.id.startswith(oldest_id))
-    SeqIO.write(oldest_records, recordfile, "fasta")
-    dnacons(recordfile, id_str="mrca", ungap=False, outfile=outfile)
-
-
-def maybe(fun):
-    """Modify a task to create empty output files if any input file is
-    empty."""
-    @wraps(fun)
-    def newf(infiles, outfiles):
-        if any(os.stat(f).st_size == 0 for f in strlist(infiles)):
-            for f in strlist(outfiles):
-                touch(f)
-        else:
-            fun(infiles, outfiles)
-    return newf
-
-
-def check_suffix(name, suffix):
-    assert(name[-len(suffix):] == suffix)
-
-
-def check_basename(name, bn):
-    assert(os.path.basename(name) == bn)
-
-
 Timepoint = namedtuple('Timepoint', ['file', 'id', 'date'])
-
 
 with open(options.file, newline='') as csvfile:
     reader = csv.reader(csvfile, delimiter=' ')
@@ -153,7 +122,7 @@ config = ConfigParser(interpolation=ExtendedInterpolation())
 try:
     configfile = parser.config
 except AttributeError:
-    configfile = os.path.join(script_dir, 'config')
+    configfile = os.path.join(script_dir, 'env_pipeline.config')
 config.read(configfile)
 
 contaminant_db = config['Paths']['contaminants_db']
@@ -170,6 +139,27 @@ def hyphy_input(s):
 
 def hyphy_results(s):
     return os.path.join(hyphy_results_dir, s)
+
+
+def maybe(fun):
+    """Modify a task to create empty output files if any input file is
+    empty."""
+    @wraps(fun)
+    def newf(infiles, outfiles):
+        if any(os.stat(f).st_size == 0 for f in strlist(infiles)):
+            for f in strlist(outfiles):
+                touch(f)
+        else:
+            fun(infiles, outfiles)
+    return newf
+
+
+def check_suffix(name, suffix):
+    assert(name[-len(suffix):] == suffix)
+
+
+def check_basename(name, bn):
+    assert(os.path.basename(name) == bn)
 
 
 @transform(start_files, suffix(".fastq"), '.filtered.fasta')
@@ -246,11 +236,18 @@ def select_cluster(infile, outfile):
     SeqIO.write(records, outfile, 'fasta')
 
 
+@jobs_limit(config['Jobs']['cluster_jobs'])
 @transform(select_cluster, suffix('.fasta'), '.aligned.fasta')
 @maybe
 def align_cluster(infile, outfile):
-    with open(outfile, 'w') as handle:
-        call('mafft {}'.format(infile), stdout=handle)
+    sentinel = '{}.job.complete'.format(outfile)
+    stderr = '{}.job.stderr'.format(outfile)
+    if os.path.exists(sentinel):
+        os.unlink(sentinel)
+    qsub('mafft {} > {} 2>{}'.format(infile, outfile, stderr), sentinel)
+    statinfo = os.stat(outfile)
+    if statinfo.st_size == 0:
+        raise Exception('mafft produced empty output file: "{}"'.format(outfile))
 
 
 @transform(align_cluster, suffix('.fasta'), '.consensus.fasta')
@@ -348,6 +345,19 @@ def write_dates(infile, outfile):
         json.dump(outdict, handle, separators=(",\n", ":"))
 
 
+def mrca(infile, recordfile, outfile, oldest_id):
+    """Writes records from `infile` to `recordfile` that have an ID
+    corresponding to `oldest_id`. Then runs DNAcons, writing result to
+    `outfile`.
+
+    """
+    len_id = len(oldest_id)
+    records = SeqIO.parse(infile, "fasta")
+    oldest_records = (r for r in records if r.id.startswith(oldest_id))
+    SeqIO.write(oldest_records, recordfile, "fasta")
+    dnacons(recordfile, id_str="mrca", ungap=False, outfile=outfile)
+
+
 @transform(backtranslate_alignment, formatter(), hyphy_input('earlyCons.seq'))
 def write_mrca(infile, outfile):
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
@@ -416,4 +426,6 @@ def infer_trees(infile, outfile):
 
 
 if __name__ == '__main__':
+    if options.jobs is None:
+        options.jobs = int(config['Jobs']['jobs'])
     cmdline.run(options)
