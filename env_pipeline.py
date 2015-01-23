@@ -415,4 +415,5 @@ def infer_trees(infile, outfile):
             call('FastTreeMP -nt -gtr -nosupport', stdin=in_handle, stdout=out_handle)
 
 
-cmdline.run(options)
+if __name__ == '__main__':
+    cmdline.run(options)
