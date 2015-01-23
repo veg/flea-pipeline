@@ -78,6 +78,9 @@ parser.add_argument('--config', type=str,
 
 options = parser.parse_args()
 
+if not options.verbose:
+    options.verbose = 1
+
 # standard python logger which can be synchronised across concurrent
 # Ruffus tasks
 logger, logger_mutex = cmdline.setup_logging(__name__,
