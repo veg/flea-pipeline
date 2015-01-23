@@ -218,6 +218,7 @@ def select_cluster(infile, outfile):
     maxsize = int(config['Parameters']['max_cluster_size'])
     if len(records) < minsize:
         touch(outfile)  # empty file; needed for pipeline sanity
+        return
     if len(records) > maxsize:
         records = sample(records, maxsize)
     SeqIO.write(records, outfile, 'fasta')
@@ -231,7 +232,8 @@ def align_cluster(infile, outfile):
     stderr = '{}.job.stderr'.format(outfile)
     if os.path.exists(sentinel):
         os.unlink(sentinel)
-    qsub('mafft {} > {} 2>{}'.format(infile, outfile, stderr), sentinel)
+    # --quiet option is needed; otherwise it fails
+    qsub('mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr), sentinel)
     statinfo = os.stat(outfile)
     if statinfo.st_size == 0:
         raise Exception('mafft produced empty output file: "{}"'.format(outfile))

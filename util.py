@@ -45,7 +45,7 @@ def qsub(cmd, sentinel, walltime=3600, sleep=1):
         raise Exception('sentinel already exists!')
     mycmd = '{}; echo $? > {}'.format(cmd, sentinel)
     fwalltime = time.strftime('%H:%M:%S', time.gmtime(walltime))
-    qsub_cmd = 'qsub -V -l walltime={}'.format(fwalltime)
+    qsub_cmd = 'qsub -V -W umask=077 -l walltime={}'.format(fwalltime)
     full_cmd = 'echo "{}" | {}'.format(mycmd, qsub_cmd)
     call(full_cmd)
     run_time = 0
@@ -54,7 +54,8 @@ def qsub(cmd, sentinel, walltime=3600, sleep=1):
         run_time += sleep
         if os.path.exists(sentinel):
             break
-    # check result status
+    # wait a second to make sure it has been flushed
+    # TODO: this is probably not robust
     time.sleep(1)
     with open(sentinel) as handle:
         code = handle.read().strip()
