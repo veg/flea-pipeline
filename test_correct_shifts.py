@@ -4,8 +4,8 @@ from correct_shifts import correct_shifts
 
 class TestCorrectShifts(unittest.TestCase):
 
-    def _test(self, seq, ref, expected):
-        self.assertEquals(correct_shifts(seq, ref), expected)
+    def _test(self, seq, ref, expected, keep=False):
+        self.assertEquals(correct_shifts(seq, ref, keep=keep), expected)
 
     def test_correct_shifts(self):
         cases = (
@@ -29,10 +29,19 @@ class TestCorrectShifts(unittest.TestCase):
         for seq, ref, expected in cases:
             self._test(seq, ref, expected)
 
+    def test_keep(self):
+        cases = (
+            ('ACAAAAGT', 'AC----GT', 'ACAAAAGT'),
+        )
+        for seq, ref, expected in cases:
+            self._test(seq, ref, expected, keep=True)
+
+
     def test_mismatched_lengths(self):
         seq = 'ACC'
         ref = 'AC'
         self.assertRaises(ValueError, correct_shifts, seq, ref)
 
 
-unittest.main()
+if __name__ == '__main__':
+    unittest.main()

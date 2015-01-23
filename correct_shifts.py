@@ -13,6 +13,7 @@ Usage:
   correct_shifts.py -h
 
 Options:
+  --keep                 Do not discard sequences, even with bad inserts [default: False]
   -v --verbose           Print summary [default: False]
   -h --help              Show this screen
 
@@ -41,7 +42,7 @@ def first_index(target, it):
     return -1
 
 
-def correct_shifts(seq, ref, gap_char=None):
+def correct_shifts(seq, ref, gap_char=None, keep=False):
     """Correct frameshifts relative to a reference."""
     if gap_char is None:
         gap_char = '-'
@@ -62,11 +63,14 @@ def correct_shifts(seq, ref, gap_char=None):
             elif len(subseq) < 3:
                 continue  # discard other insertions
             else:
-                return ''  # give up
+                if keep:
+                    result.append(subseq)
+                else:  # give up
+                    return ''
     return ''.join(result)
 
 
-def correct_shifts_fasta(infile, outfile):
+def correct_shifts_fasta(infile, outfile, keep=True):
     """Correct all the pairs in a fasta file.
 
     Returns (n_seqs, n_fixed)
@@ -74,7 +78,8 @@ def correct_shifts_fasta(infile, outfile):
     """
     ldict = {}
     pairs = grouper(SeqIO.parse(infile, 'fasta'), 2)
-    results = (new_record_seq_str(seq, correct_shifts(seq.seq, ref.seq)) for seq, ref in pairs)
+    results = (new_record_seq_str(seq, correct_shifts(seq.seq, ref.seq, keep=keep))
+               for seq, ref in pairs)
 
     results = genlen(results, ldict, 'n_seqs')
     fixed = genlen(filter(lambda r: r.seq, results), ldict, 'n_fixed')
@@ -86,7 +91,8 @@ if __name__ == "__main__":
     args = docopt(__doc__)
     infile = args["<infile>"]
     outfile = args["<outfile>"]
-    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile)
+    keep = args['<--keep-inserts>']
+    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep)
     n_dropped = n_seqs - n_fixed
     percent = 100 * n_dropped / n_seqs
     if args['--verbose']:
