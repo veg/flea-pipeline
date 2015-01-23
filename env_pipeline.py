@@ -226,7 +226,7 @@ def cluster(infile, outfiles, *args):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(cluster, suffix('.fasta'), '.keep.fasta')
-def select_cluster(infile, outfile):
+def select_clusters(infile, outfile):
     records = list(SeqIO.parse(infile, 'fasta'))
     minsize = int(config['Parameters']['min_cluster_size'])
     maxsize = int(config['Parameters']['max_cluster_size'])
@@ -239,9 +239,9 @@ def select_cluster(infile, outfile):
 
 
 @jobs_limit(n_remote_jobs, 'remote_jobs')
-@transform(select_cluster, suffix('.fasta'), '.aligned.fasta')
+@transform(select_clusters, suffix('.fasta'), '.aligned.fasta')
 @maybe
-def align_cluster(infile, outfile):
+def align_clusters(infile, outfile):
     sentinel = '{}.job.complete'.format(outfile)
     stderr = '{}.job.stderr'.format(outfile)
     if os.path.exists(sentinel):
@@ -254,7 +254,7 @@ def align_cluster(infile, outfile):
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
-@transform(align_cluster, suffix('.fasta'), '.consensus.fasta')
+@transform(align_clusters, suffix('.fasta'), '.consensus.fasta')
 @maybe
 def cluster_consensus(infile, outfile):
     dnacons(infile, outfile=outfile, ungap=True)
@@ -396,7 +396,7 @@ def mrca(infile, recordfile, outfile, oldest_id):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(backtranslate_alignment, formatter(), hyphy_input('earlyCons.seq'))
-def write_mrca(infile, outfile):
+def compute_mrca(infile, outfile):
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
     oldest_timepoint = min(timepoints, key=strptime)
     oldest_records_filename = '.'.join([infile, "oldest_{}".format(oldest_timepoint.id)])
@@ -405,13 +405,13 @@ def write_mrca(infile, outfile):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(backtranslate_alignment, formatter(), hyphy_input('merged.prot.parts'))
-def write_hxb2_coords(infile, outfile):
+def compute_hxb2_coords(infile, outfile):
     hxb2_script = hyphy_script('HXB2partsSplitter.bf')
     hyphy_call(hxb2_script, infile, outfile)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
-@merge([write_dates, write_hxb2_coords, backtranslate_alignment],
+@merge([write_dates, compute_hxb2_coords, backtranslate_alignment],
          [hyphy_input('mrca.seq')] + list(hyphy_results(f)
                                           for f in ('rates_pheno.tsv',
                                                     'trees.json',
@@ -421,7 +421,7 @@ def evo_history(infiles, outfile):
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
-@merge([write_dates, backtranslate_alignment, write_mrca],
+@merge([write_dates, backtranslate_alignment, compute_mrca],
        hyphy_results('frequences.json'))
 def aa_freqs(infile, outfile):
     hyphy_call(hyphy_script("aminoAcidFrequencies.bf"), hyphy_data_dir)
