@@ -8,13 +8,14 @@ line for each time point:
 <file> <id> <date>
 
 Usage:
-  env_pipeline [options] <file>
-  env_pipeline -h | --help
+  env_pipeline.py [options] <file>
+  env_pipeline.py -h | --help
 
 """
 
 # TODO:
 # - decorator to ensure output not empty
+# - rename files; flea and test subdirectories
 # - logging
 # - update to latest versions of dependencies
 # - replace unnecessary dependencies
