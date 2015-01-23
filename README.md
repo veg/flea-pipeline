@@ -20,7 +20,7 @@ TODO: script to download/build references.
 
 2. Generate usearch databases for each. (http://www.drive5.com/usearch/manual/cmd_makeudb_usearch.html)
 
-3. Edit paths in `config` to point to those databases.
+3. Edit paths in `env_pipeline.config` to point to those databases.
 
 
 Usage
