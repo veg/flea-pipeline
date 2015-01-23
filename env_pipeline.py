@@ -423,7 +423,7 @@ def evo_history(infiles, outfile):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @merge([write_dates, backtranslate_alignment, compute_mrca],
-       hyphy_results('frequences.json'))
+       hyphy_results('frequencies.json'))
 def aa_freqs(infile, outfile):
     hyphy_call(hyphy_script("aminoAcidFrequencies.bf"), hyphy_data_dir)
 
