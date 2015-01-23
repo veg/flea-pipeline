@@ -14,6 +14,7 @@ Usage:
 """
 
 # TODO:
+# - order of input files not guaranteed; make more robust
 # - check everywhere usearch is used; summarize # seqs lost
 # - are identities re-used correctly?
 # - decorator to ensure output not empty
@@ -468,6 +469,7 @@ def merge_all_timepoints(infiles, outfile):
 @transform([align_full_timestep, merge_all_timepoints],
            suffix('.fasta'), '.tre')
 def infer_trees(infile, outfile):
+    # TODO: run on cluster
     with open(infile, 'rb') as in_handle:
         with open(outfile, 'w') as out_handle:
             call('FastTreeMP -nt -gtr -nosupport', stdin=in_handle, stdout=out_handle)
