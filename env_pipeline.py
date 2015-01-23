@@ -192,9 +192,7 @@ def filter_uncontaminated(infiles, outfile):
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(filter_uncontaminated, suffix('.fasta'), '.shift-corrected.fasta')
 def shift_correction(infile, outfile):
-    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep=True)
-    sumfile = '{}.summary'.format(outfile)
-    write_correction_result(n_seqs, n_fixed, sumfile)
+    correct_shifts_fasta(infile, outfile, keep=True)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
