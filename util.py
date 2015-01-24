@@ -28,8 +28,12 @@ def call(cmd_str, stdin=None, stdout=None):
     process = Popen(cmd_str, stdin=stdin, stdout=stdout, stderr=PIPE, shell=True)
     stdout_str, stderr_str = process.communicate(input=in_str)
     if process.returncode != 0:
-        raise Exception("Failed to run '{}'\n{}{}Non-zero exit status {}".format(
-                cmd_str, stdout_str.decode(), stderr_str.decode(), process.returncode))
+        if in_str is None:
+            in_str = ''
+        else:
+            in_str = in_str.decode()
+        raise Exception("Failed to run '{}'\nExit status: {}\nSTDIN:\n{}\nSTDOUT:\n{}\nSTDERR\n{}\n".format(
+                cmd_str, process.returncode, in_str, stdout_str.decode(), stderr_str.decode()))
 
 
 def qsub(cmd, sentinel, walltime=3600, sleep=1):
@@ -102,7 +106,7 @@ def insert_gaps(source, target, src_gap, target_gap, skip):
             result.append(target[0:skip])
             target = target[skip:]
     return "".join(result)
-    
+
 
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
