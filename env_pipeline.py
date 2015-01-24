@@ -162,15 +162,26 @@ def maybe(strict=True):
     return wrap
 
 
-def must_work(fun):
+def must_work(fraction=None):
     """Fail if any output is empty"""
-    if options.touch_files_only or options.just_print:
-        return fun
-    @wraps(fun)
-    def wrapped(infiles, outfiles):
-        fun(infiles, outfiles)
-        ensure_not_empty(outfiles)
-    return wrapped
+    def wrap(fun):
+        if options.touch_files_only or options.just_print:
+            return fun
+        @wraps(fun)
+        def wrapped(infiles, outfiles):
+            fun(infiles, outfiles)
+            infiles = strlist(infiles)
+            outfiles = strlist(outfiles)
+            ensure_not_empty(outfiles)
+            if fraction is not None:
+                assert len(outfiles) == 1
+                outfile = outfiles[0]
+                insize = sum(os.stat(f).st_size for f in infiles)
+                outsize = os.stat(outfile).st_size
+                if outsize < insize * fraction:
+                    raise Exception('file is too small: {}'.format(outfile))
+        return wrapped
+    return wrap
 
 
 def check_suffix(name, suffix):
@@ -188,7 +199,7 @@ def check_basename(name, bn):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(start_files, suffix(".fastq"), '.filtered.fasta')
-@must_work
+@must_work()
 def filter_fastq(infile, outfile):
     outfile = outfile[:-len('.fasta')]  # prinseq appends the extension
     call('prinseq -fastq {infile} -out_format 1 -out_good {outfile}'
@@ -219,7 +230,7 @@ def db_search_pairs(infile, outfile, dbfile, identity):
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(filter_contaminants, suffix('.uncontaminated.fasta'),
            '.uncontaminated.matches.fasta')
-@must_work
+@must_work(fraction=0.1)  # conservative fraction; in practice should be close to 2.0
 def filter_uncontaminated(infiles, outfile):
     uncontam, _ = infiles
     db_search_pairs(uncontam, outfile, config['Paths']['reference_db'],
@@ -228,14 +239,14 @@ def filter_uncontaminated(infiles, outfile):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(filter_uncontaminated, suffix('.fasta'), '.shift-corrected.fasta')
-@must_work
+@must_work(fraction=0.4)  # removes half of file: the references
 def shift_correction(infile, outfile):
     correct_shifts_fasta(infile, outfile, keep=True)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(shift_correction, suffix('.fasta'), '.sorted.fasta')
-@must_work
+@must_work(fraction=0.9)
 def sort_by_length(infile, outfile):
     call('usearch -sortbylength {} -output {}'.format(infile, outfile))
 
@@ -334,14 +345,14 @@ def cluster_consensus(infile, outfile):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @collate(cluster_consensus, formatter(), '{subdir[0][0]}.consensus.fasta')
-@must_work
+@must_work(fraction=0.9)
 def cat_clusters(infiles, outfile):
     cat_files(infiles, outfile)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(cat_clusters, suffix('.fasta'), '.ref_pairs.fasta')
-@must_work
+@must_work(fraction=1.5)  # need not be conservative now
 def consensus_db_search(infile, outfile):
     db_search_pairs(infile, outfile, config['Paths']['reference_db'],
                     config['Parameters']['reference_identity'])
@@ -349,7 +360,7 @@ def consensus_db_search(infile, outfile):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(consensus_db_search, suffix('.fasta'), '.shift-corrected.fasta')
-@must_work
+@must_work()  # removes references and sequences with bad insertions
 def consensus_shift_correction(infile, outfile):
     n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep=False)
     sumfile = '{}.summary'.format(outfile)
@@ -358,28 +369,28 @@ def consensus_shift_correction(infile, outfile):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(consensus_shift_correction, suffix('.fasta'), '.sorted.fasta')
-@must_work
+@must_work(fraction=0.9)
 def sort_consensus(infile, outfile):
     call('usearch -sortbylength {} -output {}'.format(infile, outfile))
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(sort_consensus, suffix('.fasta'), '.uniques.fasta')
-@must_work
+@must_work()
 def unique_consensus(infile, outfile):
     call('usearch -cluster_smallmem {} -id 1 -centroids {}'.format(infile, outfile))
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(unique_consensus, suffix('.fasta'), '.perfect.fasta')
-@must_work
+@must_work()
 def perfect_orfs(infile, outfile):
     perfect_file(infile, outfile, min_len=750, table=1, verbose=False)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(perfect_orfs, suffix('.fasta'), '.udb')
-@must_work
+@must_work()
 def make_individual_dbs(infile, outfile):
     call("usearch -makeudb_usearch {} -output {}".format(infile, outfile))
 
@@ -388,7 +399,7 @@ def make_individual_dbs(infile, outfile):
 @collate([perfect_orfs, make_individual_dbs, shift_correction],
          formatter(r'(?P<NAME>.+).filtered'),
          '{NAME[0]}.copynumber.fasta')
-@must_work
+@must_work()
 def add_copynumber(infiles, outfile):
     rawfile, perfectfile, dbfile = infiles
     check_suffix(perfectfile, '.perfect.fasta')
@@ -413,28 +424,28 @@ def add_copynumber(infiles, outfile):
 @mkdir(hyphy_results_dir)
 @jobs_limit(n_local_jobs, 'local_jobs')
 @merge(add_copynumber, "all_perfect_orfs.fasta")
-@must_work
+@must_work(fraction=0.9)
 def cat_all_perfect(infiles, outfile):
     cat_files(infiles, outfile)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(cat_all_perfect, suffix('.fasta'), '.udb')
-@must_work
+@must_work()
 def make_full_db(infile, outfile):
     call("usearch -makeudb_usearch {} -output {}".format(infile, outfile))
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(cat_all_perfect, suffix('.fasta'), '.translated')
-@must_work
+@must_work(fraction=0.3)
 def translate_perfect(infile, outfile):
     translate(infile, outfile)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(translate_perfect, formatter(), hyphy_input('merged.prot'))
-@must_work
+@must_work(fraction=0.9)
 def codon_align_perfect(infile, outfile):
     with open(outfile, 'w') as handle:
         call("mafft --auto {}".format(infile), stdout=handle)
@@ -443,7 +454,7 @@ def codon_align_perfect(infile, outfile):
 @jobs_limit(n_local_jobs, 'local_jobs')
 @merge([cat_all_perfect, codon_align_perfect],
        hyphy_input('merged.fas'))
-@must_work
+@must_work(fraction=2.5)
 def backtranslate_alignment(infiles, outfile):
     perfect, aligned = infiles
     check_basename(perfect, 'all_perfect_orfs.fasta')
@@ -452,7 +463,7 @@ def backtranslate_alignment(infiles, outfile):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(backtranslate_alignment, formatter(), hyphy_input('merged.dates'))
-@must_work
+@must_work()
 def write_dates(infile, outfile):
     # NOTE: we assume the first part of the record id is the timestamp
     # id, followed by an underscore.
@@ -478,7 +489,7 @@ def mrca(infile, recordfile, outfile, oldest_id):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(backtranslate_alignment, formatter(), hyphy_input('earlyCons.seq'))
-@must_work
+@must_work()
 def compute_mrca(infile, outfile):
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
     oldest_timepoint = min(timepoints, key=strptime)
@@ -488,7 +499,7 @@ def compute_mrca(infile, outfile):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(backtranslate_alignment, formatter(), hyphy_input('merged.prot.parts'))
-@must_work
+@must_work()
 def compute_hxb2_coords(infile, outfile):
     hxb2_script = hyphy_script('HXB2partsSplitter.bf')
     hyphy_call(hxb2_script, infile, outfile)
@@ -500,7 +511,7 @@ def compute_hxb2_coords(infile, outfile):
                                           for f in ('rates_pheno.tsv',
                                                     'trees.json',
                                                     'sequences.json')))
-@must_work
+@must_work()
 def evo_history(infiles, outfile):
     hyphy_call(hyphy_script("obtainEvolutionaryHistory.bf"), hyphy_data_dir)
 
@@ -508,7 +519,7 @@ def evo_history(infiles, outfile):
 @jobs_limit(n_local_jobs, 'local_jobs')
 @merge([write_dates, backtranslate_alignment, compute_mrca],
        hyphy_results('frequencies.json'))
-@must_work
+@must_work()
 def aa_freqs(infile, outfile):
     hyphy_call(hyphy_script("aminoAcidFrequencies.bf"), hyphy_data_dir)
 
@@ -516,7 +527,7 @@ def aa_freqs(infile, outfile):
 @jobs_limit(n_local_jobs, 'local_jobs')
 @merge([write_dates, evo_history, backtranslate_alignment],
        hyphy_results('rates.json'))
-@must_work
+@must_work()
 def run_fubar(infile, outfile):
     hyphy_call(hyphy_script('runFUBAR.bf'), hyphy_data_dir)
 
@@ -527,7 +538,7 @@ def run_fubar(infile, outfile):
            suffix('.shift-corrected.fasta'),
            add_inputs([cat_all_perfect, backtranslate_alignment, make_full_db]),
            '.shift-corrected.aligned.fasta')
-@must_work
+@must_work()
 def align_full_timestep(infiles, outfile):
     raise Exception('Update the pipeline code to run HYPHY scripts on the output'
                     ' of this task before running it.')
@@ -545,7 +556,7 @@ def align_full_timestep(infiles, outfile):
 @jobs_limit(n_local_jobs, 'local_jobs')
 @active_if(config.getboolean('Tasks', 'align_full'))
 @merge(align_full_timestep, 'all_timepoints.aligned.fasta')
-@must_work
+@must_work(fraction=0.9)
 def merge_all_timepoints(infiles, outfile):
     cat_files(infiles, outfile)
 
@@ -555,7 +566,7 @@ def merge_all_timepoints(infiles, outfile):
            config.getboolean('Tasks', 'generate_trees'))
 @transform([align_full_timestep, merge_all_timepoints],
            suffix('.fasta'), '.tre')
-@must_work
+@must_work()
 def infer_trees(infile, outfile):
     # TODO: run on cluster
     with open(infile, 'rb') as in_handle:
