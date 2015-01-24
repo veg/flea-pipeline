@@ -148,6 +148,15 @@ def flatten(it):
     return (b for a in it for b in a)
 
 
+def traverse(o, tree_types=(list, tuple)):
+    if isinstance(o, tree_types):
+        for value in o:
+            for subvalue in traverse(value):
+                yield subvalue
+    else:
+        yield o
+
+
 def cat_files(files, outfile, chunk=2**14):
     """Concatenate multiple files in chunks."""
     out_handle = open(outfile, "w")

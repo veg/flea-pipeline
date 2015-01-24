@@ -74,7 +74,7 @@ from align_to_refs import align_to_refs, usearch_global
 from DNAcons import dnacons
 from correct_shifts import correct_shifts_fasta, write_correction_result
 from perfectORFs import perfect_file
-from util import call, qsub, hyphy_call, flatten, cat_files, touch, strlist
+from util import call, qsub, hyphy_call, cat_files, touch, strlist, traverse
 
 
 parser = cmdline.get_argparse(description='Run complete env pipeline',
@@ -177,15 +177,15 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, pattern=None):
     def wrap(fun):
         if options.touch_files_only or options.just_print:
             return fun
-        @wraps(fun)
+        @wraps(fun)  # necessary because ruffus uses function name internally
         def wrapped(infiles, outfiles):
             if maybe:
-                if any(os.stat(f).st_size == 0 for f in strlist(infiles)):
-                    for f in strlist(outfiles):
+                if any(os.stat(f).st_size == 0 for f in traverse(strlist(infiles))):
+                    for f in traverse(strlist(outfiles)):
                         touch(f)
                     return
             fun(infiles, outfiles)
-            infiles = strlist(infiles)
+            infiles = list(traverse(strlist(infiles)))
             infiles = list(f for f in infiles if fnmatch(f, pattern))
             outfiles = strlist(outfiles)
             ensure_not_empty(outfiles)
@@ -214,7 +214,7 @@ def check_basename(name, bn):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(start_files, suffix(".fastq"), '.filtered.fasta')
-@must_work()
+@must_work()  # my decorators must go before ruffus ones
 def filter_fastq(infile, outfile):
     outfile = outfile[:-len('.fasta')]  # prinseq appends the extension
     call('prinseq -fastq {infile} -out_format 1 -out_good {outfile}'
@@ -270,7 +270,10 @@ cluster_flag = "cluster_task_completed.flag"
 
 
 def cluster_uptodate(infile, outfiles):
-    # a temporary hack until the issue with @subdivide and @split gets resolved
+    """A temporary hack until the issue with @subdivide and @split
+    gets resolved.
+
+    """
     if not os.path.exists(cluster_flag):
         return True, "{} is missing".format(cluster_flag)
     # ensure each sorted file has a cluster directory
@@ -336,6 +339,13 @@ def select_clusters(infile, outfile):
     SeqIO.write(records, outfile, 'fasta')
 
 
+def rm_std():
+    """Get rid of annoying STDIN files' after qsub runs"""
+    for f in glob('STDIN.*'):
+        os.unlink(f)
+
+
+@posttask(rm_std)
 @jobs_limit(n_remote_jobs, 'remote_jobs')
 @transform(select_clusters, suffix('.fasta'), '.aligned.fasta')
 @must_work(maybe=True)
