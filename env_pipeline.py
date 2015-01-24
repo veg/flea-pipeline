@@ -307,7 +307,7 @@ def cluster_uptodate(infile, outfiles):
 @jobs_limit(n_local_jobs, 'local_jobs')
 @mkdir(sort_by_length, suffix('.fasta'), '.clusters')
 @subdivide(sort_by_length, formatter(), '{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta')
-def cluster(infile, outfiles, *args):
+def cluster(infile, outfiles):
     for f in outfiles:
         os.unlink(f)
     outdir = '{}.clusters'.format(infile[:-len('.fasta')])
