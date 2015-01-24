@@ -587,4 +587,5 @@ def infer_trees(infile, outfile):
 
 
 if __name__ == '__main__':
-    cmdline.run(options)
+    checksum_level = int(config['Misc']['checksum_level'])
+    cmdline.run(options, checksum_level=checksum_level)
