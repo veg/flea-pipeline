@@ -44,6 +44,7 @@ from random import sample
 from functools import wraps
 from configparser import ConfigParser, ExtendedInterpolation
 from glob import glob
+from fnmatch import fnmatch
 
 from docopt import docopt
 
@@ -145,41 +146,55 @@ def ensure_not_empty(files):
             raise Exception('Empty file: "{}"'.format(f))
 
 
-def maybe(strict=True):
-    """Modify a task to create empty output files if any input file is
-    empty."""
-    def wrap(fun):
-        @wraps(fun)
-        def wrapped(infiles, outfiles):
-            if any(os.stat(f).st_size == 0 for f in strlist(infiles)):
-                for f in strlist(outfiles):
-                    touch(f)
-            else:
-                fun(infiles, outfiles)
-                if strict:
-                    ensure_not_empty(outfiles)
-        return wrapped
-    return wrap
+def check_seq_ids(inputs, output):
+    a_ids = set(r.id for a in inputs for r in SeqIO.parse(a, 'fasta'))
+    b_ids = set(r.id for r in SeqIO.parse(output, 'fasta'))
+    if a_ids != b_ids:
+        raise Exception('IDs from "{}" do not match "{}"'.format(inputs, output))
 
 
-def must_work(fraction=None):
-    """Fail if any output is empty"""
+def check_seq_ratio(inputs, output, expected):
+    a_exp, b_exp = expected
+    assert a_exp == int(a_exp)
+    assert b_exp == int(b_exp)
+    a_n = sum(1 for a in inputs for r in SeqIO.parse(a, 'fasta'))
+    b_n = sum(1 for r in SeqIO.parse(output, 'fasta'))
+    if a_n * b_exp != b_n * a_exp:
+        raise Exception('Sequnce ratios do not match. Expected {}:{}. Got: {}:{}. Inputs: "{}" Output: "{}"'.format(a_exp, b_exp, a_n, b_n, inputs, output))
+
+
+def must_work(maybe=False, seq_ratio=None, seq_ids=False, pattern=None):
+    """Fail if any output is empty.
+
+    maybe: touch output and return if any input is empty
+    seq_ratio: (int, int): ensure numbers of sequences match
+    seq_ids: ensure all ids present in input files are in output file
+    pattern: pattern for determing input files to consider
+
+    """
+    if pattern is None:
+        pattern = '*'
     def wrap(fun):
         if options.touch_files_only or options.just_print:
             return fun
         @wraps(fun)
         def wrapped(infiles, outfiles):
+            if maybe:
+                if any(os.stat(f).st_size == 0 for f in strlist(infiles)):
+                    for f in strlist(outfiles):
+                        touch(f)
+                    return
             fun(infiles, outfiles)
             infiles = strlist(infiles)
+            infiles = list(f for f in infiles if fnmatch(f, pattern))
             outfiles = strlist(outfiles)
             ensure_not_empty(outfiles)
-            if fraction is not None:
+            if seq_ids:
                 assert len(outfiles) == 1
-                outfile = outfiles[0]
-                insize = sum(os.stat(f).st_size for f in infiles)
-                outsize = os.stat(outfile).st_size
-                if outsize < insize * fraction:
-                    raise Exception('file is too small: {}'.format(outfile))
+                check_seq_ids(infiles, outfiles[0])
+            if seq_ratio is not None:
+                assert len(outfiles) == 1
+                check_seq_ratio(infiles, outfiles[0], seq_ratio)
         return wrapped
     return wrap
 
@@ -230,7 +245,7 @@ def db_search_pairs(infile, outfile, dbfile, identity):
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(filter_contaminants, suffix('.uncontaminated.fasta'),
            '.uncontaminated.matches.fasta')
-@must_work(fraction=0.1)  # conservative fraction; in practice should be close to 2.0
+@must_work()
 def filter_uncontaminated(infiles, outfile):
     uncontam, _ = infiles
     db_search_pairs(uncontam, outfile, config['Paths']['reference_db'],
@@ -239,14 +254,14 @@ def filter_uncontaminated(infiles, outfile):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(filter_uncontaminated, suffix('.fasta'), '.shift-corrected.fasta')
-@must_work(fraction=0.4)  # removes half of file: the references
+@must_work(seq_ratio=(2, 1))
 def shift_correction(infile, outfile):
     correct_shifts_fasta(infile, outfile, keep=True)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(shift_correction, suffix('.fasta'), '.sorted.fasta')
-@must_work(fraction=0.9)
+@must_work(seq_ids=True)
 def sort_by_length(infile, outfile):
     call('usearch -sortbylength {} -output {}'.format(infile, outfile))
 
@@ -323,7 +338,7 @@ def select_clusters(infile, outfile):
 
 @jobs_limit(n_remote_jobs, 'remote_jobs')
 @transform(select_clusters, suffix('.fasta'), '.aligned.fasta')
-@maybe(strict=True)
+@must_work(maybe=True)
 def align_clusters(infile, outfile):
     sentinel = '{}.job.complete'.format(outfile)
     stderr = '{}.job.stderr'.format(outfile)
@@ -331,28 +346,25 @@ def align_clusters(infile, outfile):
         os.unlink(sentinel)
     # --quiet option is needed; otherwise it fails
     qsub('mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr), sentinel)
-    statinfo = os.stat(outfile)
-    if statinfo.st_size == 0:
-        raise Exception('mafft produced empty output file: "{}"'.format(outfile))
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(align_clusters, suffix('.fasta'), '.consensus.fasta')
-@maybe(strict=True)
+@must_work(maybe=True)
 def cluster_consensus(infile, outfile):
     dnacons(infile, outfile=outfile, ungap=True)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @collate(cluster_consensus, formatter(), '{subdir[0][0]}.consensus.fasta')
-@must_work(fraction=0.9)
+@must_work(seq_ids=True)
 def cat_clusters(infiles, outfile):
     cat_files(infiles, outfile)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(cat_clusters, suffix('.fasta'), '.ref_pairs.fasta')
-@must_work(fraction=1.5)  # need not be conservative now
+@must_work()
 def consensus_db_search(infile, outfile):
     db_search_pairs(infile, outfile, config['Paths']['reference_db'],
                     config['Parameters']['reference_identity'])
@@ -360,7 +372,7 @@ def consensus_db_search(infile, outfile):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(consensus_db_search, suffix('.fasta'), '.shift-corrected.fasta')
-@must_work()  # removes references and sequences with bad insertions
+@must_work()
 def consensus_shift_correction(infile, outfile):
     n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep=False)
     sumfile = '{}.summary'.format(outfile)
@@ -369,7 +381,7 @@ def consensus_shift_correction(infile, outfile):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(consensus_shift_correction, suffix('.fasta'), '.sorted.fasta')
-@must_work(fraction=0.9)
+@must_work(seq_ids=True)
 def sort_consensus(infile, outfile):
     call('usearch -sortbylength {} -output {}'.format(infile, outfile))
 
@@ -399,7 +411,7 @@ def make_individual_dbs(infile, outfile):
 @collate([perfect_orfs, make_individual_dbs, shift_correction],
          formatter(r'(?P<NAME>.+).filtered'),
          '{NAME[0]}.copynumber.fasta')
-@must_work()
+@must_work(seq_ratio=(1, 1), pattern='*perfect*fasta')
 def add_copynumber(infiles, outfile):
     rawfile, perfectfile, dbfile = infiles
     check_suffix(perfectfile, '.perfect.fasta')
@@ -424,7 +436,7 @@ def add_copynumber(infiles, outfile):
 @mkdir(hyphy_results_dir)
 @jobs_limit(n_local_jobs, 'local_jobs')
 @merge(add_copynumber, "all_perfect_orfs.fasta")
-@must_work(fraction=0.9)
+@must_work(seq_ids=True)
 def cat_all_perfect(infiles, outfile):
     cat_files(infiles, outfile)
 
@@ -438,14 +450,14 @@ def make_full_db(infile, outfile):
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(cat_all_perfect, suffix('.fasta'), '.translated')
-@must_work(fraction=0.3)
+@must_work(seq_ids=True)
 def translate_perfect(infile, outfile):
     translate(infile, outfile)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(translate_perfect, formatter(), hyphy_input('merged.prot'))
-@must_work(fraction=0.9)
+@must_work(seq_ids=True)
 def codon_align_perfect(infile, outfile):
     with open(outfile, 'w') as handle:
         call("mafft --auto {}".format(infile), stdout=handle)
@@ -454,7 +466,7 @@ def codon_align_perfect(infile, outfile):
 @jobs_limit(n_local_jobs, 'local_jobs')
 @merge([cat_all_perfect, codon_align_perfect],
        hyphy_input('merged.fas'))
-@must_work(fraction=2.5)
+@must_work(seq_ids=True)
 def backtranslate_alignment(infiles, outfile):
     perfect, aligned = infiles
     check_basename(perfect, 'all_perfect_orfs.fasta')
@@ -556,7 +568,7 @@ def align_full_timestep(infiles, outfile):
 @jobs_limit(n_local_jobs, 'local_jobs')
 @active_if(config.getboolean('Tasks', 'align_full'))
 @merge(align_full_timestep, 'all_timepoints.aligned.fasta')
-@must_work(fraction=0.9)
+@must_work(seq_ids=True)
 def merge_all_timepoints(infiles, outfile):
     cat_files(infiles, outfile)
 
