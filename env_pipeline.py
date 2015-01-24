@@ -148,7 +148,7 @@ def maybe(fun):
 
 
 def check_suffix(name, suffix):
-    assert(name[-len(suffix):] == suffix)
+    assert(name.endswith(suffix))
 
 
 def check_basename(name, bn):
