@@ -355,7 +355,8 @@ def align_clusters(infile, outfile):
     if os.path.exists(sentinel):
         os.unlink(sentinel)
     # --quiet option is needed; otherwise it fails
-    qsub('mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr), sentinel)
+    qsub('mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr), sentinel,
+         walltime=int(config['Misc']['align_clusters_walltime']))
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')

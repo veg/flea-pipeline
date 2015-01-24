@@ -36,7 +36,7 @@ def call(cmd_str, stdin=None, stdout=None):
                 cmd_str, process.returncode, in_str, stdout_str.decode(), stderr_str.decode()))
 
 
-def qsub(cmd, sentinel, walltime=3600, sleep=1):
+def qsub(cmd, sentinel, walltime=3600, sleep=5):
     """A blocking qsub.
 
     sentinel: file to be created when task is done. Cannot exist.
