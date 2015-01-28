@@ -217,10 +217,14 @@ def check_basename(name, bn):
 @must_work()  # my decorators must go before ruffus ones
 def filter_fastq(infile, outfile):
     outfile = outfile[:-len('.fasta')]  # prinseq appends the extension
+    min_len = config['Parameters']['min_sequence_length']
+    max_len = config['Parameters']['max_sequence_length']
+    min_qual_mean = config['Parameters']['min_qual_mean']
     call('prinseq -fastq {infile} -out_format 1 -out_good {outfile}'
-         ' -min_len 2200 -max_len 2900 -min_qual_mean 25'
-         ' -seq_id "{seq_id}_" -seq_id_mappings'.format(infile=infile,
-                                                        outfile=outfile,
+         ' -min_len {min_len} -max_len {max_len} -min_qual_mean {min_qual_mean}'
+         ' -seq_id "{seq_id}_" -seq_id_mappings'.format(infile=infile, outfile=outfile,
+                                                        min_len=min_len, max_len=max_len,
+                                                        min_qual_mean=min_qual_mean,
                                                         seq_id=seq_ids[infile]))
 
 
@@ -408,7 +412,7 @@ def unique_consensus(infile, outfile):
 @transform(unique_consensus, suffix('.fasta'), '.perfect.fasta')
 @must_work()
 def perfect_orfs(infile, outfile):
-    perfect_file(infile, outfile, min_len=config['Parameters']['min_sequence_length'],
+    perfect_file(infile, outfile, min_len=config['Parameters']['min_orf_length'],
                  table=1, verbose=False)
 
 
