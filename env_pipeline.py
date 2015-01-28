@@ -66,6 +66,8 @@ from ruffus import jobs_limit
 from ruffus import check_if_uptodate
 from ruffus import touch_file
 from ruffus import posttask
+from ruffus import originate
+from ruffus import follows
 
 
 from translate import translate
@@ -225,7 +227,8 @@ def check_basename(name, bn):
 
 @originate('this_run.config')
 def write_config(outfile):
-    config.write(outfile)
+    with open(outfile, 'w') as handle:
+        config.write(handle)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
@@ -432,7 +435,7 @@ def unique_consensus(infile, outfile):
 @transform(unique_consensus, suffix('.fasta'), '.perfect.fasta')
 @must_work()
 def perfect_orfs(infile, outfile):
-    perfect_file(infile, outfile, min_len=config['Parameters']['min_orf_length'],
+    perfect_file(infile, outfile, min_len=int(config['Parameters']['min_orf_length']),
                  table=1, verbose=False)
 
 
