@@ -591,8 +591,6 @@ def run_fubar(infile, outfile):
            '.shift-corrected.aligned.fasta')
 @must_work()
 def align_full_timestep(infiles, outfile):
-    raise Exception('Update the pipeline code to run HYPHY scripts on the output'
-                    ' of this task before running it.')
     shift_corrected, (perfect, perfect_aligned, dbfile) = infiles
 
     check_suffix(shift_corrected, '.shift-corrected.fasta')
