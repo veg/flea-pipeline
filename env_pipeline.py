@@ -223,7 +223,13 @@ def check_basename(name, bn):
     assert(os.path.basename(name) == bn)
 
 
+@originate('this_run.config')
+def write_config(outfile):
+    config.write(outfile)
+
+
 @jobs_limit(n_local_jobs, 'local_jobs')
+@follows(write_config)
 @transform(start_files, suffix(".fastq"), '.filtered.fasta')
 @must_work()  # my decorators must go before ruffus ones
 def filter_fastq(infile, outfile):
