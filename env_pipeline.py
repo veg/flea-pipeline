@@ -408,7 +408,8 @@ def unique_consensus(infile, outfile):
 @transform(unique_consensus, suffix('.fasta'), '.perfect.fasta')
 @must_work()
 def perfect_orfs(infile, outfile):
-    perfect_file(infile, outfile, min_len=750, table=1, verbose=False)
+    perfect_file(infile, outfile, min_len=config['Parameters']['min_sequence_length'],
+                 table=1, verbose=False)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
