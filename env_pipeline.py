@@ -123,8 +123,19 @@ config.read(configfile)
 
 n_local_jobs = int(config['Jobs']['local_jobs'])
 n_remote_jobs = int(config['Jobs']['remote_jobs'])
-max_n_jobs = max(n_local_jobs, n_remote_jobs)
+use_cluster = bool(config['Jobs']['use_cluster'])
 
+if n_local_jobs < 1:
+    n_local_jobs = 1
+
+if n_remote_jobs < 1 and use_cluster:
+    raise Exception('Bad parameters; use_cluster="{}"'
+                    ' but remote_jobs="{}"'.format(use_cluster, n_remote_jobs))
+
+if not use_cluster:
+    n_remote_jobs = n_local_jobs
+
+max_n_jobs = max(n_local_jobs, n_remote_jobs)
 options.jobs = max_n_jobs
 
 
@@ -354,13 +365,16 @@ def rm_std():
 @transform(select_clusters, suffix('.fasta'), '.aligned.fasta')
 @must_work(maybe=True)
 def align_clusters(infile, outfile):
-    sentinel = '{}.job.complete'.format(outfile)
-    stderr = '{}.job.stderr'.format(outfile)
-    if os.path.exists(sentinel):
-        os.unlink(sentinel)
-    # --quiet option is needed; otherwise it fails
-    qsub('mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr), sentinel,
-         walltime=int(config['Misc']['align_clusters_walltime']))
+    stderr = '{}.stderr'.format(outfile)
+    cmd = 'mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr)
+    if use_cluster:
+        sentinel = '{}.complete'.format(outfile)
+        if os.path.exists(sentinel):
+            os.unlink(sentinel)
+        # --quiet option is needed; otherwise it fails
+        qsub(cmd, sentinel, walltime=int(config['Misc']['align_clusters_walltime']))
+    else:
+        call(cmd)
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
