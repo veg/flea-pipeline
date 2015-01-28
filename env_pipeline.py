@@ -427,7 +427,7 @@ def add_copynumber(infiles, outfile):
     rawfile, perfectfile, dbfile = infiles
     check_suffix(perfectfile, '.perfect.fasta')
     check_suffix(dbfile, '.udb')
-    identity = config['Parameters']['reference_identity']
+    identity = config['Parameters']['raw_to_consensus_identity']
     pairs = usearch_global(rawfile, dbfile, identity)
     consensus_counts = defaultdict(lambda: 1)
     for raw_id, ref_id in pairs:
