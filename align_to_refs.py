@@ -36,16 +36,19 @@ from util import insert_gaps
 from util import call
 
 
-def usearch_global(readfile, dbfile, identity):
+def usearch_global(readfile, dbfile, identity, usearch=None):
     """Run usearch_global against database.
 
     Returns: list of (read id, ref id) tuples.
 
     """
+    if usearch is None:
+        usearch = 'usearch'
     with tempfile.TemporaryDirectory() as tmpdirname:
         outfile = os.path.join(tmpdirname, 'pairs.txt')
-        kwargs = dict(readfile=readfile, dbfile=dbfile, identity=identity, outfile=outfile)
-        cmd = ("usearch -usearch_global {readfile} -db {dbfile} -id {identity}"
+        kwargs = dict(usearch=usearch, readfile=readfile, dbfile=dbfile,
+                      identity=identity, outfile=outfile)
+        cmd = ("{usearch} -usearch_global {readfile} -db {dbfile} -id {identity}"
                " -userout {outfile} -userfields query+target -strand both")
         cmd = cmd.format(**kwargs)
         call(cmd)
@@ -126,11 +129,11 @@ def add_all_gaps(alignments, gapped_filename):
 
 
 def align_to_refs(reads_filename, refs_filename, refs_aligned_filename, dbfile,
-                  outfile, identity, keep=False):
+                  outfile, identity, keep=False, usearch=None):
     """Align all reads to best reference and write full MSA."""
     tmpdir = "/tmp/align_{}".format(uuid.uuid4())
     os.mkdir(tmpdir)
-    pairs = usearch_global(reads_filename, dbfile, identity)
+    pairs = usearch_global(reads_filename, dbfile, identity, usearch=usearch)
     alignments = align_all(reads_filename, refs_filename, pairs, tmpdir)
     msa = add_all_gaps(alignments, refs_aligned_filename)
     lens = list(len(r) for r in msa)

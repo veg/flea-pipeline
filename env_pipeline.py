@@ -240,12 +240,12 @@ def filter_fastq(infile, outfile):
     min_len = config['Parameters']['min_sequence_length']
     max_len = config['Parameters']['max_sequence_length']
     min_qual_mean = config['Parameters']['min_qual_mean']
-    call('prinseq -fastq {infile} -out_format 1 -out_good {outfile}'
+    call('{prinseq} -fastq {infile} -out_format 1 -out_good {outfile}'
          ' -min_len {min_len} -max_len {max_len} -min_qual_mean {min_qual_mean}'
-         ' -seq_id "{seq_id}_" -seq_id_mappings'.format(infile=infile, outfile=outfile,
-                                                        min_len=min_len, max_len=max_len,
-                                                        min_qual_mean=min_qual_mean,
-                                                        seq_id=seq_ids[infile]))
+         ' -seq_id "{seq_id}_" -seq_id_mappings'.format(
+            prinseq=config['Paths']['prinseq'],
+            infile=infile, outfile=outfile, min_len=min_len, max_len=max_len,
+            min_qual_mean=min_qual_mean, seq_id=seq_ids[infile]))
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
@@ -253,16 +253,18 @@ def filter_fastq(infile, outfile):
            ['.uncontaminated.fasta', '.contaminated.fasta'])
 def filter_contaminants(infile, outfiles):
     uncontam, contam = outfiles
-    call('usearch -usearch_global {infile} -db {db}'
+    call('{usearch} -usearch_global {infile} -db {db}'
          ' -id {id} -notmatched {uncontam} -matched {contam}'
-         ' -strand both'.format(infile=infile, db=config['Paths']['contaminants_db'],
+         ' -strand both'.format(usearch=config['Paths']['usearch'],
+                                infile=infile, db=config['Paths']['contaminants_db'],
                                 id=config['Parameters']['contaminant_identity'],
                                 uncontam=uncontam, contam=contam))
 
 
 def db_search_pairs(infile, outfile, dbfile, identity):
-    call('usearch -usearch_global {infile} -db {db} -id {id}'
+    call('{usearch} -usearch_global {infile} -db {db} -id {id}'
          ' -fastapairs {outfile} -strand both'.format(
+            usearch=config['Paths']['usearch'],
             infile=infile, db=dbfile, id=identity, outfile=outfile))
 
 
@@ -287,7 +289,8 @@ def shift_correction(infile, outfile):
 @transform(shift_correction, suffix('.fasta'), '.sorted.fasta')
 @must_work(seq_ids=True)
 def sort_by_length(infile, outfile):
-    call('usearch -sortbylength {} -output {}'.format(infile, outfile))
+    call('{usearch} -sortbylength {infile} -output {outfile}'.format(
+            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
 
 
 cluster_flag = "cluster_task_completed.flag"
@@ -336,10 +339,11 @@ def cluster(infile, outfiles):
         os.unlink(f)
     outdir = '{}.clusters'.format(infile[:-len('.fasta')])
     outpattern = os.path.join(outdir, 'cluster_')
-    call('usearch -cluster_smallmem {infile} -id {id}'
-         ' -clusters {outpattern}'.format(infile=infile,
-                                          id=config['Parameters']['cluster_identity'],
-                                          outpattern=outpattern))
+    call('{usearch} -cluster_smallmem {infile} -id {id}'
+         ' -clusters {outpattern}'.format(
+            usearch=config['Paths']['usearch'],
+            infile=infile, id=config['Parameters']['cluster_identity'],
+            outpattern=outpattern))
 
     # TODO: put this in own function
     r = re.compile(r'^cluster_[0-9]+$')
@@ -421,14 +425,16 @@ def consensus_shift_correction(infile, outfile):
 @transform(consensus_shift_correction, suffix('.fasta'), '.sorted.fasta')
 @must_work(seq_ids=True)
 def sort_consensus(infile, outfile):
-    call('usearch -sortbylength {} -output {}'.format(infile, outfile))
+    call('{usearch} -sortbylength {infile} -output {outfile}'.format(
+            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
 @transform(sort_consensus, suffix('.fasta'), '.uniques.fasta')
 @must_work()
 def unique_consensus(infile, outfile):
-    call('usearch -cluster_smallmem {} -id 1 -centroids {}'.format(infile, outfile))
+    call('{usearch} -cluster_smallmem {infile} -id 1 -centroids {outfile}'.format(
+            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
@@ -443,7 +449,8 @@ def perfect_orfs(infile, outfile):
 @transform(perfect_orfs, suffix('.fasta'), '.udb')
 @must_work()
 def make_individual_dbs(infile, outfile):
-    call("usearch -makeudb_usearch {} -output {}".format(infile, outfile))
+    call("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
+            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
@@ -456,7 +463,7 @@ def add_copynumber(infiles, outfile):
     check_suffix(perfectfile, '.perfect.fasta')
     check_suffix(dbfile, '.udb')
     identity = config['Parameters']['raw_to_consensus_identity']
-    pairs = usearch_global(rawfile, dbfile, identity)
+    pairs = usearch_global(rawfile, dbfile, identity, usearch=config['Paths']['usearch'])
     consensus_counts = defaultdict(lambda: 1)
     for raw_id, ref_id in pairs:
         consensus_counts[str(ref_id).upper()] += 1
@@ -484,7 +491,8 @@ def cat_all_perfect(infiles, outfile):
 @transform(cat_all_perfect, suffix('.fasta'), '.udb')
 @must_work()
 def make_full_db(infile, outfile):
-    call("usearch -makeudb_usearch {} -output {}".format(infile, outfile))
+    call("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
+            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
@@ -599,7 +607,7 @@ def align_full_timestep(infiles, outfile):
     check_basename(perfect_aligned, 'merged.fas')
     identity = config['Parameters']['reference_identity']
     align_to_refs(shift_corrected, perfect, perfect_aligned, dbfile,
-                  outfile, identity)
+                  outfile, identity, usearch=config['Paths']['usearch'])
 
 
 @jobs_limit(n_local_jobs, 'local_jobs')
