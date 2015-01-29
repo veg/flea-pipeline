@@ -106,6 +106,14 @@ with open(options.file, newline='') as csvfile:
 seq_ids = {t.file: t.id for t in timepoints}
 start_files = list(t.file for t in timepoints)
 
+for f in start_files:
+    if not os.path.exists(f):
+        raise Exception('file does not exist: "{}"'.format(f))
+
+
+if len(seq_ids) != len(timepoints):
+    raise Exception('non-unique sequence ids')
+
 # useful directories
 data_dir = os.path.dirname(os.path.abspath(timepoints[0].file))
 script_dir = os.path.abspath(os.path.split(__file__)[0])
