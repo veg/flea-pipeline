@@ -104,7 +104,7 @@ with open(options.file, newline='') as csvfile:
     reader = csv.reader(csvfile, delimiter=' ')
     timepoints = list(Timepoint(f, i, d) for f, i, d in reader)
 
-seq_ids = {t.file: t.id for t in timepoints}
+timepoint_ids = {t.file: t.id for t in timepoints}
 start_files = list(t.file for t in timepoints)
 
 for f in start_files:
@@ -269,7 +269,7 @@ def filter_fastq(infile, outfile):
          ' -seq_id "{seq_id}_" -seq_id_mappings'.format(
             prinseq=config['Paths']['prinseq'],
             infile=infile, outfile=outfile, min_len=min_len, max_len=max_len,
-            min_qual_mean=min_qual_mean, seq_id=seq_ids[infile]))
+            min_qual_mean=min_qual_mean, seq_id=timepoint_ids[infile]))
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -357,7 +357,7 @@ def select_clusters(infile, outfile):
     SeqIO.write(records, outfile, 'fasta')
 
 
-def rm_std():
+def rm_stdin():
     """Get rid of annoying STDIN files' after qsub runs"""
     for f in glob('STDIN.*'):
         os.unlink(f)
@@ -372,7 +372,7 @@ def maybe_qsub(cmd, sentinel):
         call(cmd)
 
 
-@posttask(rm_std)
+@posttask(rm_stdin)
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(select_clusters, suffix('.fasta'), '.aligned.fasta')
 @must_work(maybe=True)
@@ -597,9 +597,7 @@ def run_fubar(infile, outfile):
 @must_work()
 def full_timestep_pairs(infiles, outfile):
     infile, (dbfile,) = infiles
-    check_suffix(infile, '.shift-corrected.fasta')
-    check_suffix(dbfile, '.udb')
-    identity = config['Parameters']['reference_identity']
+    identity = config['Parameters']['raw_to_consensus_identity']
     db_search_pairs(infile, outfile, dbfile, identity, nums_only=True)
 
 
@@ -615,25 +613,26 @@ def combine_pairs(infiles, outfiles, basename):
     for f in outfiles:
         os.unlink(f)
     infile, (perfectfile,) = infiles
-    readsfile = '{}.fasta'.format(basename)
+    seqsfile = '{}.fasta'.format(basename)
     check_basename(perfectfile, 'all_perfect_orfs.fasta')
     with open(infile) as handle:
         pairs = list(line.strip().split("\t") for line in handle.readlines())
     match_dict = defaultdict(list)
-    for read, ref in pairs:
-        match_dict[ref].append(read)
+    for seq, ref in pairs:
+        match_dict[ref].append(seq)
     references_records = list(SeqIO.parse(perfectfile, "fasta"))
-    read_records = list(SeqIO.parse(readsfile, "fasta"))
+    seq_records = list(SeqIO.parse(seqsfile, "fasta"))
     references_dict = {r.id : r for r in references_records}
-    read_dict = {r.id : r for r in read_records}
+    seq_dict = {r.id : r for r in seq_records}
 
-    for ref_id, read_ids in match_dict.items():
+    for ref_id, seq_ids in match_dict.items():
         outfile = '{}.raw_consensus_pairs.combined.{}.unaligned.fasta'.format(basename, ref_id)
         records = [references_dict[ref_id]]
-        records.extend(list(read_dict[i] for i in read_ids))
+        records.extend(list(seq_dict[i] for i in seq_ids))
         SeqIO.write(records, outfile, "fasta")
 
 
+@posttask(rm_stdin)
 @active_if(config.getboolean('Tasks', 'align_full'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(combine_pairs,
@@ -646,6 +645,7 @@ def codon_align(infile, outfile):
     maybe_qsub(cmd, sentinel)
 
 
+@posttask(rm_stdin)
 @active_if(config.getboolean('Tasks', 'align_full'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(codon_align, suffix('.bam'), '.fasta')
@@ -661,7 +661,7 @@ def convert_bam_to_fasta(infile, outfile):
 @transform(convert_bam_to_fasta,
            suffix('.fasta'),
            add_inputs([backtranslate_alignment]),
-           '.msa.fasta')
+           '.gapped.fasta')
 @must_work()
 def insert_gaps_task(infiles, outfile):
     infile, (backtranslated,) = infiles
