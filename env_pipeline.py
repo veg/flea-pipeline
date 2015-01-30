@@ -321,44 +321,6 @@ def sort_by_length(infile, outfile):
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
 
 
-cluster_flag = "cluster_task_completed.flag"
-
-
-def cluster_uptodate(infile, outfiles):
-    """A temporary hack until the issue with @subdivide and @split
-    gets resolved.
-
-    """
-    if not os.path.exists(cluster_flag):
-        return True, "{} is missing".format(cluster_flag)
-    # ensure each sorted file has a cluster directory
-    sorted_files = glob('*.sorted.fasta')
-    sorted_files = list(f for f in sorted_files
-                        if not f.endswith('ref_pairs.shift-corrected.sorted.fasta'))
-    for f in sorted_files:
-        d = '{}.clusters'.format(remove_suffix(f, '.fasta'))
-        if not os.path.exists(d):
-            return True, "at least one cluster directory is missing: {}".format(d)
-    pattern = '{}.clusters/*.raw.fasta'
-    # ensure each cluster directory contains at least one cluster
-    for f in sorted_files:
-        search = pattern.format(remove_suffix(f, '.fasta'))
-        raw_clusters = glob(search)
-        if not raw_clusters:
-            return True, "at least one cluster directory is empty: {}".format(d)
-    # ensure all timestamps are more recent than sorted file timestamps.
-    for f in sorted_files:
-        sorted_time = os.path.getmtime(f)
-        search = pattern.format(remove_suffix(f, '.fasta'))
-        raw_clusters = glob(search)
-        for r in raw_clusters:
-            if os.path.getmtime(r) <= sorted_time:
-                return True, "at least one cluster is old: {}".format(r)
-    return False, "{} exists and clusters look up-to-date".format(cluster_flag)
-
-
-@check_if_uptodate(cluster_uptodate)
-@posttask(touch_file(cluster_flag))
 @jobs_limit(n_local_jobs, local_job_limiter)
 @mkdir(sort_by_length, suffix('.fasta'), '.clusters')
 @subdivide(sort_by_length, formatter(), '{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta')
