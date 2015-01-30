@@ -77,6 +77,7 @@ from DNAcons import dnacons
 from correct_shifts import correct_shifts_fasta, write_correction_result
 from perfectORFs import perfect_file
 from util import call, qsub, hyphy_call, cat_files, touch, strlist, traverse
+from util import new_record_seq_str, insert_gaps
 
 
 parser = cmdline.get_argparse(description='Run complete env pipeline',
@@ -133,7 +134,7 @@ config.read(configfile)
 
 n_local_jobs = int(config['Jobs']['local_jobs'])
 n_remote_jobs = int(config['Jobs']['remote_jobs'])
-use_cluster = bool(config['Jobs']['use_cluster'])
+use_cluster = config.getboolean('Jobs', 'use_cluster')
 
 if n_local_jobs < 1:
     n_local_jobs = 1
@@ -145,10 +146,10 @@ if n_remote_jobs < 1 and use_cluster:
 if not use_cluster:
     n_remote_jobs = n_local_jobs
 
-max_n_jobs = max(n_local_jobs, n_remote_jobs)
-options.jobs = max_n_jobs
+options.jobs = max(n_local_jobs, n_remote_jobs)
 
 local_job_limiter = 'local_jobs'
+remote_job_limiter = 'remote_jobs'
 
 
 def hyphy_script(name):
@@ -201,13 +202,13 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, pattern=None):
         if options.touch_files_only or options.just_print:
             return fun
         @wraps(fun)  # necessary because ruffus uses function name internally
-        def wrapped(infiles, outfiles):
+        def wrapped(infiles, outfiles, *args, **kwargs):
             if maybe:
                 if any(os.stat(f).st_size == 0 for f in traverse(strlist(infiles))):
                     for f in traverse(strlist(outfiles)):
                         touch(f)
                     return
-            fun(infiles, outfiles)
+            fun(infiles, outfiles, *args, **kwargs)
             infiles = list(traverse(strlist(infiles)))
             infiles = list(f for f in infiles if fnmatch(f, pattern))
             outfiles = strlist(outfiles)
@@ -271,11 +272,15 @@ def filter_contaminants(infile, outfiles):
                                 uncontam=uncontam, contam=contam))
 
 
-def db_search_pairs(infile, outfile, dbfile, identity):
-    call('{usearch} -usearch_global {infile} -db {db} -id {id}'
-         ' -fastapairs {outfile} -strand both'.format(
-            usearch=config['Paths']['usearch'],
-            infile=infile, db=dbfile, id=identity, outfile=outfile))
+def db_search_pairs(infile, outfile, dbfile, identity, nums_only=False):
+    if nums_only:
+        cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
+               " -userout {outfile} -userfields query+target -strand both")
+    else:
+        cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
+               ' -fastapairs {outfile} -strand both')
+    call(cmd.format(usearch=config['Paths']['usearch'],
+                    infile=infile, db=dbfile, id=identity, outfile=outfile))
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -383,21 +388,24 @@ def rm_std():
         os.unlink(f)
 
 
+def maybe_qsub(cmd, sentinel):
+    if use_cluster:
+        if os.path.exists(sentinel):
+            os.unlink(sentinel)
+        qsub(cmd, sentinel, walltime=int(config['Misc']['align_clusters_walltime']))
+    else:
+        call(cmd)
+
+
 @posttask(rm_std)
-@jobs_limit(n_remote_jobs, 'remote_jobs')
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(select_clusters, suffix('.fasta'), '.aligned.fasta')
 @must_work(maybe=True)
 def align_clusters(infile, outfile):
     stderr = '{}.stderr'.format(outfile)
+    sentinel = '{}.complete'.format(outfile)
     cmd = 'mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr)
-    if use_cluster:
-        sentinel = '{}.complete'.format(outfile)
-        if os.path.exists(sentinel):
-            os.unlink(sentinel)
-        # --quiet option is needed; otherwise it fails
-        qsub(cmd, sentinel, walltime=int(config['Misc']['align_clusters_walltime']))
-    else:
-        call(cmd)
+    maybe_qsub(cmd, sentinel)
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -566,6 +574,7 @@ def compute_mrca(infile, outfile):
     mrca(infile, oldest_records_filename, outfile, oldest_timepoint.id)
 
 
+@active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(backtranslate_alignment, formatter(), hyphy_input('merged.prot.parts'))
 @must_work()
@@ -574,6 +583,7 @@ def compute_hxb2_coords(infile, outfile):
     hyphy_call(hxb2_script, infile, outfile)
 
 
+@active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_local_jobs, local_job_limiter)
 @merge([write_dates, compute_hxb2_coords, backtranslate_alignment],
          [hyphy_input('mrca.seq')] + list(hyphy_results(f)
@@ -585,6 +595,7 @@ def evo_history(infiles, outfile):
     hyphy_call(hyphy_script("obtainEvolutionaryHistory.bf"), hyphy_data_dir)
 
 
+@active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_local_jobs, local_job_limiter)
 @merge([write_dates, backtranslate_alignment, compute_mrca],
        hyphy_results('frequencies.json'))
@@ -593,6 +604,7 @@ def aa_freqs(infile, outfile):
     hyphy_call(hyphy_script("aminoAcidFrequencies.bf"), hyphy_data_dir)
 
 
+@active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_local_jobs, local_job_limiter)
 @merge([write_dates, evo_history, backtranslate_alignment],
        hyphy_results('rates.json'))
@@ -605,40 +617,95 @@ def run_fubar(infile, outfile):
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(shift_correction,
            suffix('.shift-corrected.fasta'),
-           add_inputs([cat_all_perfect, backtranslate_alignment, make_full_db]),
-           '.shift-corrected.aligned.fasta')
+           add_inputs([ make_full_db]),
+           '.shift-corrected.raw_consensus_pairs.txt')
 @must_work()
-def align_full_timestep(infiles, outfile):
-    shift_corrected, (perfect, perfect_aligned, dbfile) = infiles
-
-    check_suffix(shift_corrected, '.shift-corrected.fasta')
-    check_basename(perfect, 'all_perfect_orfs.fasta')
+def full_timestep_pairs(infiles, outfile):
+    infile, (dbfile,) = infiles
+    check_suffix(infile, '.shift-corrected.fasta')
     check_suffix(dbfile, '.udb')
-    check_basename(perfect_aligned, 'merged.fas')
     identity = config['Parameters']['reference_identity']
-    align_to_refs(shift_corrected, perfect, perfect_aligned, dbfile,
-                  outfile, identity, usearch=config['Paths']['usearch'])
+    db_search_pairs(infile, outfile, dbfile, identity, nums_only=True)
+
+
+@active_if(config.getboolean('Tasks', 'align_full'))
+@jobs_limit(n_local_jobs, local_job_limiter)
+@subdivide(full_timestep_pairs,
+           formatter('.*/(?P<NAME>.+).raw_consensus_pairs'),
+           add_inputs([cat_all_perfect]),
+           '{NAME[0]}.raw_consensus_pairs.combined.*.unaligned.fasta',
+           '{NAME[0]}')
+@must_work()
+def combine_pairs(infiles, outfiles, basename):
+    for f in outfiles:
+        os.unlink(f)
+    infile, (perfectfile,) = infiles
+    readsfile = '{}.fasta'.format(basename)
+    check_basename(perfectfile, 'all_perfect_orfs.fasta')
+    with open(infile) as handle:
+        pairs = list(line.strip().split("\t") for line in handle.readlines())
+    match_dict = defaultdict(list)
+    for read, ref in pairs:
+        match_dict[ref].append(read)
+    references_records = list(SeqIO.parse(perfectfile, "fasta"))
+    read_records = list(SeqIO.parse(readsfile, "fasta"))
+    references_dict = {r.id : r for r in references_records}
+    read_dict = {r.id : r for r in read_records}
+
+    for ref_id, read_ids in match_dict.items():
+        outfile = '{}.raw_consensus_pairs.combined.{}.unaligned.fasta'.format(basename, ref_id)
+        records = [references_dict[ref_id]]
+        records.extend(list(read_dict[i] for i in read_ids))
+        SeqIO.write(records, outfile, "fasta")
+
+
+@active_if(config.getboolean('Tasks', 'align_full'))
+@jobs_limit(n_local_jobs, local_job_limiter)
+@transform(combine_pairs,
+           suffix('.unaligned.fasta'),
+           '.aligned.bam')
+@must_work()
+def codon_align(infile, outfile):
+    cmd = "bealign.py -R {} {}".format(infile, outfile)
+    sentinel = '{}.complete'.format(outfile)
+    maybe_qsub(cmd, sentinel)
+
+
+@active_if(config.getboolean('Tasks', 'align_full'))
+@jobs_limit(n_local_jobs, local_job_limiter)
+@transform(codon_align, suffix('.bam'), '.fasta')
+@must_work()
+def convert_bam_to_fasta(infile, outfile):
+    cmd = "bam2msa.py {} {}".format(infile, outfile)
+    sentinel = '{}.complete'.format(outfile)
+    maybe_qsub(cmd, sentinel)
+
+
+@active_if(config.getboolean('Tasks', 'align_full'))
+@jobs_limit(n_local_jobs, local_job_limiter)
+@transform(convert_bam_to_fasta,
+           suffix('.fasta'),
+           add_inputs([backtranslate_alignment]),
+           '.msa.fasta')
+@must_work()
+def insert_gaps_task(infiles, outfile):
+    infile, (backtranslated,) = infiles
+    ref, *seqs = list(SeqIO.parse(infile, 'fasta'))
+    ref_gapped = list(r for r in SeqIO.parse(backtranslated, 'fasta')
+                      if r.id == ref.id)[0]
+    seqs_gapped = (new_record_seq_str(r, insert_gaps(str(ref_gapped.seq),
+                                                     str(r.seq),
+                                                     '-', '-', skip=1))
+                   for r in seqs)
+    SeqIO.write(seqs_gapped, outfile, "fasta")
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
 @active_if(config.getboolean('Tasks', 'align_full'))
-@merge(align_full_timestep, 'all_timepoints.aligned.fasta')
+@merge(insert_gaps_task, 'all_timepoints.aligned.fasta')
 @must_work(seq_ids=True)
 def merge_all_timepoints(infiles, outfile):
     cat_files(infiles, outfile)
-
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@active_if(config.getboolean('Tasks', 'align_full') and
-           config.getboolean('Tasks', 'generate_trees'))
-@transform([align_full_timestep, merge_all_timepoints],
-           suffix('.fasta'), '.tre')
-@must_work()
-def infer_trees(infile, outfile):
-    # TODO: run on cluster
-    with open(infile, 'rb') as in_handle:
-        with open(outfile, 'w') as out_handle:
-            call('FastTreeMP -nt -gtr -nosupport', stdin=in_handle, stdout=out_handle)
 
 
 if __name__ == '__main__':
