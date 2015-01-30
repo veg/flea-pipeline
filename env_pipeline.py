@@ -112,7 +112,7 @@ for f in start_files:
         raise Exception('file does not exist: "{}"'.format(f))
 
 
-if len(seq_ids) != len(timepoints):
+if len(set(t.id for t in timepoints)) != len(timepoints):
     raise Exception('non-unique sequence ids')
 
 # useful directories
