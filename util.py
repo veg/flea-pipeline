@@ -43,13 +43,15 @@ def qsub(cmd, sentinel, walltime=3600, sleep=5):
     walltime: seconds
 
     """
+    # TODO: capture STDOUT and STDERR
+    # TODO: what's up with STDIN.* files?
     if walltime < 1:
         raise Exception('walltime={} < 1'.format(walltime))
     if os.path.exists(sentinel):
         raise Exception('sentinel already exists!')
     mycmd = '{}; echo $? > {}'.format(cmd, sentinel)
     fwalltime = time.strftime('%H:%M:%S', time.gmtime(walltime))
-    qsub_cmd = 'qsub -V -W umask=077 -l walltime={}'.format(fwalltime)
+    qsub_cmd = 'qsub -V -W umask=077 -l walltime={} -d `pwd` -w `pwd`'.format(fwalltime)
     full_cmd = 'echo "{}" | {}'.format(mycmd, qsub_cmd)
     call(full_cmd)
     run_time = 0
