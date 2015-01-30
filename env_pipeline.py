@@ -14,10 +14,10 @@ Usage:
 """
 
 # TODO:
+# - run as many tasks as possible on the cluster
 # - order of input files not guaranteed; make more robust
 # - check everywhere usearch is used; summarize # seqs lost
 # - are identities re-used correctly?
-# - decorator to ensure output not empty
 # - rename files; flea and test subdirectories
 # - logging
 # - update to latest versions of dependencies
@@ -660,7 +660,7 @@ def combine_pairs(infiles, outfiles, basename):
 
 
 @active_if(config.getboolean('Tasks', 'align_full'))
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(combine_pairs,
            suffix('.unaligned.fasta'),
            '.aligned.bam')
@@ -672,7 +672,7 @@ def codon_align(infile, outfile):
 
 
 @active_if(config.getboolean('Tasks', 'align_full'))
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(codon_align, suffix('.bam'), '.fasta')
 @must_work()
 def convert_bam_to_fasta(infile, outfile):
