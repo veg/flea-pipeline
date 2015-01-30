@@ -236,7 +236,20 @@ def check_basename(name, bn):
     assert(os.path.basename(name) == bn)
 
 
-@originate('this_run.config')
+def param_uptodate(infile, outfile):
+    """Re-run if any parameters changed."""
+    # TODO: do this check on a task basis
+    if not os.path.exists(outfile):
+        return True, "{} is missing".format(outfile)
+    param_config = ConfigParser(interpolation=ExtendedInterpolation())
+    param_config.read(outfile)
+    if param_config['Parameters'] != config['Parameters']:
+        return True, 'parameters not the same'
+    return False, 'parameters are the same'
+
+
+@check_if_uptodate(param_uptodate)
+@originate('parameters.config')
 def write_config(outfile):
     with open(outfile, 'w') as handle:
         config.write(handle)
