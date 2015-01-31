@@ -77,16 +77,6 @@ def qsub(cmd, sentinel, walltime=3600, sleep=5, name=None, stdout=None, stderr=N
             raise Exception('qsub job "{}" exited with code "{}"'.format(full_cmd, code))
 
 
-def hyphy_call(script_file, *args, hyphy=None):
-    if hyphy is None:
-        hyphy = "HYPHYMP"
-    cmd = '{} {}'.format(hyphy, script_file)
-    if args:
-        in_str = "".join("{}\n".format(i) for i in args)
-    else:
-        in_str = None
-    call(cmd, stdin=in_str)
-
 
 def insert_gaps(source, target, src_gap, target_gap, skip):
     """Inserts `target_gap` into target string at same positions as

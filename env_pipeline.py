@@ -76,7 +76,7 @@ from backtranslate import backtranslate
 from DNAcons import dnacons
 from correct_shifts import correct_shifts_fasta, write_correction_result
 from perfectORFs import perfect_file
-from util import call, qsub, hyphy_call, cat_files, touch, strlist, traverse
+from util import call, qsub, cat_files, touch, strlist, traverse
 from util import new_record_seq_str, insert_gaps
 
 
@@ -380,6 +380,19 @@ def maybe_qsub(cmd, sentinel, **kwargs):
         call(cmd)
 
 
+def hyphy_call(script_file, name, args):
+    if args:
+        in_str = "".join("{}\n".format(i) for i in args)
+    else:
+        in_str = ''
+    infile = '{}.stdin'.format(name)
+    sentinel = '{}.complete'.format(name)
+    with open(infile, 'w') as handle:
+        handle.write(in_str)
+    cmd = '{} {} < {}'.format(config['Paths']['hyphy'], script_file, infile)
+    maybe_qsub(cmd, sentinel, name=name)
+
+
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(select_clusters, suffix('.fasta'), '.aligned.fasta')
 @must_work(maybe=True)
@@ -478,8 +491,6 @@ def add_copynumber(infiles, outfile):
                 outfile, 'fasta')
 
 
-@mkdir(hyphy_input_dir)
-@mkdir(hyphy_results_dir)
 @jobs_limit(n_local_jobs, local_job_limiter)
 @merge(add_copynumber, "all_perfect_orfs.fasta")
 @must_work(seq_ids=True)
@@ -556,17 +567,21 @@ def compute_mrca(infile, outfile):
     mrca(infile, oldest_records_filename, outfile, oldest_timepoint.id)
 
 
+@mkdir(hyphy_input_dir)
+@mkdir(hyphy_results_dir)
 @active_if(config.getboolean('Tasks', 'hyphy'))
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(backtranslate_alignment, formatter(), hyphy_input('merged.prot.parts'))
 @must_work()
 def compute_hxb2_coords(infile, outfile):
     hxb2_script = hyphy_script('HXB2partsSplitter.bf')
-    hyphy_call(hxb2_script, infile, outfile)
+    hyphy_call(hxb2_script, 'hxb2_coords', [infile, outfile])
 
 
+@mkdir(hyphy_input_dir)
+@mkdir(hyphy_results_dir)
 @active_if(config.getboolean('Tasks', 'hyphy'))
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @merge([write_dates, compute_hxb2_coords, backtranslate_alignment],
          [hyphy_input('mrca.seq')] + list(hyphy_results(f)
                                           for f in ('rates_pheno.tsv',
@@ -574,25 +589,32 @@ def compute_hxb2_coords(infile, outfile):
                                                     'sequences.json')))
 @must_work()
 def evo_history(infiles, outfile):
-    hyphy_call(hyphy_script("obtainEvolutionaryHistory.bf"), hyphy_data_dir)
+    hyphy_call(hyphy_script("obtainEvolutionaryHistory.bf"),
+               'evo_history', [hyphy_data_dir])
 
 
+@mkdir(hyphy_input_dir)
+@mkdir(hyphy_results_dir)
 @active_if(config.getboolean('Tasks', 'hyphy'))
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @merge([write_dates, backtranslate_alignment, compute_mrca],
        hyphy_results('frequencies.json'))
 @must_work()
 def aa_freqs(infile, outfile):
-    hyphy_call(hyphy_script("aminoAcidFrequencies.bf"), hyphy_data_dir)
+    hyphy_call(hyphy_script("aminoAcidFrequencies.bf"),
+               'aa_freqs',
+               [hyphy_data_dir])
 
 
+@mkdir(hyphy_input_dir)
+@mkdir(hyphy_results_dir)
 @active_if(config.getboolean('Tasks', 'hyphy'))
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @merge([write_dates, evo_history, backtranslate_alignment],
        hyphy_results('rates.json'))
 @must_work()
 def run_fubar(infile, outfile):
-    hyphy_call(hyphy_script('runFUBAR.bf'), hyphy_data_dir)
+    hyphy_call(hyphy_script('runFUBAR.bf'), 'fubar', [hyphy_data_dir])
 
 
 @active_if(config.getboolean('Tasks', 'align_full'))
