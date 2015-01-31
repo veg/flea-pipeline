@@ -346,7 +346,6 @@ def cluster(infile, outfiles):
             infile=infile, id=config['Parameters']['cluster_identity'],
             outpattern=outpattern))
 
-    # TODO: put this in own function
     r = re.compile(r'^cluster_[0-9]+$')
     for f in list(f for f in os.listdir(outdir) if r.match(f)):
         oldfile = os.path.join(outdir, f)
