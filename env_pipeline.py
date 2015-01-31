@@ -184,7 +184,10 @@ def check_seq_ratio(inputs, output, expected):
     a_n = sum(1 for a in inputs for r in SeqIO.parse(a, 'fasta'))
     b_n = sum(1 for r in SeqIO.parse(output, 'fasta'))
     if a_n * b_exp != b_n * a_exp:
-        raise Exception('Sequnce ratios do not match. Expected {}:{}. Got: {}:{}. Inputs: "{}" Output: "{}"'.format(a_exp, b_exp, a_n, b_n, inputs, output))
+        raise Exception('Sequnce ratios do not match.'
+                        ' Expected {}:{}. Got: {}:{}.'
+                        ' Inputs: "{}" Output: "{}"'.format(
+                a_exp, b_exp, a_n, b_n, inputs, output))
 
 
 def must_work(maybe=False, seq_ratio=None, seq_ids=False, pattern=None):
