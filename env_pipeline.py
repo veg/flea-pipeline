@@ -402,7 +402,7 @@ def cat_clusters(infiles, outfile):
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
-@transform(cat_clusters, suffix('.fasta'), '.ref_pairs.fasta')
+@transform(cat_clusters, suffix('.fasta'), '.pairs.fasta')
 @must_work()
 def consensus_db_search(infile, outfile):
     usearch_global_pairs(infile, outfile, config['Paths']['reference_db'],
@@ -594,9 +594,9 @@ def run_fubar(infile, outfile):
 @active_if(config.getboolean('Tasks', 'align_full'))
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(shift_correction,
-           suffix('.shift-corrected.fasta'),
+           suffix('.fasta'),
            add_inputs([ make_full_db]),
-           '.shift-corrected.raw_consensus_pairs.txt')
+           '.pairs.txt')
 @must_work()
 def full_timestep_pairs(infiles, outfile):
     infile, (dbfile,) = infiles
@@ -606,10 +606,11 @@ def full_timestep_pairs(infiles, outfile):
 
 @active_if(config.getboolean('Tasks', 'align_full'))
 @jobs_limit(n_local_jobs, local_job_limiter)
+@mkdir(full_timestep_pairs, suffix('.pairs.txt'), '.alignments')
 @subdivide(full_timestep_pairs,
-           formatter('.*/(?P<NAME>.+).raw_consensus_pairs'),
+           formatter('.*/(?P<NAME>.+).pairs.txt'),
            add_inputs([cat_all_perfect]),
-           '{NAME[0]}.raw_consensus_pairs.combined.*.unaligned.fasta',
+           '{NAME[0]}.alignments/combined.*.unaligned.fasta',
            '{NAME[0]}')
 @must_work()
 def combine_pairs(infiles, outfiles, basename):
@@ -629,7 +630,7 @@ def combine_pairs(infiles, outfiles, basename):
     seq_dict = {r.id : r for r in seq_records}
 
     for ref_id, seq_ids in match_dict.items():
-        outfile = '{}.raw_consensus_pairs.combined.{}.unaligned.fasta'.format(basename, ref_id)
+        outfile = '{}.alignments/combined.{}.unaligned.fasta'.format(basename, ref_id)
         records = [references_dict[ref_id]]
         records.extend(list(seq_dict[i] for i in seq_ids))
         SeqIO.write(records, outfile, "fasta")
