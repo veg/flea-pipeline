@@ -45,6 +45,7 @@ from functools import wraps
 from configparser import ConfigParser, ExtendedInterpolation
 from glob import glob
 from fnmatch import fnmatch
+import tempfile
 
 from docopt import docopt
 
@@ -72,7 +73,6 @@ from ruffus import follows
 
 from translate import translate
 from backtranslate import backtranslate
-from align_to_refs import align_to_refs, usearch_global
 from DNAcons import dnacons
 from correct_shifts import correct_shifts_fasta, write_correction_result
 from perfectORFs import perfect_file
@@ -285,7 +285,7 @@ def filter_contaminants(infile, outfiles):
                                 uncontam=uncontam, contam=contam))
 
 
-def db_search_pairs(infile, outfile, dbfile, identity, nums_only=False):
+def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False):
     if nums_only:
         cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
                " -userout {outfile} -userfields query+target -strand both")
@@ -296,14 +296,22 @@ def db_search_pairs(infile, outfile, dbfile, identity, nums_only=False):
                     infile=infile, db=dbfile, id=identity, outfile=outfile))
 
 
+def usearch_global_get_pairs(infile, dbfile, identity):
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        outfile = os.path.join(tmpdirname, 'pairs.txt')
+        usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True)
+        with open(outfile) as f:
+            return list(line.strip().split("\t") for line in f.readlines())
+
+
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(filter_contaminants, suffix('.uncontaminated.fasta'),
            '.uncontaminated.matches.fasta')
 @must_work()
 def filter_uncontaminated(infiles, outfile):
     uncontam, _ = infiles
-    db_search_pairs(uncontam, outfile, config['Paths']['reference_db'],
-                    config['Parameters']['reference_identity'])
+    usearch_global_pairs(uncontam, outfile, config['Paths']['reference_db'],
+                         config['Parameters']['reference_identity'])
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -401,8 +409,8 @@ def cat_clusters(infiles, outfile):
 @transform(cat_clusters, suffix('.fasta'), '.ref_pairs.fasta')
 @must_work()
 def consensus_db_search(infile, outfile):
-    db_search_pairs(infile, outfile, config['Paths']['reference_db'],
-                    config['Parameters']['reference_identity'])
+    usearch_global_pairs(infile, outfile, config['Paths']['reference_db'],
+                         config['Parameters']['reference_identity'])
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -456,19 +464,18 @@ def add_copynumber(infiles, outfile):
     check_suffix(perfectfile, '.perfect.fasta')
     check_suffix(dbfile, '.udb')
     identity = config['Parameters']['raw_to_consensus_identity']
-    pairs = usearch_global(rawfile, dbfile, identity, usearch=config['Paths']['usearch'])
+    pairs = usearch_global_get_pairs(rawfile, dbfile, identity)
     consensus_counts = defaultdict(lambda: 1)
     for raw_id, ref_id in pairs:
         consensus_counts[str(ref_id).upper()] += 1
-    records = list(SeqIO.parse(perfectfile, 'fasta'))
-    def record_generator():
-        for r in records:
-            str_id = str(r.id).upper()
-            r.id = "{}_{}".format(str_id, consensus_counts[str_id])
-            r.name = ""
-            r.description = ""
-            yield r
-    SeqIO.write(record_generator(), outfile, 'fasta')
+    def new_record(r):
+        r = r[:]
+        _id = str(r.id).upper()
+        r.id = "{}_{}".format(_id, consensus_counts[_id])
+        r.name = ''
+        r.description = ''
+        return r
+    SeqIO.write((new_record(r) for r in SeqIO.parse(perfectfile, 'fasta')), outfile, 'fasta')
 
 
 @mkdir(hyphy_input_dir)
@@ -598,7 +605,7 @@ def run_fubar(infile, outfile):
 def full_timestep_pairs(infiles, outfile):
     infile, (dbfile,) = infiles
     identity = config['Parameters']['raw_to_consensus_identity']
-    db_search_pairs(infile, outfile, dbfile, identity, nums_only=True)
+    usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True)
 
 
 @active_if(config.getboolean('Tasks', 'align_full'))
