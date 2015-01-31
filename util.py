@@ -37,7 +37,8 @@ def call(cmd_str, stdin=None, stdout=None):
                 cmd_str, process.returncode, in_str, stdout_str.decode(), stderr_str.decode()))
 
 
-def qsub(cmd, sentinel, walltime=3600, sleep=5, name=None, stdout=None, stderr=None):
+def qsub(cmd, sentinel, walltime=3600, sleep=5, postsleep=10,
+         name=None, stdout=None, stderr=None):
     """A blocking qsub.
 
     sentinel: file to be created when task is done. Cannot exist.
@@ -52,6 +53,7 @@ def qsub(cmd, sentinel, walltime=3600, sleep=5, name=None, stdout=None, stderr=N
         raise Exception('sentinel already exists!')
     if name is None:
         name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
+    # FIXME: job status always seems to be 0
     mycmd = '{}; echo $? > {}'.format(cmd, sentinel)
     fwalltime = time.strftime('%H:%M:%S', time.gmtime(walltime))
     qsub_cmd = ('qsub -V -W umask=077 -l walltime={} -N {name}'
@@ -70,7 +72,15 @@ def qsub(cmd, sentinel, walltime=3600, sleep=5, name=None, stdout=None, stderr=N
             break
     # wait to make sure it has been flushed
     # TODO: this is probably not robust
-    time.sleep(5)
+    time_waited = 0
+    tick = 1
+    while not os.path.exists(sentinel):
+        time.sleep(tick)
+        time_waited += tick
+        if time_waited > postsleep:
+            break
+    if not os.path.exists(sentinel):
+        raise Exception('qsub sentinel not found: "{}"'.format(sentinel))
     with open(sentinel) as handle:
         code = handle.read().strip()
         if code != '0':
