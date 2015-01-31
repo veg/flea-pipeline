@@ -32,11 +32,12 @@ def call(cmd_str, stdin=None, stdout=None):
             in_str = ''
         else:
             in_str = in_str.decode()
-        raise Exception("Failed to run '{}'\nExit status: {}\nSTDIN:\n{}\nSTDOUT:\n{}\nSTDERR\n{}\n".format(
+        raise Exception("Failed to run '{}'\nExit status: {}\nSTDIN:\n{}"
+                        "\nSTDOUT:\n{}\nSTDERR\n{}\n".format(
                 cmd_str, process.returncode, in_str, stdout_str.decode(), stderr_str.decode()))
 
 
-def qsub(cmd, sentinel, walltime=3600, sleep=5):
+def qsub(cmd, sentinel, walltime=3600, sleep=5, name=None, stdout=None, stderr=None):
     """A blocking qsub.
 
     sentinel: file to be created when task is done. Cannot exist.
@@ -44,14 +45,21 @@ def qsub(cmd, sentinel, walltime=3600, sleep=5):
 
     """
     # TODO: capture STDOUT and STDERR
-    # TODO: what's up with STDIN.* files?
+    # TODO: name jobs and move their output somewhere
     if walltime < 1:
         raise Exception('walltime={} < 1'.format(walltime))
     if os.path.exists(sentinel):
         raise Exception('sentinel already exists!')
+    if name is None:
+        name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
     mycmd = '{}; echo $? > {}'.format(cmd, sentinel)
     fwalltime = time.strftime('%H:%M:%S', time.gmtime(walltime))
-    qsub_cmd = 'qsub -V -W umask=077 -l walltime={} -d `pwd` -w `pwd`'.format(fwalltime)
+    qsub_cmd = ('qsub -V -W umask=077 -l walltime={} -N {name}'
+                ' -d `pwd` -w `pwd`'.format(fwalltime, name=name))
+    if stdout is not None:
+        qsub_cmd = '{} -o {}'.format(qsub_cmd, stdout)
+    if stdout is not None:
+        qsub_cmd = '{} -e {}'.format(qsub_cmd, stderr)
     full_cmd = 'echo "{}" | {}'.format(mycmd, qsub_cmd)
     call(full_cmd)
     run_time = 0
@@ -60,9 +68,9 @@ def qsub(cmd, sentinel, walltime=3600, sleep=5):
         run_time += sleep
         if os.path.exists(sentinel):
             break
-    # wait a second to make sure it has been flushed
+    # wait to make sure it has been flushed
     # TODO: this is probably not robust
-    time.sleep(1)
+    time.sleep(5)
     with open(sentinel) as handle:
         code = handle.read().strip()
         if code != '0':
