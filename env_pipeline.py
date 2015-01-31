@@ -513,7 +513,7 @@ def translate_perfect(infile, outfile):
 
 
 @mkdir(hyphy_input_dir)
-@mkdir(hyphy_input_dir)
+@mkdir(hyphy_results_dir)
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(translate_perfect, formatter(), hyphy_input('merged.prot'))
 @must_work(seq_ids=True)
