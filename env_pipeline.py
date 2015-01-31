@@ -260,7 +260,7 @@ def write_config(outfile):
 
 @jobs_limit(n_local_jobs, local_job_limiter)
 @follows(write_config)
-@transform(start_files, suffix(".fastq"), '.filtered.fasta')
+@transform(start_files, suffix(".fastq"), '.qfilter.fasta')
 @must_work()  # my decorators must go before ruffus ones
 def filter_fastq(infile, outfile):
     outfile = outfile[:-len('.fasta')]  # prinseq appends the extension
@@ -277,7 +277,7 @@ def filter_fastq(infile, outfile):
 
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(filter_fastq, suffix('.fasta'),
-           ['.uncontaminated.fasta', '.contaminated.fasta'])
+           ['.uncontam.fasta', '.contam.fasta'])
 def filter_contaminants(infile, outfiles):
     uncontam, contam = outfiles
     call('{usearch} -usearch_global {infile} -db {db}'
@@ -308,8 +308,8 @@ def usearch_global_get_pairs(infile, dbfile, identity):
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
-@transform(filter_contaminants, suffix('.uncontaminated.fasta'),
-           '.uncontaminated.matches.fasta')
+@transform(filter_contaminants, suffix('.uncontam.fasta'),
+           '.uncontam.rfilter.fasta')
 @must_work()
 def filter_uncontaminated(infiles, outfile):
     uncontam, _ = infiles
@@ -318,7 +318,7 @@ def filter_uncontaminated(infiles, outfile):
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
-@transform(filter_uncontaminated, suffix('.fasta'), '.shift-corrected.fasta')
+@transform(filter_uncontaminated, suffix('.fasta'), '.shifted.fasta')
 @must_work(seq_ratio=(2, 1))
 def shift_correction(infile, outfile):
     correct_shifts_fasta(infile, outfile, keep=True)
@@ -391,14 +391,14 @@ def align_clusters(infile, outfile):
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
-@transform(align_clusters, suffix('.fasta'), '.consensus.fasta')
+@transform(align_clusters, suffix('.fasta'), '.cons.fasta')
 @must_work(maybe=True)
 def cluster_consensus(infile, outfile):
     dnacons(infile, outfile=outfile, ungap=True)
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
-@collate(cluster_consensus, formatter(), '{subdir[0][0]}.consensus.fasta')
+@collate(cluster_consensus, formatter(), '{subdir[0][0]}.cons.fasta')
 @must_work(seq_ids=True)
 def cat_clusters(infiles, outfile):
     cat_files(infiles, outfile)
@@ -413,7 +413,7 @@ def consensus_db_search(infile, outfile):
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
-@transform(consensus_db_search, suffix('.fasta'), '.shift-corrected.fasta')
+@transform(consensus_db_search, suffix('.fasta'), '.shifted.fasta')
 @must_work()
 def consensus_shift_correction(infile, outfile):
     n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep=False)
@@ -455,7 +455,7 @@ def make_individual_dbs(infile, outfile):
 
 @jobs_limit(n_local_jobs, local_job_limiter)
 @collate([perfect_orfs, make_individual_dbs, shift_correction],
-         formatter(r'(?P<NAME>.+).filtered'),
+         formatter(r'(?P<NAME>.+).qfilter'),
          '{NAME[0]}.copynumber.fasta')
 @must_work(seq_ratio=(1, 1), pattern='*perfect*fasta')
 def add_copynumber(infiles, outfile):
@@ -474,7 +474,8 @@ def add_copynumber(infiles, outfile):
         r.name = ''
         r.description = ''
         return r
-    SeqIO.write((new_record(r) for r in SeqIO.parse(perfectfile, 'fasta')), outfile, 'fasta')
+    SeqIO.write((new_record(r) for r in SeqIO.parse(perfectfile, 'fasta')),
+                outfile, 'fasta')
 
 
 @mkdir(hyphy_input_dir)
@@ -495,7 +496,7 @@ def make_full_db(infile, outfile):
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
-@transform(cat_all_perfect, suffix('.fasta'), '.translated')
+@transform(cat_all_perfect, suffix('.fasta'), '.translated.fasta')
 @must_work(seq_ids=True)
 def translate_perfect(infile, outfile):
     translate(infile, outfile)
