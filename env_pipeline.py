@@ -365,22 +365,18 @@ def select_clusters(infile, outfile):
     SeqIO.write(records, outfile, 'fasta')
 
 
-def rm_stdin():
-    """Get rid of annoying STDIN files' after qsub runs"""
-    for f in glob('STDIN.*'):
-        os.unlink(f)
 
-
-def maybe_qsub(cmd, sentinel):
+def maybe_qsub(cmd, sentinel, **kwargs):
     if use_cluster:
         if os.path.exists(sentinel):
             os.unlink(sentinel)
-        qsub(cmd, sentinel, walltime=int(config['Misc']['align_clusters_walltime']))
+        qsub(cmd, sentinel, walltime=int(config['Misc']['align_clusters_walltime']),
+             **kwargs)
     else:
+        # TODO: handle stdout and stderr kwargs
         call(cmd)
 
 
-@posttask(rm_stdin)
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(select_clusters, suffix('.fasta'), '.aligned.fasta')
 @must_work(maybe=True)
@@ -388,7 +384,7 @@ def align_clusters(infile, outfile):
     stderr = '{}.stderr'.format(outfile)
     sentinel = '{}.complete'.format(outfile)
     cmd = 'mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr)
-    maybe_qsub(cmd, sentinel)
+    maybe_qsub(cmd, sentinel, stdout='/dev/null', stderr='/dev/null')
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -639,7 +635,6 @@ def combine_pairs(infiles, outfiles, basename):
         SeqIO.write(records, outfile, "fasta")
 
 
-@posttask(rm_stdin)
 @active_if(config.getboolean('Tasks', 'align_full'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(combine_pairs,
@@ -649,10 +644,11 @@ def combine_pairs(infiles, outfiles, basename):
 def codon_align(infile, outfile):
     cmd = "bealign.py -R {} {}".format(infile, outfile)
     sentinel = '{}.complete'.format(outfile)
-    maybe_qsub(cmd, sentinel)
+    stdout = '{}.stdout'.format(outfile)
+    stderr = '{}.stderr'.format(outfile)
+    maybe_qsub(cmd, sentinel, stdout=stdout, stderr=stderr)
 
 
-@posttask(rm_stdin)
 @active_if(config.getboolean('Tasks', 'align_full'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(codon_align, suffix('.bam'), '.fasta')
@@ -660,7 +656,9 @@ def codon_align(infile, outfile):
 def convert_bam_to_fasta(infile, outfile):
     cmd = "bam2msa.py {} {}".format(infile, outfile)
     sentinel = '{}.complete'.format(outfile)
-    maybe_qsub(cmd, sentinel)
+    stdout = '{}.stdout'.format(outfile)
+    stderr = '{}.stderr'.format(outfile)
+    maybe_qsub(cmd, sentinel, stdout=stdout, stderr=stderr)
 
 
 @active_if(config.getboolean('Tasks', 'align_full'))
