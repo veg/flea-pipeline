@@ -512,6 +512,8 @@ def translate_perfect(infile, outfile):
     translate(infile, outfile)
 
 
+@mkdir(hyphy_input_dir)
+@mkdir(hyphy_input_dir)
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(translate_perfect, formatter(), hyphy_input('merged.prot'))
 @must_work(seq_ids=True)
@@ -566,8 +568,6 @@ def compute_mrca(infile, outfile):
     mrca(infile, oldest_records_filename, outfile, oldest_timepoint.id)
 
 
-@mkdir(hyphy_input_dir)
-@mkdir(hyphy_results_dir)
 @active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(backtranslate_alignment, formatter(), hyphy_input('merged.prot.parts'))
@@ -577,8 +577,6 @@ def compute_hxb2_coords(infile, outfile):
     hyphy_call(hxb2_script, 'hxb2_coords', [infile, outfile])
 
 
-@mkdir(hyphy_input_dir)
-@mkdir(hyphy_results_dir)
 @active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @merge([write_dates, compute_hxb2_coords, backtranslate_alignment],
@@ -592,8 +590,6 @@ def evo_history(infiles, outfile):
                'evo_history', [hyphy_data_dir])
 
 
-@mkdir(hyphy_input_dir)
-@mkdir(hyphy_results_dir)
 @active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @merge([write_dates, backtranslate_alignment, compute_mrca],
@@ -605,8 +601,6 @@ def aa_freqs(infile, outfile):
                [hyphy_data_dir])
 
 
-@mkdir(hyphy_input_dir)
-@mkdir(hyphy_results_dir)
 @active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @merge([write_dates, evo_history, backtranslate_alignment],
