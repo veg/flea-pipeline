@@ -226,6 +226,17 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, pattern=None):
     return wrap
 
 
+def maybe_qsub(cmd, sentinel, **kwargs):
+    if use_cluster:
+        if os.path.exists(sentinel):
+            os.unlink(sentinel)
+        qsub(cmd, sentinel, walltime=int(config['Misc']['align_clusters_walltime']),
+             **kwargs)
+    else:
+        # TODO: handle stdout and stderr kwargs
+        call(cmd)
+
+
 def check_suffix(name, suffix):
     assert(name.endswith(suffix))
 
@@ -275,46 +286,53 @@ def filter_fastq(infile, outfile):
             min_qual_mean=min_qual_mean, seq_id=timepoint_ids[infile]))
 
 
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(filter_fastq, suffix('.fasta'),
            ['.uncontam.fasta', '.contam.fasta'])
 def filter_contaminants(infile, outfiles):
     uncontam, contam = outfiles
-    call('{usearch} -usearch_global {infile} -db {db}'
-         ' -id {id} -notmatched {uncontam} -matched {contam}'
-         ' -strand both'.format(usearch=config['Paths']['usearch'],
-                                infile=infile, db=config['Paths']['contaminants_db'],
-                                id=config['Parameters']['contaminant_identity'],
-                                uncontam=uncontam, contam=contam))
+    sentinel = '{}.complete'.format(contam)
+    cmd = ('{usearch} -usearch_global {infile} -db {db}'
+           ' -id {id} -notmatched {uncontam} -matched {contam}'
+           ' -strand both'.format(usearch=config['Paths']['usearch'],
+                                  infile=infile, db=config['Paths']['contaminants_db'],
+                                  id=config['Parameters']['contaminant_identity'],
+                                  uncontam=uncontam, contam=contam))
+    maybe_qsub(cmd, sentinel, name='filter-contaminants')
 
 
-def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False):
+def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, name=None):
     if nums_only:
         cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
                " -userout {outfile} -userfields query+target -strand both")
     else:
         cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
                ' -fastapairs {outfile} -strand both')
-    call(cmd.format(usearch=config['Paths']['usearch'],
-                    infile=infile, db=dbfile, id=identity, outfile=outfile))
+    sentinel = '{}.complete'.format(outfile)
+    if name is None:
+        name = 'usearch-global-pairs'
+    cmd = cmd.format(usearch=config['Paths']['usearch'],
+                     infile=infile, db=dbfile, id=identity, outfile=outfile)
+    maybe_qsub(cmd, sentinel, name=name)
 
 
-def usearch_global_get_pairs(infile, dbfile, identity):
+def usearch_global_get_pairs(infile, dbfile, identity, name=None):
     with tempfile.TemporaryDirectory() as tmpdirname:
         outfile = os.path.join(tmpdirname, 'pairs.txt')
-        usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True)
+        usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True, name=name)
         with open(outfile) as f:
             return list(line.strip().split("\t") for line in f.readlines())
 
 
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(filter_contaminants, suffix('.uncontam.fasta'),
            '.uncontam.rfilter.fasta')
 @must_work()
 def filter_uncontaminated(infiles, outfile):
     uncontam, _ = infiles
     usearch_global_pairs(uncontam, outfile, config['Paths']['reference_db'],
-                         config['Parameters']['reference_identity'])
+                         config['Parameters']['reference_identity'],
+                         name="filter-uncontaminated")
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -324,15 +342,17 @@ def shift_correction(infile, outfile):
     correct_shifts_fasta(infile, outfile, keep=True)
 
 
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(shift_correction, suffix('.fasta'), '.sorted.fasta')
 @must_work(seq_ids=True)
 def sort_by_length(infile, outfile):
-    call('{usearch} -sortbylength {infile} -output {outfile}'.format(
+    sentinel = "{}.complete".format(outfile)
+    cmd = ('{usearch} -sortbylength {infile} -output {outfile}'.format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+    maybe_qsub(cmd, sentinel, name="sort-by-length")
 
 
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @mkdir(sort_by_length, suffix('.fasta'), '.clusters')
 @subdivide(sort_by_length, formatter(), '{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta')
 def cluster(infile, outfiles):
@@ -340,12 +360,13 @@ def cluster(infile, outfiles):
         os.unlink(f)
     outdir = '{}.clusters'.format(infile[:-len('.fasta')])
     outpattern = os.path.join(outdir, 'cluster_')
-    call('{usearch} -cluster_smallmem {infile} -id {id}'
-         ' -clusters {outpattern}'.format(
+    cmd = ('{usearch} -cluster_smallmem {infile} -id {id}'
+           ' -clusters {outpattern}'.format(
             usearch=config['Paths']['usearch'],
             infile=infile, id=config['Parameters']['cluster_identity'],
             outpattern=outpattern))
-
+    sentinel = "cluster.complete"
+    maybe_qsub(cmd, sentinel, name="cluster")
     r = re.compile(r'^cluster_[0-9]+$')
     for f in list(f for f in os.listdir(outdir) if r.match(f)):
         oldfile = os.path.join(outdir, f)
@@ -365,18 +386,6 @@ def select_clusters(infile, outfile):
     if len(records) > maxsize:
         records = sample(records, maxsize)
     SeqIO.write(records, outfile, 'fasta')
-
-
-
-def maybe_qsub(cmd, sentinel, **kwargs):
-    if use_cluster:
-        if os.path.exists(sentinel):
-            os.unlink(sentinel)
-        qsub(cmd, sentinel, walltime=int(config['Misc']['align_clusters_walltime']),
-             **kwargs)
-    else:
-        # TODO: handle stdout and stderr kwargs
-        call(cmd)
 
 
 def hyphy_call(script_file, name, args):
@@ -416,12 +425,13 @@ def cat_clusters(infiles, outfile):
     cat_files(infiles, outfile)
 
 
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(cat_clusters, suffix('.fasta'), '.pairs.fasta')
 @must_work()
 def consensus_db_search(infile, outfile):
     usearch_global_pairs(infile, outfile, config['Paths']['reference_db'],
-                         config['Parameters']['reference_identity'])
+                         config['Parameters']['reference_identity'],
+                         name='consensus-db-search')
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -433,20 +443,24 @@ def consensus_shift_correction(infile, outfile):
     write_correction_result(n_seqs, n_fixed, sumfile)
 
 
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(consensus_shift_correction, suffix('.fasta'), '.sorted.fasta')
 @must_work(seq_ids=True)
 def sort_consensus(infile, outfile):
-    call('{usearch} -sortbylength {infile} -output {outfile}'.format(
+    cmd = ('{usearch} -sortbylength {infile} -output {outfile}'.format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+    sentinel = '{}.complete'.format(outfile)
+    maybe_qsub(cmd, sentinel, name='sort-consensus')
 
 
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(sort_consensus, suffix('.fasta'), '.uniques.fasta')
 @must_work()
 def unique_consensus(infile, outfile):
-    call('{usearch} -cluster_smallmem {infile} -id 1 -centroids {outfile}'.format(
+    sentinel = '{}.complete'.format(outfile)
+    cmd = ('{usearch} -cluster_smallmem {infile} -id 1 -centroids {outfile}'.format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+    maybe_qsub(cmd, sentinel, name='unique_consensus')
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -457,25 +471,32 @@ def perfect_orfs(infile, outfile):
                  table=1, verbose=False)
 
 
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(perfect_orfs, suffix('.fasta'), '.udb')
 @must_work()
 def make_individual_dbs(infile, outfile):
-    call("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
+    cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+    sentinel = '{}.complete'.format(outfile)
+    maybe_qsub(cmd, sentinel, name='make-individual-dbs')
 
 
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @collate([perfect_orfs, make_individual_dbs, shift_correction],
          formatter(r'(?P<NAME>.+).qfilter'),
-         '{NAME[0]}.copynumber.fasta')
+         '{NAME[0]}.copynumber.fasta',
+         '{NAME[0]}')
 @must_work(seq_ratio=(1, 1), pattern='*perfect*fasta')
-def add_copynumber(infiles, outfile):
+def add_copynumber(infiles, outfile, basename):
     rawfile, perfectfile, dbfile = infiles
     check_suffix(perfectfile, '.perfect.fasta')
     check_suffix(dbfile, '.udb')
     identity = config['Parameters']['raw_to_consensus_identity']
-    pairs = usearch_global_get_pairs(rawfile, dbfile, identity)
+    pairfile = '{}.copynumber.pairs'.format(basename)
+    usearch_global_pairs(rawfile, pairfile, dbfile, identity,
+                         nums_only=True, name='add-copynumber')
+    with open(pairfile) as f:
+            pairs = list(line.strip().split("\t") for line in f.readlines())
     consensus_counts = defaultdict(lambda: 1)
     for raw_id, ref_id in pairs:
         consensus_counts[str(ref_id).upper()] += 1
@@ -497,12 +518,14 @@ def cat_all_perfect(infiles, outfile):
     cat_files(infiles, outfile)
 
 
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(cat_all_perfect, suffix('.fasta'), '.udb')
 @must_work()
 def make_full_db(infile, outfile):
-    call("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
+    cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+    sentinel = '{}.complete'.format(outfile)
+    maybe_qsub(cmd, sentinel, name='make_full_db')
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -611,7 +634,7 @@ def run_fubar(infile, outfile):
 
 
 @active_if(config.getboolean('Tasks', 'align_full'))
-@jobs_limit(n_local_jobs, local_job_limiter)
+@jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(shift_correction,
            suffix('.fasta'),
            add_inputs([ make_full_db]),
@@ -620,7 +643,8 @@ def run_fubar(infile, outfile):
 def full_timestep_pairs(infiles, outfile):
     infile, (dbfile,) = infiles
     identity = config['Parameters']['raw_to_consensus_identity']
-    usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True)
+    usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True,
+                         name='full-timestep-pairs')
 
 
 @active_if(config.getboolean('Tasks', 'align_full'))
