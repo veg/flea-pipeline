@@ -37,7 +37,17 @@ def call(cmd_str, stdin=None, stdout=None):
                 cmd_str, process.returncode, in_str, stdout_str.decode(), stderr_str.decode()))
 
 
-def qsub(cmd, sentinel, walltime=3600, sleep=5, postsleep=10,
+def wait_for_files(files, sleep, walltime):
+    files = strlist(files)
+    run_time = 0
+    while run_time < walltime:
+        time.sleep(sleep)
+        run_time += sleep
+        if all(os.path.exists(f) for f in files):
+            break
+
+
+def qsub(cmd, sentinel, outfiles=None, sleep=5, walltime=3600, waittime=10,
          name=None, stdout=None, stderr=None):
     """A blocking qsub.
 
@@ -64,21 +74,9 @@ def qsub(cmd, sentinel, walltime=3600, sleep=5, postsleep=10,
         qsub_cmd = '{} -e {}'.format(qsub_cmd, stderr)
     full_cmd = 'echo "{}" | {}'.format(mycmd, qsub_cmd)
     call(full_cmd)
-    run_time = 0
-    while run_time < walltime:
-        time.sleep(sleep)
-        run_time += sleep
-        if os.path.exists(sentinel):
-            break
-    # wait to make sure it has been flushed
-    # TODO: this is probably not robust
-    time_waited = 0
-    tick = 1
-    while not os.path.exists(sentinel):
-        time.sleep(tick)
-        time_waited += tick
-        if time_waited > postsleep:
-            break
+    wait_for_files(sentinel, sleep, walltime)
+    if outfiles is not None:
+        wait_for_files(outfiles, sleep, waittime)
     if not os.path.exists(sentinel):
         raise Exception('qsub sentinel not found: "{}"'.format(sentinel))
     with open(sentinel) as handle:
