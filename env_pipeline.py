@@ -237,6 +237,13 @@ def maybe_qsub(cmd, sentinel, **kwargs):
         call(cmd)
 
 
+def mafft(infile, outfile):
+    stderr = '{}.stderr'.format(outfile)
+    sentinel = '{}.complete'.format(outfile)
+    cmd = 'mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr)
+    maybe_qsub(cmd, sentinel, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
+
+
 def check_suffix(name, suffix):
     assert(name.endswith(suffix))
 
@@ -298,7 +305,7 @@ def filter_contaminants(infile, outfiles):
                                   infile=infile, db=config['Paths']['contaminants_db'],
                                   id=config['Parameters']['contaminant_identity'],
                                   uncontam=uncontam, contam=contam))
-    maybe_qsub(cmd, sentinel, name='filter-contaminants')
+    maybe_qsub(cmd, sentinel, outfiles=outfiles, name='filter-contaminants')
 
 
 def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, name=None):
@@ -313,7 +320,7 @@ def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, nam
         name = 'usearch-global-pairs'
     cmd = cmd.format(usearch=config['Paths']['usearch'],
                      infile=infile, db=dbfile, id=identity, outfile=outfile)
-    maybe_qsub(cmd, sentinel, name=name)
+    maybe_qsub(cmd, sentinel, outfiles=outfile, name=name)
 
 
 def usearch_global_get_pairs(infile, dbfile, identity, name=None):
@@ -349,7 +356,7 @@ def sort_by_length(infile, outfile):
     sentinel = "{}.complete".format(outfile)
     cmd = ('{usearch} -sortbylength {infile} -output {outfile}'.format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    maybe_qsub(cmd, sentinel, name="sort-by-length")
+    maybe_qsub(cmd, sentinel, outfiles=outfile, name="sort-by-length")
 
 
 @jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -405,10 +412,7 @@ def hyphy_call(script_file, name, args):
 @transform(select_clusters, suffix('.fasta'), '.aligned.fasta')
 @must_work(maybe=True)
 def align_clusters(infile, outfile):
-    stderr = '{}.stderr'.format(outfile)
-    sentinel = '{}.complete'.format(outfile)
-    cmd = 'mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr)
-    maybe_qsub(cmd, sentinel, stdout='/dev/null', stderr='/dev/null')
+    mafft(infile, outfile)
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -450,7 +454,7 @@ def sort_consensus(infile, outfile):
     cmd = ('{usearch} -sortbylength {infile} -output {outfile}'.format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
     sentinel = '{}.complete'.format(outfile)
-    maybe_qsub(cmd, sentinel, name='sort-consensus')
+    maybe_qsub(cmd, sentinel, outfiles=outfile, name='sort-consensus')
 
 
 @jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -460,7 +464,7 @@ def unique_consensus(infile, outfile):
     sentinel = '{}.complete'.format(outfile)
     cmd = ('{usearch} -cluster_smallmem {infile} -id 1 -centroids {outfile}'.format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    maybe_qsub(cmd, sentinel, name='unique_consensus')
+    maybe_qsub(cmd, sentinel, outfiles=outfile, name='unique_consensus')
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -478,7 +482,7 @@ def make_individual_dbs(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
     sentinel = '{}.complete'.format(outfile)
-    maybe_qsub(cmd, sentinel, name='make-individual-dbs')
+    maybe_qsub(cmd, sentinel, outfiles=outfile, name='make-individual-dbs')
 
 
 @jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -525,7 +529,7 @@ def make_full_db(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
     sentinel = '{}.complete'.format(outfile)
-    maybe_qsub(cmd, sentinel, name='make_full_db')
+    maybe_qsub(cmd, sentinel, outfiles=outfile, name='make_full_db')
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -541,8 +545,7 @@ def translate_perfect(infile, outfile):
 @transform(translate_perfect, formatter(), hyphy_input('merged.prot'))
 @must_work(seq_ids=True)
 def codon_align_perfect(infile, outfile):
-    with open(outfile, 'w') as handle:
-        call("mafft --auto {}".format(infile), stdout=handle)
+    mafft(infile, outfile)
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -690,7 +693,7 @@ def codon_align(infile, outfile):
     sentinel = '{}.complete'.format(outfile)
     stdout = '{}.stdout'.format(outfile)
     stderr = '{}.stderr'.format(outfile)
-    maybe_qsub(cmd, sentinel, stdout=stdout, stderr=stderr)
+    maybe_qsub(cmd, sentinel, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
 @active_if(config.getboolean('Tasks', 'align_full'))
@@ -702,7 +705,7 @@ def convert_bam_to_fasta(infile, outfile):
     sentinel = '{}.complete'.format(outfile)
     stdout = '{}.stdout'.format(outfile)
     stderr = '{}.stderr'.format(outfile)
-    maybe_qsub(cmd, sentinel, stdout=stdout, stderr=stderr)
+    maybe_qsub(cmd, sentinel, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
 @active_if(config.getboolean('Tasks', 'align_full'))
