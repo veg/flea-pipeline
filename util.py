@@ -48,8 +48,8 @@ def wait_for_files(files, sleep, walltime):
             break
 
 
-def qsub(cmd, sentinel, outfiles=None, sleep=5, walltime=3600, waittime=10,
-         name=None, stdout=None, stderr=None):
+def qsub(cmd, sentinel, outfiles=None, queue=None, nodes=1, ppn=1, sleep=5,
+         walltime=3600, waittime=10, name=None, stdout=None, stderr=None):
     """A blocking qsub.
 
     sentinel: file to be created when task is done. Cannot exist.
@@ -67,8 +67,11 @@ def qsub(cmd, sentinel, outfiles=None, sleep=5, walltime=3600, waittime=10,
     # FIXME: job status always seems to be 0
     mycmd = '{}; echo \$? > {}'.format(cmd, sentinel)
     fwalltime = time.strftime('%H:%M:%S', time.gmtime(walltime))
-    qsub_cmd = ('qsub -V -W umask=077 -l walltime={} -N {name}'
-                ' -d `pwd` -w `pwd`'.format(fwalltime, name=name))
+    qsub_cmd = ('qsub -V -W umask=077 -l'
+                ' walltime={},nodes={}:ppn={} -N {name}'
+                ' -d `pwd` -w `pwd`'.format(fwalltime, nodes, ppn, name=name))
+    if queue is not None:
+        qsub_cmd = "{} -q {}".format(qsub_cmd, queue)
     if stdout is not None:
         qsub_cmd = '{} -o {}'.format(qsub_cmd, stdout)
     if stdout is not None:
