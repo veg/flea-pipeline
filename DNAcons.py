@@ -32,10 +32,12 @@ from Bio.Align import AlignInfo
 from Bio.Alphabet import IUPAC
 
 
-def dnacons(filename, id_str=None, outfile=None, ungap=True, verbose=False):
+def dnacons(filename, outfile=None, id_str=None, ambiguous=None, ungap=True, verbose=False):
+    if ambiguous is None:
+        ambiguous = 'N'
     alignment = AlignIO.read(filename, "fasta")
     summary_align = AlignInfo.SummaryInfo(alignment)
-    consensus = summary_align.gap_consensus(threshold=0.00)
+    consensus = summary_align.gap_consensus(threshold=0.00, ambiguous=ambiguous)
     if ungap:
         consensus = consensus.ungap("-")
 
@@ -61,5 +63,5 @@ if __name__ == "__main__":
     outfile = args["--outfile"]
     keep_gap = args["--keep-gaps"]
     ungap = not keep_gap
-    dnacons(filename, id_str, outfile, ungap=ungap, verbose=verbose)
+    dnacons(filename, outfile, id_str, ungap=ungap, verbose=verbose)
 

@@ -193,15 +193,15 @@ def check_seq_ratio(inputs, output, expected):
                 a_exp, b_exp, a_n, b_n, inputs, output))
 
 
-def assert_no_char(f, char):
+def check_illegal_chars(f, chars):
     for r in SeqIO.parse(f, 'fasta'):
-        if char in r.seq:
-            raise Exception('Illegal character "{}" found in sequence "{}"'
-                            ' of file "{}"'.format(char, r.id, f))
+        found = set(chars).intersection(set(str(r.seq)))
+        if found:
+            raise Exception('Illegal characters "{}" found in sequence "{}"'
+                            ' of file "{}"'.format(found, r.id, f))
 
 
-def must_work(maybe=False, seq_ratio=None, seq_ids=False, unambiguous=False,
-              ungapped=False, pattern=None):
+def must_work(maybe=False, seq_ratio=None, seq_ids=False, illegal_chars=None, pattern=None):
     """Fail if any output is empty.
 
     maybe: touch output and return if any input is empty
@@ -233,12 +233,9 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, unambiguous=False,
             if seq_ratio is not None:
                 assert len(outfiles) == 1
                 check_seq_ratio(infiles, outfiles[0], seq_ratio)
-            if unambiguous:
+            if illegal_chars:
                 for f in outfiles:
-                    assert_no_char(f, 'X')
-            if ungapped:
-                for f in outfiles:
-                    assert_no_char(f, '-')
+                    check_illegal_chars(f, illegal_chars)
         return wrapped
     return wrap
 
@@ -435,9 +432,9 @@ def align_clusters(infile, outfile):
 
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(align_clusters, suffix('.fasta'), '.cons.fasta')
-@must_work(maybe=True, unambiguous=True, ungapped=True)
+@must_work(maybe=True, illegal_chars='X-')
 def cluster_consensus(infile, outfile):
-    dnacons(infile, outfile=outfile, ungap=True)
+    dnacons(infile, outfile, ungap=True)
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -599,12 +596,12 @@ def mrca(infile, recordfile, outfile, oldest_id):
     records = SeqIO.parse(infile, "fasta")
     oldest_records = (r for r in records if r.id.startswith(oldest_id))
     SeqIO.write(oldest_records, recordfile, "fasta")
-    dnacons(recordfile, id_str="mrca", ungap=False, outfile=outfile)
+    dnacons(recordfile, outfile, id_str="mrca", ungap=False, ambiguous='N')
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(backtranslate_alignment, formatter(), hyphy_input('earlyCons.seq'))
-@must_work(unambiguous=True)
+@must_work(illegal_chars='X')
 def compute_mrca(infile, outfile):
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
     oldest_timepoint = min(timepoints, key=strptime)
