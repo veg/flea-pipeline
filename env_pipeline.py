@@ -240,6 +240,20 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, illegal_chars=None, pa
     return wrap
 
 
+def must_produce(n):
+    """Check that at least `n` files match the pathname glob"""
+    def wrap(fun):
+        @wraps(fun)
+        def wrapped(infiles, outfiles, pathname, *args, **kwargs):
+            fun(infiles, outfiles, pathname, *args, **kwargs)
+            n_produced = len(glob(pathname))
+            if n_produced < n:
+                raise Exception('Task was supposed to produce at least {}'
+                                ' outputs, but it produced {}'.format(n, n_produced))
+        return wrapped
+    return wrap
+
+
 def maybe_qsub(cmd, sentinel, **kwargs):
     if use_cluster:
         if os.path.exists(sentinel):
@@ -376,8 +390,11 @@ def sort_by_length(infile, outfile):
 
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @mkdir(sort_by_length, suffix('.fasta'), '.clusters')
-@subdivide(sort_by_length, formatter(), '{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta')
-def cluster(infile, outfiles):
+@subdivide(sort_by_length, formatter(),
+           '{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta',
+           '{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta')
+@must_produce(n=int(config['Parameters']['min_n_clusters']))
+def cluster(infile, outfiles, pathname):
     for f in outfiles:
         os.unlink(f)
     outdir = '{}.clusters'.format(infile[:-len('.fasta')])
