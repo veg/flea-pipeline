@@ -404,7 +404,7 @@ def cluster(infile, outfiles, pathname):
             usearch=config['Paths']['usearch'],
             infile=infile, id=config['Parameters']['cluster_identity'],
             outpattern=outpattern))
-    sentinel = "cluster.complete"
+    sentinel = "{}.cluster.complete".format(infile)
     maybe_qsub(cmd, sentinel, name="cluster")
     r = re.compile(r'^cluster_[0-9]+$')
     for f in list(f for f in os.listdir(outdir) if r.match(f)):
