@@ -551,6 +551,9 @@ def add_copynumber(infiles, outfile, basename):
 @merge(add_copynumber, "all_perfect_orfs.fasta")
 @must_work(seq_ids=True)
 def cat_all_perfect(infiles, outfile):
+    if len(infiles) != len(timepoints):
+        raise Exception('Number of input files does not match number'
+                        ' of timepoints')
     cat_files(infiles, outfile)
 
 
