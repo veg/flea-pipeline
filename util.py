@@ -10,6 +10,7 @@ import os
 from Bio.Seq import Seq
 
 
+# TODO: capture and write all stdout and stderr to files.
 def call(cmd_str, stdin=None, stdout=None):
     """Call a command in the shell. Captures STDOUT and STDERR.
 
@@ -64,7 +65,7 @@ def qsub(cmd, sentinel, outfiles=None, sleep=5, walltime=3600, waittime=10,
     if name is None:
         name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
     # FIXME: job status always seems to be 0
-    mycmd = '{}; echo $? > {}'.format(cmd, sentinel)
+    mycmd = '{}; echo \$? > {}'.format(cmd, sentinel)
     fwalltime = time.strftime('%H:%M:%S', time.gmtime(walltime))
     qsub_cmd = ('qsub -V -W umask=077 -l walltime={} -N {name}'
                 ' -d `pwd` -w `pwd`'.format(fwalltime, name=name))
