@@ -166,6 +166,9 @@ def hyphy_results(s):
 
 def ensure_not_empty(files):
     for f in strlist(files):
+        if not os.path.exists(f):
+            raise Exception('Expected output file does not'
+                            ' exist: "{}"'.format(f))
         if os.stat(f).st_size == 0:
             raise Exception('Empty file: "{}"'.format(f))
 
