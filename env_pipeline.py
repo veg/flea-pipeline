@@ -193,7 +193,15 @@ def check_seq_ratio(inputs, output, expected):
                 a_exp, b_exp, a_n, b_n, inputs, output))
 
 
-def must_work(maybe=False, seq_ratio=None, seq_ids=False, pattern=None):
+def assert_no_char(f, char):
+    for r in SeqIO.parse(f, 'fasta'):
+        if char in r.seq:
+            raise Exception('Illegal character "{}" found in sequence "{}"'
+                            ' of file "{}"'.format(char, r.id, f))
+
+
+def must_work(maybe=False, seq_ratio=None, seq_ids=False, unambiguous=False,
+              ungapped=False, pattern=None):
     """Fail if any output is empty.
 
     maybe: touch output and return if any input is empty
@@ -225,6 +233,12 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, pattern=None):
             if seq_ratio is not None:
                 assert len(outfiles) == 1
                 check_seq_ratio(infiles, outfiles[0], seq_ratio)
+            if unambiguous:
+                for f in outfiles:
+                    assert_no_char(f, 'X')
+            if ungapped:
+                for f in outfiles:
+                    assert_no_char(f, '-')
         return wrapped
     return wrap
 
@@ -421,7 +435,7 @@ def align_clusters(infile, outfile):
 
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(align_clusters, suffix('.fasta'), '.cons.fasta')
-@must_work(maybe=True)
+@must_work(maybe=True, unambiguous=True, ungapped=True)
 def cluster_consensus(infile, outfile):
     dnacons(infile, outfile=outfile, ungap=True)
 
@@ -590,7 +604,7 @@ def mrca(infile, recordfile, outfile, oldest_id):
 
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(backtranslate_alignment, formatter(), hyphy_input('earlyCons.seq'))
-@must_work()
+@must_work(unambiguous=True)
 def compute_mrca(infile, outfile):
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
     oldest_timepoint = min(timepoints, key=strptime)
@@ -609,7 +623,7 @@ def compute_hxb2_coords(infile, outfile):
 
 @active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
-@merge([write_dates, compute_hxb2_coords, backtranslate_alignment],
+@merge([write_dates, compute_hxb2_coords, backtranslate_alignment, compute_mrca],
          [hyphy_input('mrca.seq')] + list(hyphy_results(f)
                                           for f in ('rates_pheno.tsv',
                                                     'trees.json',
