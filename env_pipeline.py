@@ -254,11 +254,9 @@ def must_produce(n):
     return wrap
 
 
-def maybe_qsub(cmd, sentinel, **kwargs):
+def maybe_qsub(cmd, **kwargs):
     if use_cluster:
-        if os.path.exists(sentinel):
-            os.unlink(sentinel)
-        qsub(cmd, sentinel, walltime=int(config['Jobs']['walltime']),
+        qsub(cmd, walltime=int(config['Jobs']['walltime']),
              queue=config['Jobs']['queue'], nodes=config['Jobs']['nodes'],
              ppn=config['Jobs']['ppn'], **kwargs)
     else:
@@ -268,9 +266,8 @@ def maybe_qsub(cmd, sentinel, **kwargs):
 
 def mafft(infile, outfile):
     stderr = '{}.stderr'.format(outfile)
-    sentinel = '{}.complete'.format(outfile)
     cmd = 'mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr)
-    maybe_qsub(cmd, sentinel, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
+    maybe_qsub(cmd, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
 
 
 def check_suffix(name, suffix):
@@ -327,14 +324,13 @@ def filter_fastq(infile, outfile):
            ['.uncontam.fasta', '.contam.fasta'])
 def filter_contaminants(infile, outfiles):
     uncontam, contam = outfiles
-    sentinel = '{}.complete'.format(contam)
     cmd = ('{usearch} -usearch_global {infile} -db {db}'
            ' -id {id} -notmatched {uncontam} -matched {contam}'
            ' -strand both'.format(usearch=config['Paths']['usearch'],
                                   infile=infile, db=config['Paths']['contaminants_db'],
                                   id=config['Parameters']['contaminant_identity'],
                                   uncontam=uncontam, contam=contam))
-    maybe_qsub(cmd, sentinel, outfiles=outfiles, name='filter-contaminants')
+    maybe_qsub(cmd, outfiles=outfiles, name='filter-contaminants')
 
 
 def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, name=None):
@@ -344,12 +340,11 @@ def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, nam
     else:
         cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
                ' -fastapairs {outfile} -strand both')
-    sentinel = '{}.complete'.format(outfile)
     if name is None:
         name = 'usearch-global-pairs'
     cmd = cmd.format(usearch=config['Paths']['usearch'],
                      infile=infile, db=dbfile, id=identity, outfile=outfile)
-    maybe_qsub(cmd, sentinel, outfiles=outfile, name=name)
+    maybe_qsub(cmd, outfiles=outfile, name=name)
 
 
 def usearch_global_get_pairs(infile, dbfile, identity, name=None):
@@ -382,10 +377,9 @@ def shift_correction(infile, outfile):
 @transform(shift_correction, suffix('.fasta'), '.sorted.fasta')
 @must_work(seq_ids=True)
 def sort_by_length(infile, outfile):
-    sentinel = "{}.complete".format(outfile)
     cmd = ('{usearch} -sortbylength {infile} -output {outfile}'.format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    maybe_qsub(cmd, sentinel, outfiles=outfile, name="sort-by-length")
+    maybe_qsub(cmd, outfiles=outfile, name="sort-by-length")
 
 
 @jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -404,8 +398,7 @@ def cluster(infile, outfiles, pathname):
             usearch=config['Paths']['usearch'],
             infile=infile, id=config['Parameters']['cluster_identity'],
             outpattern=outpattern))
-    sentinel = "{}.cluster.complete".format(infile)
-    maybe_qsub(cmd, sentinel, name="cluster")
+    maybe_qsub(cmd, name="cluster")
     r = re.compile(r'^cluster_[0-9]+$')
     for f in list(f for f in os.listdir(outdir) if r.match(f)):
         oldfile = os.path.join(outdir, f)
@@ -433,11 +426,10 @@ def hyphy_call(script_file, name, args):
     else:
         in_str = ''
     infile = '{}.stdin'.format(name)
-    sentinel = '{}.complete'.format(name)
     with open(infile, 'w') as handle:
         handle.write(in_str)
     cmd = '{} {} < {}'.format(config['Paths']['hyphy'], script_file, infile)
-    maybe_qsub(cmd, sentinel, name=name)
+    maybe_qsub(cmd, name=name)
 
 
 @jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -485,18 +477,16 @@ def consensus_shift_correction(infile, outfile):
 def sort_consensus(infile, outfile):
     cmd = ('{usearch} -sortbylength {infile} -output {outfile}'.format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    sentinel = '{}.complete'.format(outfile)
-    maybe_qsub(cmd, sentinel, outfiles=outfile, name='sort-consensus')
+    maybe_qsub(cmd, outfiles=outfile, name='sort-consensus')
 
 
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(sort_consensus, suffix('.fasta'), '.uniques.fasta')
 @must_work()
 def unique_consensus(infile, outfile):
-    sentinel = '{}.complete'.format(outfile)
     cmd = ('{usearch} -cluster_smallmem {infile} -id 1 -centroids {outfile}'.format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    maybe_qsub(cmd, sentinel, outfiles=outfile, name='unique_consensus')
+    maybe_qsub(cmd, outfiles=outfile, name='unique_consensus')
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -513,8 +503,7 @@ def perfect_orfs(infile, outfile):
 def make_individual_dbs(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    sentinel = '{}.complete'.format(outfile)
-    maybe_qsub(cmd, sentinel, outfiles=outfile, name='make-individual-dbs')
+    maybe_qsub(cmd,  outfiles=outfile, name='make-individual-dbs')
 
 
 @jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -563,8 +552,7 @@ def cat_all_perfect(infiles, outfile):
 def make_full_db(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    sentinel = '{}.complete'.format(outfile)
-    maybe_qsub(cmd, sentinel, outfiles=outfile, name='make_full_db')
+    maybe_qsub(cmd, outfiles=outfile, name='make_full_db')
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -725,10 +713,9 @@ def combine_pairs(infiles, outfiles, basename):
 @must_work()
 def codon_align(infile, outfile):
     cmd = "{} -R {} {}".format(config['Paths']['bealign'], infile, outfile)
-    sentinel = '{}.complete'.format(outfile)
     stdout = '{}.stdout'.format(outfile)
     stderr = '{}.stderr'.format(outfile)
-    maybe_qsub(cmd, sentinel, outfiles=outfile, stdout=stdout, stderr=stderr)
+    maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
 @active_if(config.getboolean('Tasks', 'align_full'))
@@ -737,10 +724,9 @@ def codon_align(infile, outfile):
 @must_work()
 def convert_bam_to_fasta(infile, outfile):
     cmd = "{} {} {}".format(config['Paths']['bam2msa'], infile, outfile)
-    sentinel = '{}.complete'.format(outfile)
     stdout = '{}.stdout'.format(outfile)
     stderr = '{}.stderr'.format(outfile)
-    maybe_qsub(cmd, sentinel, outfiles=outfile, stdout=stdout, stderr=stderr)
+    maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
 @active_if(config.getboolean('Tasks', 'align_full'))

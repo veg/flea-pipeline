@@ -1,9 +1,11 @@
 """Utility functions used in more than one script."""
 
-from subprocess import Popen, PIPE, STDOUT
+from subprocess import Popen, PIPE, STDOUT, CalledProcessError
 from itertools import zip_longest
 from itertools import tee
 from itertools import filterfalse
+from collections import defaultdict
+from uuid import uuid4
 import time
 import os
 
@@ -33,12 +35,39 @@ def call(cmd_str, stdin=None, stdout=None):
             in_str = ''
         else:
             in_str = in_str.decode()
-        raise Exception("Failed to run '{}'\nExit status: {}\nSTDIN:\n{}"
-                        "\nSTDOUT:\n{}\nSTDERR\n{}\n".format(
+        raise CalledProcessError("Failed to run '{}'\nExit status: {}\nSTDIN:\n{}"
+                                 "\nSTDOUT:\n{}\nSTDERR\n{}\n".format(
                 cmd_str, process.returncode, in_str, stdout_str.decode(), stderr_str.decode()))
+    return stdout_str.decode()
+
+
+def job_state(job_id):
+    """Returns job state from qstat.
+
+    If the job is not found, returns 'M' for 'missing'.
+
+    """
+    cmd = 'qstat {}'.format(job_id)
+    try:
+        result = call(cmd)
+        name, _, _, _, state, _ = result.split('\n')[2].split()
+        return state
+    except CalledProcessError:
+        pass
+    return 'M'
+
+
+def wait_for_job(job_id, sleep):
+    """Check job state every `sleep` seconds; return if 'C' or 'M'."""
+    while True:
+        time.sleep(sleep)
+        state = job_state(job_id)
+        if state in 'CM':
+            return
 
 
 def wait_for_files(files, sleep, walltime):
+    """Wait up to `walltime` seconds for files in `files` to exist"""
     files = strlist(files)
     run_time = 0
     while run_time < walltime:
@@ -48,23 +77,14 @@ def wait_for_files(files, sleep, walltime):
             break
 
 
-def qsub(cmd, sentinel, outfiles=None, queue=None, nodes=1, ppn=1, sleep=5,
+def qsub(cmd, outfiles=None, queue=None, nodes=1, ppn=1, sleep=5,
          walltime=3600, waittime=10, name=None, stdout=None, stderr=None):
-    """A blocking qsub.
-
-    sentinel: file to be created when task is done. Cannot exist.
-    walltime: seconds
-
-    """
-    # TODO: capture STDOUT and STDERR
-    # TODO: name jobs and move their output somewhere
+    """A blocking qsub."""
     if walltime < 1:
         raise Exception('walltime={} < 1'.format(walltime))
-    if os.path.exists(sentinel):
-        raise Exception('sentinel already exists!')
     if name is None:
         name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
-    # FIXME: job status always seems to be 0
+    sentinel = '{}-{}.complete'.format(name, uuid4())
     mycmd = '{}; echo \$? > {}'.format(cmd, sentinel)
     fwalltime = time.strftime('%H:%M:%S', time.gmtime(walltime))
     qsub_cmd = ('qsub -V -W umask=077 -l'
@@ -74,11 +94,15 @@ def qsub(cmd, sentinel, outfiles=None, queue=None, nodes=1, ppn=1, sleep=5,
         qsub_cmd = "{} -q {}".format(qsub_cmd, queue)
     if stdout is not None:
         qsub_cmd = '{} -o {}'.format(qsub_cmd, stdout)
-    if stdout is not None:
+    if stderr is not None:
         qsub_cmd = '{} -e {}'.format(qsub_cmd, stderr)
     full_cmd = 'echo "{}" | {}'.format(mycmd, qsub_cmd)
-    call(full_cmd)
-    wait_for_files(sentinel, sleep, walltime)
+    try:
+        job_id = call(full_cmd)
+        wait_for_job(job_id, sleep)
+    finally:
+        if job_state(job_id) not in 'CM':
+            call('qdel {}'.format(job_id))
     if outfiles is not None:
         wait_for_files(outfiles, sleep, waittime)
     if not os.path.exists(sentinel):
@@ -87,7 +111,6 @@ def qsub(cmd, sentinel, outfiles=None, queue=None, nodes=1, ppn=1, sleep=5,
         code = handle.read().strip()
         if code != '0':
             raise Exception('qsub job "{}" exited with code "{}"'.format(full_cmd, code))
-
 
 
 def insert_gaps(source, target, src_gap, target_gap, skip):
