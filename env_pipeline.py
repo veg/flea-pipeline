@@ -724,7 +724,7 @@ def combine_pairs(infiles, outfiles, basename):
            '.aligned.bam')
 @must_work()
 def codon_align(infile, outfile):
-    cmd = "bealign.py -R {} {}".format(infile, outfile)
+    cmd = "{} -R {} {}".format(config['Paths']['bealign'], infile, outfile)
     sentinel = '{}.complete'.format(outfile)
     stdout = '{}.stdout'.format(outfile)
     stderr = '{}.stderr'.format(outfile)
@@ -736,7 +736,7 @@ def codon_align(infile, outfile):
 @transform(codon_align, suffix('.bam'), '.fasta')
 @must_work()
 def convert_bam_to_fasta(infile, outfile):
-    cmd = "bam2msa.py {} {}".format(infile, outfile)
+    cmd = "{} {} {}".format(config['Paths']['bam2msa'], infile, outfile)
     sentinel = '{}.complete'.format(outfile)
     stdout = '{}.stdout'.format(outfile)
     stderr = '{}.stderr'.format(outfile)
