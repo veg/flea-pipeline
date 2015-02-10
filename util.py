@@ -77,6 +77,13 @@ def wait_for_files(files, sleep, walltime):
             break
 
 
+def format_walltime(seconds):
+    seconds = int(seconds)
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    return "{:02}:{:02}:{:02}".format(h, m, s)
+
+
 def qsub(cmd, outfiles=None, queue=None, nodes=1, ppn=1, sleep=5,
          walltime=3600, waittime=10, name=None, stdout=None, stderr=None):
     """A blocking qsub."""
@@ -86,7 +93,7 @@ def qsub(cmd, outfiles=None, queue=None, nodes=1, ppn=1, sleep=5,
         name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
     sentinel = '{}-{}.complete'.format(name, uuid4())
     mycmd = '{}; echo \$? > {}'.format(cmd, sentinel)
-    fwalltime = time.strftime('%H:%M:%S', time.gmtime(walltime))
+    fwalltime = format_walltime(walltime)
     qsub_cmd = ('qsub -V -W umask=077 -l'
                 ' walltime={},nodes={}:ppn={} -N {name}'
                 ' -d `pwd` -w `pwd`'.format(fwalltime, nodes, ppn, name=name))
