@@ -258,7 +258,7 @@ def maybe_qsub(cmd, sentinel, **kwargs):
     if use_cluster:
         if os.path.exists(sentinel):
             os.unlink(sentinel)
-        qsub(cmd, sentinel, walltime=int(config['Misc']['walltime']),
+        qsub(cmd, sentinel, walltime=int(config['Jobs']['walltime']),
              queue=config['Jobs']['queue'], nodes=config['Jobs']['nodes'],
              ppn=config['Jobs']['ppn'], **kwargs)
     else:
