@@ -767,9 +767,6 @@ def insert_gaps_task(infiles, outfile):
 @merge(insert_gaps_task, 'all_timepoints.aligned.fasta')
 @must_work(seq_ids=True)
 def merge_all_timepoints(infiles, outfile):
-    if len(infiles) != len(timepoints):
-        raise Exception('Number of input files does not match number'
-                        ' of timepoints')
     cat_files(infiles, outfile)
 
 
