@@ -127,10 +127,14 @@ config = ConfigParser(interpolation=ExtendedInterpolation())
 
 if options.config is None:
     configfile = os.path.join(data_dir, 'env_pipeline.config')
+    if not os.path.exists(configfile):
+        configfile = os.path.join(script_dir, 'env_pipeline.config')
 else:
     configfile = options.config
-config.read(configfile)
+if not os.path.exists(configfile):
+    raise Exception('pipeline configuration file not found')
 
+config.read(configfile)
 
 n_local_jobs = int(config['Jobs']['local_jobs'])
 n_remote_jobs = int(config['Jobs']['remote_jobs'])
