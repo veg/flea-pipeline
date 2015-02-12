@@ -126,7 +126,7 @@ hyphy_results_dir = os.path.join(hyphy_data_dir, "results")
 config = ConfigParser(interpolation=ExtendedInterpolation())
 
 if options.config is None:
-    configfile = os.path.join(script_dir, 'env_pipeline.config')
+    configfile = os.path.join(data_dir, 'env_pipeline.config')
 else:
     configfile = options.config
 config.read(configfile)
