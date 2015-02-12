@@ -46,6 +46,7 @@ from configparser import ConfigParser, ExtendedInterpolation
 from glob import glob
 from fnmatch import fnmatch
 import tempfile
+from functools import partial
 
 from docopt import docopt
 
@@ -566,13 +567,13 @@ def translate_perfect(infile, outfile):
     translate(infile, outfile)
 
 
-def pause():
+def pause(filename):
     if config.getboolean('Tasks', 'pause_after_codon_alignment'):
-        input('Paused for manual editing of hyphy_data/input/merged.prot.'
-              '\nPress Enter to continue.')
+        input('Paused for manual editing of {}'
+              '\nPress Enter to continue.'.format(filename))
 
 
-@posttask(pause)
+@posttask(partial(pause, 'hyphy_data/input/merged.prot'))
 @mkdir(hyphy_input_dir)
 @mkdir(hyphy_results_dir)
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -729,6 +730,7 @@ def codon_align(infile, outfile):
     maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
+@posttask(partial(pause, '*/*.aligned.fasta'))
 @active_if(config.getboolean('Tasks', 'align_full'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(codon_align, suffix('.bam'), '.fasta')
