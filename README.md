@@ -14,11 +14,13 @@ Python dependencies
 
 Setup
 -----
-1. Download contaminants and references files.
+1. Copy `env_pipeline.config.tpl` to `env_pipeline.config`.
 
-2. Generate usearch databases for each. (http://www.drive5.com/usearch/manual/cmd_makeudb_usearch.html)
+2. Download contaminants and references files.
 
-3. Edit paths in `env_pipeline.config` to point to those databases.
+3. Generate usearch databases for each. (http://www.drive5.com/usearch/manual/cmd_makeudb_usearch.html)
+
+4. Edit paths in `env_pipeline.config` to point to those databases.
 
 
 Usage
@@ -39,3 +41,6 @@ files, their sequence ids, and their dates, seperated by spaces.
     ....
 
 Dates must be in 'YYYYMMDD' format.
+
+If no config file is specified, we look for it in in the data
+directory, and then in the script directory.
