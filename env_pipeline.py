@@ -296,17 +296,17 @@ def param_uptodate(infile, outfile):
 
 
 @check_if_uptodate(param_uptodate)
-@originate('parameters.config')
+@originate('run_parameters.config')
 def write_config(outfile):
     with open(outfile, 'w') as handle:
         config.write(handle)
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
-@follows(write_config)
-@transform(start_files, suffix(".fastq"), '.qfilter.fasta')
+@transform(start_files, suffix(".fastq"), add_inputs([write_config]), '.qfilter.fasta')
 @must_work()  # my decorators must go before ruffus ones
-def filter_fastq(infile, outfile):
+def filter_fastq(infiles, outfile):
+    infile, _ = infiles
     outfile = outfile[:-len('.fasta')]  # prinseq appends the extension
     min_len = config['Parameters']['min_sequence_length']
     max_len = config['Parameters']['max_sequence_length']
