@@ -2,7 +2,7 @@
 """
 Runs the complete pipeline on a set of fasta files.
 
-Input is a file with the following space-seperated informatoin on each
+Input is a file with the following space-seperated information on each
 line for each time point:
 
 <file> <id> <date>
@@ -670,7 +670,7 @@ def run_fubar(infile, outfile):
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(shift_correction,
            suffix('.fasta'),
-           add_inputs([ make_full_db]),
+           add_inputs([make_full_db]),
            '.pairs.txt')
 @must_work()
 def full_timestep_pairs(infiles, outfile):
