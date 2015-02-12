@@ -36,6 +36,7 @@ max_cluster_size: 30
 min_orf_length: 750
 
 [Tasks]
+pause_after_codon_alignment: False
 align_full: True
 hyphy: True
 

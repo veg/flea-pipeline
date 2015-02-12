@@ -562,6 +562,13 @@ def translate_perfect(infile, outfile):
     translate(infile, outfile)
 
 
+def pause():
+    if config.getboolean('Tasks', 'pause_after_codon_alignment'):
+        input('Paused for manual editing of hyphy_data/input/merged.prot.'
+              '\nPress Enter to continue.')
+
+
+@posttask(pause)
 @mkdir(hyphy_input_dir)
 @mkdir(hyphy_results_dir)
 @jobs_limit(n_local_jobs, local_job_limiter)
