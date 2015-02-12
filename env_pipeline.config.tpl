@@ -1,7 +1,4 @@
 [Paths]
-reference_dir: /home/ben/EnvPipeline/References
-contaminants_db: ${reference_dir}/ContaminantRef.udb
-reference_db: ${reference_dir}/LANLsubtypeRef.udb
 mafft: /usr/local/bin/mafft
 usearch: /usr/local/bin/usearch
 prinseq: prinseq
@@ -23,6 +20,9 @@ ppn: 16
 walltime: 86400
 
 [Parameters]
+reference_dir: /home/ben/EnvPipeline/References
+contaminants_db: ${reference_dir}/ContaminantRef.udb
+reference_db: /home/keren/projects/env_pipeline/data/largeData/PC64ref.udb
 min_sequence_length: 2200
 max_sequence_length: 2900
 min_qual_mean: 25

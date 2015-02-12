@@ -327,7 +327,7 @@ def filter_contaminants(infile, outfiles):
     cmd = ('{usearch} -usearch_global {infile} -db {db}'
            ' -id {id} -notmatched {uncontam} -matched {contam}'
            ' -strand both'.format(usearch=config['Paths']['usearch'],
-                                  infile=infile, db=config['Paths']['contaminants_db'],
+                                  infile=infile, db=config['Parameters']['contaminants_db'],
                                   id=config['Parameters']['contaminant_identity'],
                                   uncontam=uncontam, contam=contam))
     maybe_qsub(cmd, outfiles=outfiles, name='filter-contaminants')
@@ -361,7 +361,7 @@ def usearch_global_get_pairs(infile, dbfile, identity, name=None):
 @must_work()
 def filter_uncontaminated(infiles, outfile):
     uncontam, _ = infiles
-    usearch_global_pairs(uncontam, outfile, config['Paths']['reference_db'],
+    usearch_global_pairs(uncontam, outfile, config['Parameters']['reference_db'],
                          config['Parameters']['reference_identity'],
                          name="filter-uncontaminated")
 
@@ -457,7 +457,7 @@ def cat_clusters(infiles, outfile):
 @transform(cat_clusters, suffix('.fasta'), '.pairs.fasta')
 @must_work()
 def consensus_db_search(infile, outfile):
-    usearch_global_pairs(infile, outfile, config['Paths']['reference_db'],
+    usearch_global_pairs(infile, outfile, config['Parameters']['reference_db'],
                          config['Parameters']['reference_identity'],
                          name='consensus-db-search')
 
