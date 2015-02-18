@@ -307,6 +307,7 @@ def write_config(outfile):
         config.write(handle)
 
 
+"""
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(start_files, suffix(".fastq"), add_inputs([write_config]), '.qfilter.fasta')
 @must_work()  # my decorators must go before ruffus ones
@@ -321,6 +322,19 @@ def filter_fastq(infiles, outfile):
          ' -seq_id "{seq_id}_" -seq_id_mappings'.format(
             prinseq=config['Paths']['prinseq'],
             infile=infile, outfile=outfile, min_len=min_len, max_len=max_len,
+            min_qual_mean=min_qual_mean, seq_id=timepoint_ids[infile]))
+"""
+
+@jobs_limit(n_local_jobs, local_job_limiter)
+@transform(start_files, suffix(".fastq"), add_inputs([write_config]), '.qfilter.fasta')
+@must_work()  # my decorators must go before ruffus ones
+def filter_fastq(infiles, outfile):
+    infile, _ = infiles
+    min_len = config['Parameters']['min_sequence_length']
+    min_qual_mean = config['Parameters']['min_qual_mean']
+    call('{usearch8} -fastq_filter {infile} -fastq_maxee_rate {min_qual_mean} -threads 1 -fastq_qmax 55 -fastq_minlen {min_len} -fastaout {outfile} -relabel "{seq_id}_"'.format(
+            usearch8=config['Paths']['usearch8'],
+            infile=infile, outfile=outfile, min_len=min_len,
             min_qual_mean=min_qual_mean, seq_id=timepoint_ids[infile]))
 
 
@@ -341,10 +355,10 @@ def filter_contaminants(infile, outfiles):
 def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, name=None):
     if nums_only:
         cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
-               " -userout {outfile} -userfields query+target -strand both")
+               " -userout {outfile} -userfields query+target -strand both -maxaccepts 300 -maxrejects 600")
     else:
         cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
-               ' -fastapairs {outfile} -strand both')
+               ' -fastapairs {outfile} -strand both -maxaccepts 300 -maxrejects 600')
     if name is None:
         name = 'usearch-global-pairs'
     cmd = cmd.format(usearch=config['Paths']['usearch'],
@@ -399,7 +413,7 @@ def cluster(infile, outfiles, pathname):
     outdir = '{}.clusters'.format(infile[:-len('.fasta')])
     outpattern = os.path.join(outdir, 'cluster_')
     cmd = ('{usearch} -cluster_smallmem {infile} -id {id}'
-           ' -clusters {outpattern}'.format(
+           ' -clusters {outpattern} -maxaccepts 300 -maxrejects 600'.format(
             usearch=config['Paths']['usearch'],
             infile=infile, id=config['Parameters']['cluster_identity'],
             outpattern=outpattern))
