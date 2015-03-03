@@ -200,7 +200,7 @@ def check_seq_ratio(inputs, output, expected):
 
 def check_illegal_chars(f, chars):
     for r in SeqIO.parse(f, 'fasta'):
-        found = set(chars).intersection(set(str(r.seq)))
+        found = set(chars.upper()).intersection(set(str(r.seq).upper()))
         if found:
             raise Exception('Illegal characters "{}" found in sequence "{}"'
                             ' of file "{}"'.format(found, r.id, f))
