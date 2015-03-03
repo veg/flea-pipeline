@@ -1,6 +1,6 @@
 """Utility functions used in more than one script."""
 
-from subprocess import Popen, PIPE, STDOUT, CalledProcessError
+from subprocess import Popen, PIPE, STDOUT
 from itertools import zip_longest
 from itertools import tee
 from itertools import filterfalse
@@ -35,8 +35,8 @@ def call(cmd_str, stdin=None, stdout=None):
             in_str = ''
         else:
             in_str = in_str.decode()
-        raise CalledProcessError("Failed to run '{}'\nExit status: {}\nSTDIN:\n{}"
-                                 "\nSTDOUT:\n{}\nSTDERR\n{}\n".format(
+        raise Exception("Failed to run '{}'\nExit status: {}\nSTDIN:\n{}"
+                        "\nSTDOUT:\n{}\nSTDERR\n{}\n".format(
                 cmd_str, process.returncode, in_str, stdout_str.decode(), stderr_str.decode()))
     return stdout_str.decode()
 
