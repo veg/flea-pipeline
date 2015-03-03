@@ -271,7 +271,7 @@ def maybe_qsub(cmd, **kwargs):
 
 def mafft(infile, outfile):
     stderr = '{}.stderr'.format(outfile)
-    cmd = 'mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr)
+    cmd = 'mafft-fftns --ep 0.5 --quiet --preservecase {} > {} 2>{}'.format(infile, outfile, stderr)
     maybe_qsub(cmd, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
 
 
@@ -343,9 +343,9 @@ def filter_fastq(infiles, outfile):
            ['.uncontam.fasta', '.contam.fasta'])
 def filter_contaminants(infile, outfiles):
     uncontam, contam = outfiles
-    cmd = ('{usearch} -usearch_global {infile} -db {db}'
+    cmd = ('{usearch8} -usearch_global {infile} -db {db}'
            ' -id {id} -notmatched {uncontam} -matched {contam}'
-           ' -strand both'.format(usearch=config['Paths']['usearch'],
+           ' -strand both'.format(usearch8=config['Paths']['usearch8'],
                                   infile=infile, db=config['Parameters']['contaminants_db'],
                                   id=config['Parameters']['contaminant_identity'],
                                   uncontam=uncontam, contam=contam))
@@ -354,15 +354,16 @@ def filter_contaminants(infile, outfiles):
 
 def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, name=None):
     if nums_only:
-        cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
-               " -userout {outfile} -userfields query+target -strand both -maxaccepts 300 -maxrejects 600")
+        cmd = ("{usearch8} -usearch_global {infile} -db {db} -id {id}"
+               " -userout {outfile} -top_hit_only -userfields query+target -strand both -maxaccepts 300 -maxrejects 600")
     else:
-        cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
-               ' -fastapairs {outfile} -strand both -maxaccepts 300 -maxrejects 600')
+        cmd = ('{usearch8} -usearch_global {infile} -db {db} -id {id}'
+               ' -fastapairs {outfile} -top_hit_only -strand both -maxaccepts 300 -maxrejects 600')
     if name is None:
         name = 'usearch-global-pairs'
-    cmd = cmd.format(usearch=config['Paths']['usearch'],
+    cmd = cmd.format(usearch8=config['Paths']['usearch8'],
                      infile=infile, db=dbfile, id=identity, outfile=outfile)
+    print(cmd)
     maybe_qsub(cmd, outfiles=outfile, name=name)
 
 
@@ -396,8 +397,8 @@ def shift_correction(infile, outfile):
 @transform(shift_correction, suffix('.fasta'), '.sorted.fasta')
 @must_work(seq_ids=True)
 def sort_by_length(infile, outfile):
-    cmd = ('{usearch} -sortbylength {infile} -output {outfile}'.format(
-            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+    cmd = ('{usearch8} -sortbylength {infile} -fastaout {outfile}'.format(
+            usearch8=config['Paths']['usearch8'], infile=infile, outfile=outfile))
     maybe_qsub(cmd, outfiles=outfile, name="sort-by-length")
 
 
@@ -412,9 +413,9 @@ def cluster(infile, outfiles, pathname):
         os.unlink(f)
     outdir = '{}.clusters'.format(infile[:-len('.fasta')])
     outpattern = os.path.join(outdir, 'cluster_')
-    cmd = ('{usearch} -cluster_smallmem {infile} -id {id}'
+    cmd = ('{usearch8} -cluster_fast {infile} -id {id}'
            ' -clusters {outpattern} -maxaccepts 300 -maxrejects 600'.format(
-            usearch=config['Paths']['usearch'],
+            usearch8=config['Paths']['usearch8'],
             infile=infile, id=config['Parameters']['cluster_identity'],
             outpattern=outpattern))
     maybe_qsub(cmd, name="cluster")
@@ -460,7 +461,7 @@ def align_clusters(infile, outfile):
 
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(align_clusters, suffix('.fasta'), '.cons.fasta')
-@must_work(maybe=True, illegal_chars='X-')
+@must_work(maybe=True, illegal_chars='-')
 def cluster_consensus(infile, outfile):
     dnacons(infile, outfile, ungap=True)
 
@@ -494,8 +495,8 @@ def consensus_shift_correction(infile, outfile):
 @transform(consensus_shift_correction, suffix('.fasta'), '.sorted.fasta')
 @must_work(seq_ids=True)
 def sort_consensus(infile, outfile):
-    cmd = ('{usearch} -sortbylength {infile} -output {outfile}'.format(
-            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+    cmd = ('{usearch8} -sortbylength {infile} -fastaout {outfile}'.format(
+            usearch8=config['Paths']['usearch8'], infile=infile, outfile=outfile))
     maybe_qsub(cmd, outfiles=outfile, name='sort-consensus')
 
 
@@ -503,8 +504,8 @@ def sort_consensus(infile, outfile):
 @transform(sort_consensus, suffix('.fasta'), '.uniques.fasta')
 @must_work()
 def unique_consensus(infile, outfile):
-    cmd = ('{usearch} -cluster_smallmem {infile} -id 1 -centroids {outfile}'.format(
-            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+    cmd = ('{usearch8} -cluster_fast {infile} -id 1 -centroids {outfile}'.format(
+            usearch8=config['Paths']['usearch8'], infile=infile, outfile=outfile))
     maybe_qsub(cmd, outfiles=outfile, name='unique_consensus')
 
 
@@ -520,8 +521,8 @@ def perfect_orfs(infile, outfile):
 @transform(perfect_orfs, suffix('.fasta'), '.udb')
 @must_work()
 def make_individual_dbs(infile, outfile):
-    cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
-            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+    cmd = ("{usearch8} -makeudb_usearch {infile} -output {outfile}".format(
+            usearch8=config['Paths']['usearch8'], infile=infile, outfile=outfile))
     maybe_qsub(cmd,  outfiles=outfile, name='make-individual-dbs')
 
 
@@ -569,8 +570,8 @@ def cat_all_perfect(infiles, outfile):
 @transform(cat_all_perfect, suffix('.fasta'), '.udb')
 @must_work()
 def make_full_db(infile, outfile):
-    cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
-            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+    cmd = ("{usearch8} -makeudb_usearch {infile} -output {outfile}".format(
+            usearch8=config['Paths']['usearch8'], infile=infile, outfile=outfile))
     maybe_qsub(cmd, outfiles=outfile, name='make_full_db')
 
 
@@ -635,7 +636,7 @@ def mrca(infile, recordfile, outfile, oldest_id):
 
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(backtranslate_alignment, formatter(), hyphy_input('earlyCons.seq'))
-@must_work(illegal_chars='X')
+@must_work(illegal_chars='')
 def compute_mrca(infile, outfile):
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
     oldest_timepoint = min(timepoints, key=strptime)

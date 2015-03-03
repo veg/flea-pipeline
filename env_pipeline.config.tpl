@@ -11,7 +11,7 @@ hyphy: HYPHYMP
 local_jobs: 1
 
 # maximum jobs submitted to the cluster
-remote_jobs: 16
+remote_jobs: 64
 
 use_cluster: True
 queue: fast
@@ -25,7 +25,7 @@ contaminants_db: ${reference_dir}/ContaminantRef.udb
 reference_db: /home/keren/projects/env_pipeline/data/largeData/PC64ref.udb
 min_sequence_length: 2200
 max_sequence_length: 2900
-min_qual_mean: 25
+min_qual_mean: 0.01
 min_n_clusters: 3
 contaminant_identity: 0.98
 reference_identity: 0.8
