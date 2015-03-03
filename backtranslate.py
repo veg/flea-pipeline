@@ -14,8 +14,6 @@ Options:
 """
 
 import sys
-from itertools import zip_longest
-from warnings import warn
 
 from docopt import docopt
 
@@ -25,10 +23,6 @@ from Bio.Alphabet import IUPAC
 from Bio.Alphabet import Gapped
 
 from util import insert_gaps
-
-
-class MissingRecord(Exception):
-    pass
 
 
 def back_translate_gapped(protein, dna):
@@ -44,10 +38,6 @@ def back_translate_gapped(protein, dna):
     Returns: SeqRecord
 
     """
-    if protein is None or dna is None:
-        raise MissingRecord("One or more arguments is missing")
-    if protein.id != dna.id:
-        warn("Protein id={} but DNA id={}".format(protein.id, dna.id))
     try:
         dna_str = str(dna.seq.ungap())
     except ValueError:
@@ -61,18 +51,26 @@ def back_translate_gapped(protein, dna):
 
 
 def backtranslate(protein_filename, dna_filename, outfile):
-    try:
-        protein_records = SeqIO.parse(protein_filename, "fasta",
-                                      alphabet=Gapped(IUPAC.protein))
-        dna_records = SeqIO.parse(dna_filename, "fasta",
-                                  alphabet=Gapped(IUPAC.unambiguous_dna))
-        result_iter = (back_translate_gapped(a, b) for a, b in zip_longest(protein_records, dna_records))
-        SeqIO.write(result_iter, outfile, "fasta")
-    except MissingRecord:
-        # manually delete generators to avoid extra exception messages
-        del protein_records
-        del dna_records
-        raise MissingRecord
+    protein_dict = dict((s.id, s)
+                        for s in SeqIO.parse(protein_filename, "fasta",
+                                             alphabet=Gapped(IUPAC.protein)))
+    dna_dict = dict((s.id, s)
+                    for s in SeqIO.parse(dna_filename, "fasta",
+                                         alphabet=Gapped(IUPAC.unambiguous_dna)))
+    protein_ids = set(protein_dict)
+    dna_ids = set(dna_dict)
+    shared = protein_ids & dna_ids
+    missing_protein = dna_ids - protein_ids
+    missing_dna = protein_ids - dna_ids
+    if len(missing_protein) > 0:
+        sys.stderr.write('Warning: {} protein sequences'
+                         ' missing.'.format(len(missing_protein)))
+    if len(missing_dna) > 0:
+        raise Exception('{} protein sequences have no corresponding'
+                        ' dna sequence'.format(len(missing_dna)))
+    result_iter = (back_translate_gapped(protein_dict[_id], dna_dict[_id])
+                   for _id in shared)
+    SeqIO.write(result_iter, outfile, "fasta")
 
 
 if __name__ == "__main__":
@@ -80,8 +78,4 @@ if __name__ == "__main__":
     protein_filename = args["<aligned_protein>"]
     dna_filename = args["<dna>"]
     outfile = args["<outfile>"]
-    try:
-        backtranslate(protein_filename, dna_filename, outfile)
-    except MissingRecord:
-        sys.stderr.write("Input files contain different numbers of sequences.\n")
-        sys.exit(1)
+    backtranslate(protein_filename, dna_filename, outfile)
