@@ -1,6 +1,6 @@
 [Paths]
 mafft: /usr/local/bin/mafft
-usearch: /usr/local/bin/usearch
+usearch: /usr/local/bin/usearch8
 prinseq: prinseq
 bealign: /opt/talign/env/bin/bealign.py
 bam2msa: /opt/talign/env/bin/bam2msa.py
