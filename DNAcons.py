@@ -132,5 +132,5 @@ if __name__ == "__main__":
     outfile = args["--outfile"]
     keep_gap = args["--keep-gaps"]
     ungap = not keep_gap
-    dnacons(filename, outfile, id_str, ungap=ungap, verbose=verbose)
+    consfile(filename, outfile, id_str, ungap=ungap, verbose=verbose)
 
