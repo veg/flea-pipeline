@@ -15,6 +15,7 @@ Options:
   --keep-gaps            Do not ungap the consensus
   --id=<STRING>          Record id for the fasta output
   -o --outfile=<STRING>  Name of output file
+  --ambifile=<STRING>
   -h --help              Show this screen
 
 """
@@ -128,7 +129,8 @@ if __name__ == "__main__":
     verbose = args["--verbose"]
     id_str = args["--id"]
     outfile = args["--outfile"]
+    ambifile = args['--ambifile']
     keep_gap = args["--keep-gaps"]
     ungap = not keep_gap
-    consfile(filename, outfile, id_str, ungap=ungap, verbose=verbose)
+    consfile(filename, outfile, ambifile, id_str, ungap=ungap, verbose=verbose)
 
