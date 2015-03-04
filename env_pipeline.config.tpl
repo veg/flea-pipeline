@@ -20,9 +20,9 @@ ppn: 16
 walltime: 86400
 
 [Parameters]
-reference_dir: /home/ben/EnvPipeline/References
+reference_dir: /path/to/references
 contaminants_db: ${reference_dir}/ContaminantRef.udb
-reference_db: /home/keren/projects/env_pipeline/data/largeData/PC64ref.udb
+reference_db: ${reference_dir}/LANLsubtypeRef.udb
 min_sequence_length: 2200
 max_sequence_length: 2900
 min_qual_mean: 0.01
