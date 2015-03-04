@@ -74,7 +74,7 @@ from ruffus import follows
 
 from translate import translate
 from backtranslate import backtranslate
-from DNAcons import dnacons
+from DNAcons import consfile
 from correct_shifts import correct_shifts_fasta, write_correction_result
 from perfectORFs import perfect_file
 from util import call, qsub, cat_files, touch, strlist, traverse
@@ -456,7 +456,8 @@ def align_clusters(infile, outfile):
 @transform(align_clusters, suffix('.fasta'), '.cons.fasta')
 @must_work(maybe=True, illegal_chars='-')
 def cluster_consensus(infile, outfile):
-    dnacons(infile, outfile, ungap=True)
+    ambifile = '{}.info'.format(outfile[:-len('.fasta')])
+    consfile(infile, outfile, ambifile, ungap=True)
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
@@ -624,7 +625,7 @@ def mrca(infile, recordfile, outfile, oldest_id):
     records = SeqIO.parse(infile, "fasta")
     oldest_records = (r for r in records if r.id.startswith(oldest_id))
     SeqIO.write(oldest_records, recordfile, "fasta")
-    dnacons(recordfile, outfile, id_str="mrca", ungap=False, ambiguous='N')
+    consfile(recordfile, outfile, id_str="mrca", ungap=False)
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)

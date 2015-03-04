@@ -20,6 +20,8 @@ Options:
 """
 
 import sys
+import random
+from collections import Counter
 
 from docopt import docopt
 
@@ -32,14 +34,75 @@ from Bio.Align import AlignInfo
 from Bio.Alphabet import IUPAC
 
 
-def dnacons(filename, outfile=None, id_str=None, ambiguous=None, ungap=True, verbose=False):
-    if ambiguous is None:
-        ambiguous = 'N'
+def _column_consensus(counter, n_cols, seed=None):
+    """
+
+    >>> _column_consensus(Counter('aabc'), 4, seed=0)
+    ('a', (0.5, ['a']))
+
+    """
+    r = random
+    if seed is not None:
+        r = random.Random(seed)
+    mc = counter.most_common()
+    count = mc[0][1]
+    cands = sorted(c for c, n in mc if n == count)
+    char = r.choice(cands)
+    assert(char in cands)
+    ambi = (count / n_cols, cands)
+    return char, ambi
+
+
+def consensus(seqs, seed=None):
+    """
+
+    >>> consensus(['aab', 'abb'], seed=0)[0]
+    'abb'
+
+    >>> consensus(['aab', 'abb'], seed=0)[1]
+    ((1.0, ['a']), (0.5, ['a', 'b']), (1.0, ['b']))
+
+    """
+    pwm = list(Counter() for _ in range(len(seqs[0])))
+    for seq in seqs:
+        for i, char in enumerate(seq):
+            pwm[i].update([char])
+    n_cols = len(seqs)
+    pairs = (_column_consensus(c, n_cols, seed) for c in pwm)
+    cons, ambi = zip(*pairs)
+    cons = ''.join(cons)
+    assert(len(cons) == len(ambi))
+    for i, char in enumerate(cons):
+        assert(char in ambi[i][1])
+    return ''.join(cons), ambi
+
+
+def consfile(filename, outfile=None, ambifile=None, id_str=None,
+             ungap=True, verbose=False):
+    """Computes a consensus sequence and writes it to a file.
+
+    Breaks ties independently for each position by choosing randomly
+    among winners.
+
+    If `ambifile` is not None, writes ambiguous calls to that file,
+    one per line, in the following format:
+
+    <0-index position> <frequency> <candidates>
+
+    """
     alignment = AlignIO.read(filename, "fasta")
-    summary_align = AlignInfo.SummaryInfo(alignment)
-    consensus = summary_align.gap_consensus(threshold=0.00, ambiguous=ambiguous)
+    seqs = list(r.seq for r in alignment)
+    tmp, ambiguous = consensus(seqs)
+    _consensus = seqs[0][:]
+    _consensus.seq = tmp
     if ungap:
-        consensus = consensus.ungap("-")
+        # cannot just call _consensus.ungap('-'), because that will
+        # mess up ambiguity information
+        indices = set(i for i, char in enumerate(_consensus) if char == '-')
+        _consensus = ''.join(char for i, char in enumerate(_consensus)
+                             if i not in indices)
+        ambiguous = (pair for i, pair in enumerate(ambiguous)
+                     if i not in indices)
 
     # use the first entry for the name, just so know what is what later
     rec = alignment[0]
@@ -49,8 +112,14 @@ def dnacons(filename, outfile=None, id_str=None, ambiguous=None, ungap=True, ver
         outfile = "{}.cons.fasta".format(filename)
     writer = FastaWriter(open(outfile, "w"), wrap=None)
     writer.write_header()
-    newrecord = SeqRecord(Seq(str(consensus), IUPAC.unambiguous_dna), id=id_str, description="")
+    newrecord = SeqRecord(Seq(str(_consensus), IUPAC.unambiguous_dna), id=id_str, description="")
     writer.write_record(newrecord)
+    if ambifile is not None:
+        with open(ambifile, 'w') as handle:
+            for i, (freq, cands) in enumerate(ambiguous):
+                if len(cands) > 1:
+                    assert(_consensus[i] in cands)
+                    handle.write('{} {} {}\n'.format(i, freq, ''.join(cands)))
     if verbose:
         sys.stderr.write('Consensus written with name {}.\n'.format(id_str))
 
