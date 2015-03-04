@@ -315,12 +315,13 @@ def filter_fastq(infiles, outfile):
     qmax = config['Parameters']['qmax']
     min_len = config['Parameters']['min_sequence_length']
     max_err_rate = config['Parameters']['max_err_rate']
-    call('{usearch} -fastq_filter {infile} -fastq_maxee_rate {max_err_rate}'
+    cmd = ('{usearch} -fastq_filter {infile} -fastq_maxee_rate {max_err_rate}'
          ' -threads 1 -fastq_qmax {qmax} -fastq_minlen {min_len} -fastaout {outfile}'
          ' -relabel "{seq_id}_"'.format(
             usearch=config['Paths']['usearch'],
             infile=infile, outfile=outfile, qmax=qmax, min_len=min_len,
             max_err_rate=max_err_rate, seq_id=timepoint_ids[infile]))
+    maybe_qsub(cmd, outfiles=outfile, name='filter-fastq')
 
 
 @jobs_limit(n_remote_jobs, remote_job_limiter)
