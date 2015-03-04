@@ -595,7 +595,7 @@ def codon_align_perfect(infile, outfile):
 @jobs_limit(n_local_jobs, local_job_limiter)
 @merge([cat_all_perfect, codon_align_perfect],
        hyphy_input('merged.fas'))
-@must_work(seq_ids=True)
+@must_work()
 def backtranslate_alignment(infiles, outfile):
     perfect, aligned = infiles
     check_basename(perfect, 'all_perfect_orfs.fasta')
