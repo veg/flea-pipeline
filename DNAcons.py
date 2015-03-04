@@ -108,10 +108,11 @@ def consfile(filename, outfile=None, ambifile=None, id_str=None,
         id_str = "{}_cons".format(rec.name)
     if outfile is None:
         outfile = "{}.cons.fasta".format(filename)
-    writer = FastaWriter(open(outfile, "w"), wrap=None)
-    writer.write_header()
-    newrecord = SeqRecord(Seq(str(_consensus), IUPAC.unambiguous_dna), id=id_str, description="")
-    writer.write_record(newrecord)
+    with open(outfile, 'w') as handle:
+        writer = FastaWriter(handle, wrap=None)
+        writer.write_header()
+        newrecord = SeqRecord(Seq(str(_consensus), IUPAC.unambiguous_dna), id=id_str, description="")
+        writer.write_record(newrecord)
     if ambifile is not None:
         with open(ambifile, 'w') as handle:
             for i, (freq, cands) in enumerate(ambiguous):
