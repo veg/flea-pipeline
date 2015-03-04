@@ -35,18 +35,12 @@ from Bio.Alphabet import IUPAC
 
 
 def _column_consensus(counter, n_cols, seed=None):
-    """
-
-    >>> _column_consensus(Counter('aabc'), 4, seed=0)
-    ('a', (0.5, ['a']))
-
-    """
     r = random
     if seed is not None:
         r = random.Random(seed)
     mc = counter.most_common()
     count = mc[0][1]
-    cands = sorted(c for c, n in mc if n == count)
+    cands = ''.join(sorted(c for c, n in mc if n == count))
     char = r.choice(cands)
     assert(char in cands)
     ambi = (count / n_cols, cands)
@@ -54,15 +48,6 @@ def _column_consensus(counter, n_cols, seed=None):
 
 
 def consensus(seqs, seed=None):
-    """
-
-    >>> consensus(['aab', 'abb'], seed=0)[0]
-    'abb'
-
-    >>> consensus(['aab', 'abb'], seed=0)[1]
-    ((1.0, ['a']), (0.5, ['a', 'b']), (1.0, ['b']))
-
-    """
     pwm = list(Counter() for _ in range(len(seqs[0])))
     for seq in seqs:
         for i, char in enumerate(seq):
@@ -78,7 +63,7 @@ def consensus(seqs, seed=None):
 
 
 def consfile(filename, outfile=None, ambifile=None, id_str=None,
-             ungap=True, verbose=False):
+             ungap=True, verbose=False, seed=None):
     """Computes a consensus sequence and writes it to a file.
 
     Breaks ties independently for each position by choosing randomly
@@ -92,7 +77,7 @@ def consfile(filename, outfile=None, ambifile=None, id_str=None,
     """
     alignment = AlignIO.read(filename, "fasta")
     seqs = list(r.seq for r in alignment)
-    _consensus, ambiguous = consensus(seqs)
+    _consensus, ambiguous = consensus(seqs, seed=seed)
     if ungap:
         # cannot just call _consensus.ungap('-'), because that will
         # mess up ambiguity information
@@ -118,7 +103,7 @@ def consfile(filename, outfile=None, ambifile=None, id_str=None,
             for i, (freq, cands) in enumerate(ambiguous):
                 if len(cands) > 1:
                     assert(_consensus[i] in cands)
-                    handle.write('{} {} {}\n'.format(i, freq, ''.join(cands)))
+                    handle.write('{} {} {}\n'.format(i, freq, cands))
     if verbose:
         sys.stderr.write('Consensus written with name {}.\n'.format(id_str))
 
