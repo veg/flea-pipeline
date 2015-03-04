@@ -271,7 +271,7 @@ def maybe_qsub(cmd, **kwargs):
 
 def mafft(infile, outfile):
     stderr = '{}.stderr'.format(outfile)
-    cmd = 'mafft --quiet {} > {} 2>{}'.format(infile, outfile, stderr)
+    cmd = 'mafft-fftns --ep 0.5 --quiet --preservecase {} > {} 2>{}'.format(infile, outfile, stderr)
     maybe_qsub(cmd, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
 
 
@@ -312,16 +312,15 @@ def write_config(outfile):
 @must_work()  # my decorators must go before ruffus ones
 def filter_fastq(infiles, outfile):
     infile, _ = infiles
-    outfile = outfile[:-len('.fasta')]  # prinseq appends the extension
+    qmax = config['Parameters']['qmax']
     min_len = config['Parameters']['min_sequence_length']
-    max_len = config['Parameters']['max_sequence_length']
-    min_qual_mean = config['Parameters']['min_qual_mean']
-    call('{prinseq} -fastq {infile} -out_format 1 -out_good {outfile}'
-         ' -min_len {min_len} -max_len {max_len} -min_qual_mean {min_qual_mean}'
-         ' -seq_id "{seq_id}_" -seq_id_mappings'.format(
-            prinseq=config['Paths']['prinseq'],
-            infile=infile, outfile=outfile, min_len=min_len, max_len=max_len,
-            min_qual_mean=min_qual_mean, seq_id=timepoint_ids[infile]))
+    max_err_rate = config['Parameters']['max_err_rate']
+    call('{usearch} -fastq_filter {infile} -fastq_maxee_rate {max_err_rate}'
+         ' -threads 1 -fastq_qmax {qmax} -fastq_minlen {min_len} -fastaout {outfile}'
+         ' -relabel "{seq_id}_"'.format(
+            usearch=config['Paths']['usearch'],
+            infile=infile, outfile=outfile, qmax=qmax, min_len=min_len,
+            max_err_rate=max_err_rate, seq_id=timepoint_ids[infile]))
 
 
 @jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -339,16 +338,21 @@ def filter_contaminants(infile, outfiles):
 
 
 def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, name=None):
+    max_accepts = config['Parameters']['max_accepts']
+    max_rejects = config['Parameters']['max_rejects']
     if nums_only:
         cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
-               " -userout {outfile} -userfields query+target -strand both")
+               " -userout {outfile} -top_hit_only -userfields query+target -strand both"
+               " -maxaccepts {max_accepts} -maxrejects {max_rejects}")
     else:
         cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
-               ' -fastapairs {outfile} -strand both')
+               ' -fastapairs {outfile} -top_hit_only -strand both'
+               ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
     if name is None:
         name = 'usearch-global-pairs'
     cmd = cmd.format(usearch=config['Paths']['usearch'],
-                     infile=infile, db=dbfile, id=identity, outfile=outfile)
+                     infile=infile, db=dbfile, id=identity, outfile=outfile,
+                     max_accepts=max_accepts, max_rejects=max_rejects)
     maybe_qsub(cmd, outfiles=outfile, name=name)
 
 
@@ -382,7 +386,7 @@ def shift_correction(infile, outfile):
 @transform(shift_correction, suffix('.fasta'), '.sorted.fasta')
 @must_work(seq_ids=True)
 def sort_by_length(infile, outfile):
-    cmd = ('{usearch} -sortbylength {infile} -output {outfile}'.format(
+    cmd = ('{usearch} -sortbylength {infile} -fastaout {outfile}'.format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
     maybe_qsub(cmd, outfiles=outfile, name="sort-by-length")
 
@@ -398,11 +402,14 @@ def cluster(infile, outfiles, pathname):
         os.unlink(f)
     outdir = '{}.clusters'.format(infile[:-len('.fasta')])
     outpattern = os.path.join(outdir, 'cluster_')
-    cmd = ('{usearch} -cluster_smallmem {infile} -id {id}'
-           ' -clusters {outpattern}'.format(
+    cmd = ('{usearch} -cluster_fast {infile} -id {id}'
+           ' -clusters {outpattern} -maxaccepts {max_accepts}'
+           ' -maxrejects {max_rejects}'.format(
             usearch=config['Paths']['usearch'],
             infile=infile, id=config['Parameters']['cluster_identity'],
-            outpattern=outpattern))
+            outpattern=outpattern,
+            max_accepts=config['Parameters']['max_accepts'],
+            max_rejects=config['Parameters']['max_rejects']))
     maybe_qsub(cmd, name="cluster")
     r = re.compile(r'^cluster_[0-9]+$')
     for f in list(f for f in os.listdir(outdir) if r.match(f)):
@@ -446,7 +453,7 @@ def align_clusters(infile, outfile):
 
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(align_clusters, suffix('.fasta'), '.cons.fasta')
-@must_work(maybe=True, illegal_chars='X-')
+@must_work(maybe=True, illegal_chars='-')
 def cluster_consensus(infile, outfile):
     dnacons(infile, outfile, ungap=True)
 
@@ -480,7 +487,7 @@ def consensus_shift_correction(infile, outfile):
 @transform(consensus_shift_correction, suffix('.fasta'), '.sorted.fasta')
 @must_work(seq_ids=True)
 def sort_consensus(infile, outfile):
-    cmd = ('{usearch} -sortbylength {infile} -output {outfile}'.format(
+    cmd = ('{usearch} -sortbylength {infile} -fastaout {outfile}'.format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
     maybe_qsub(cmd, outfiles=outfile, name='sort-consensus')
 
@@ -489,7 +496,7 @@ def sort_consensus(infile, outfile):
 @transform(sort_consensus, suffix('.fasta'), '.uniques.fasta')
 @must_work()
 def unique_consensus(infile, outfile):
-    cmd = ('{usearch} -cluster_smallmem {infile} -id 1 -centroids {outfile}'.format(
+    cmd = ('{usearch} -cluster_fast {infile} -id 1 -centroids {outfile}'.format(
             usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
     maybe_qsub(cmd, outfiles=outfile, name='unique_consensus')
 
@@ -621,7 +628,7 @@ def mrca(infile, recordfile, outfile, oldest_id):
 
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(backtranslate_alignment, formatter(), hyphy_input('earlyCons.seq'))
-@must_work(illegal_chars='X')
+@must_work(illegal_chars='')
 def compute_mrca(infile, outfile):
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
     oldest_timepoint = min(timepoints, key=strptime)
