@@ -7,7 +7,7 @@ Python dependencies
 
 3rd party dependencies
 ----------------------
-- usearch
+- usearch (version >= 8.0.1570)
 - mafft
 - BioExt's bealign
 
