@@ -307,35 +307,20 @@ def write_config(outfile):
         config.write(handle)
 
 
-"""
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(start_files, suffix(".fastq"), add_inputs([write_config]), '.qfilter.fasta')
 @must_work()  # my decorators must go before ruffus ones
 def filter_fastq(infiles, outfile):
     infile, _ = infiles
-    outfile = outfile[:-len('.fasta')]  # prinseq appends the extension
+    qmax = config['Parameters']['qmax']
     min_len = config['Parameters']['min_sequence_length']
-    max_len = config['Parameters']['max_sequence_length']
-    min_qual_mean = config['Parameters']['min_qual_mean']
-    call('{prinseq} -fastq {infile} -out_format 1 -out_good {outfile}'
-         ' -min_len {min_len} -max_len {max_len} -min_qual_mean {min_qual_mean}'
-         ' -seq_id "{seq_id}_" -seq_id_mappings'.format(
-            prinseq=config['Paths']['prinseq'],
-            infile=infile, outfile=outfile, min_len=min_len, max_len=max_len,
-            min_qual_mean=min_qual_mean, seq_id=timepoint_ids[infile]))
-"""
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@transform(start_files, suffix(".fastq"), add_inputs([write_config]), '.qfilter.fasta')
-@must_work()  # my decorators must go before ruffus ones
-def filter_fastq(infiles, outfile):
-    infile, _ = infiles
-    min_len = config['Parameters']['min_sequence_length']
-    min_qual_mean = config['Parameters']['min_qual_mean']
-    call('{usearch8} -fastq_filter {infile} -fastq_maxee_rate {min_qual_mean} -threads 1 -fastq_qmax 55 -fastq_minlen {min_len} -fastaout {outfile} -relabel "{seq_id}_"'.format(
+    max_err_rate = config['Parameters']['max_err_rate']
+    call('{usearch8} -fastq_filter {infile} -fastq_maxee_rate {max_err_rate}'
+         ' -threads 1 -fastq_qmax {qmax} -fastq_minlen {min_len} -fastaout {outfile}'
+         ' -relabel "{seq_id}_"'.format(
             usearch8=config['Paths']['usearch8'],
-            infile=infile, outfile=outfile, min_len=min_len,
-            min_qual_mean=min_qual_mean, seq_id=timepoint_ids[infile]))
+            infile=infile, outfile=outfile, qmax=qmax, min_len=min_len,
+            max_err_rate=max_err_rate, seq_id=timepoint_ids[infile]))
 
 
 @jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -353,17 +338,21 @@ def filter_contaminants(infile, outfiles):
 
 
 def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, name=None):
+    max_accepts = config['Parameters']['max_accepts']
+    max_rejects = config['Parameters']['max_rejects']
     if nums_only:
         cmd = ("{usearch8} -usearch_global {infile} -db {db} -id {id}"
-               " -userout {outfile} -top_hit_only -userfields query+target -strand both -maxaccepts 300 -maxrejects 600")
+               " -userout {outfile} -top_hit_only -userfields query+target -strand both"
+               " -maxaccepts {max_accepts} -maxrejects {max_rejects}")
     else:
         cmd = ('{usearch8} -usearch_global {infile} -db {db} -id {id}'
-               ' -fastapairs {outfile} -top_hit_only -strand both -maxaccepts 300 -maxrejects 600')
+               ' -fastapairs {outfile} -top_hit_only -strand both'
+               ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
     if name is None:
         name = 'usearch-global-pairs'
     cmd = cmd.format(usearch8=config['Paths']['usearch8'],
-                     infile=infile, db=dbfile, id=identity, outfile=outfile)
-    print(cmd)
+                     infile=infile, db=dbfile, id=identity, outfile=outfile,
+                     max_accepts=max_accepts, max_rejects=max_rejects)
     maybe_qsub(cmd, outfiles=outfile, name=name)
 
 
@@ -414,10 +403,13 @@ def cluster(infile, outfiles, pathname):
     outdir = '{}.clusters'.format(infile[:-len('.fasta')])
     outpattern = os.path.join(outdir, 'cluster_')
     cmd = ('{usearch8} -cluster_fast {infile} -id {id}'
-           ' -clusters {outpattern} -maxaccepts 300 -maxrejects 600'.format(
+           ' -clusters {outpattern} -maxaccepts {max_accepts}'
+           ' -maxrejects {max_rejects}'.format(
             usearch8=config['Paths']['usearch8'],
             infile=infile, id=config['Parameters']['cluster_identity'],
-            outpattern=outpattern))
+            outpattern=outpattern,
+            max_accepts=config['Parameters']['max_accepts'],
+            max_rejects=config['Parameters']['max_rejects']))
     maybe_qsub(cmd, name="cluster")
     r = re.compile(r'^cluster_[0-9]+$')
     for f in list(f for f in os.listdir(outdir) if r.match(f)):

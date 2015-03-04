@@ -25,7 +25,10 @@ contaminants_db: ${reference_dir}/ContaminantRef.udb
 reference_db: ${reference_dir}/LANLsubtypeRef.udb
 min_sequence_length: 2200
 max_sequence_length: 2900
-min_qual_mean: 0.01
+max_err_rate: 0.01
+qmax: 55
+max_accepts: 300
+max_rejects: 600
 min_n_clusters: 3
 contaminant_identity: 0.98
 reference_identity: 0.8
