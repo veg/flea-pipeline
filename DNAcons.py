@@ -92,9 +92,7 @@ def consfile(filename, outfile=None, ambifile=None, id_str=None,
     """
     alignment = AlignIO.read(filename, "fasta")
     seqs = list(r.seq for r in alignment)
-    tmp, ambiguous = consensus(seqs)
-    _consensus = seqs[0][:]
-    _consensus.seq = tmp
+    _consensus, ambiguous = consensus(seqs)
     if ungap:
         # cannot just call _consensus.ungap('-'), because that will
         # mess up ambiguity information
