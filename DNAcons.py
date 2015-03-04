@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 """
-Prints a gapless consensus sequence with any nucleotides lower that
-50% identity recieving an ambiguous character X.
+Prints a gapless consensus sequence.
 
 Sequences must be aligned, and all the same length'
 
