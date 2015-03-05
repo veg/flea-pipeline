@@ -186,6 +186,11 @@ def new_record_seq_str(record, seqstr):
     return record
 
 
+def update_record_seq(record, seq):
+    record.seq = seq
+    return record
+
+
 def flatten(it):
     return (b for a in it for b in a)
 

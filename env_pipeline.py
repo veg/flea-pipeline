@@ -78,7 +78,7 @@ from DNAcons import consfile
 from correct_shifts import correct_shifts_fasta, write_correction_result
 from perfectORFs import perfect_file
 from util import call, qsub, cat_files, touch, strlist, traverse
-from util import new_record_seq_str, insert_gaps
+from util import new_record_seq_str, insert_gaps, update_record_seq
 
 
 parser = cmdline.get_argparse(description='Run complete env pipeline',
@@ -560,15 +560,6 @@ def cat_all_perfect(infiles, outfile):
     cat_files(infiles, outfile)
 
 
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(cat_all_perfect, suffix('.fasta'), '.udb')
-@must_work()
-def make_full_db(infile, outfile):
-    cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
-            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    maybe_qsub(cmd, outfiles=outfile, name='make_full_db')
-
-
 @jobs_limit(n_local_jobs, local_job_limiter)
 @transform(cat_all_perfect, suffix('.fasta'), '.translated.fasta')
 @must_work(seq_ids=True)
@@ -680,6 +671,27 @@ def run_fubar(infile, outfile):
     hyphy_call(hyphy_script('runFUBAR.bf'), 'fubar', [hyphy_data_dir])
 
 
+@jobs_limit(n_local_jobs, local_job_limiter)
+@transform(backtranslate_alignment, formatter(), 'all_perfect_orfs_degapped.fasta')
+@must_work()
+def degap_backtranslated_alignment(infile, outfile):
+    # we need this in case sequences were removed during hand-editing
+    # of the output of `codon_align_perfect()`.
+    records = (SeqIO.parse(infile, 'fasta'))
+    processed = (update_record_seq(r, r.seq.ungap('-')) for r in records)
+    SeqIO.write(processed, outfile, 'fasta')
+
+
+@jobs_limit(n_remote_jobs, remote_job_limiter)
+@transform(degap_backtranslated_alignment, suffix('.fasta'), '.udb')
+@must_work()
+def make_full_db(infile, outfile):
+    cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
+            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+    maybe_qsub(cmd, outfiles=outfile, name='make_full_db')
+
+
+
 @active_if(config.getboolean('Tasks', 'align_full'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(shift_correction,
@@ -699,7 +711,7 @@ def full_timestep_pairs(infiles, outfile):
 @mkdir(full_timestep_pairs, suffix('.pairs.txt'), '.alignments')
 @subdivide(full_timestep_pairs,
            formatter('.*/(?P<NAME>.+).pairs.txt'),
-           add_inputs([cat_all_perfect]),
+           add_inputs([degap_backtranslated_alignment]),
            '{NAME[0]}.alignments/combined.*.unaligned.fasta',
            '{NAME[0]}')
 @must_work()
