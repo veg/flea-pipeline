@@ -720,7 +720,6 @@ def combine_pairs(infiles, outfiles, basename):
         os.unlink(f)
     infile, (perfectfile,) = infiles
     seqsfile = '{}.fasta'.format(basename)
-    check_basename(perfectfile, 'all_perfect_orfs.fasta')
     with open(infile) as handle:
         pairs = list(line.strip().split("\t") for line in handle.readlines())
     match_dict = defaultdict(list)
