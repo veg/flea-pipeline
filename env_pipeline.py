@@ -750,7 +750,6 @@ def codon_align(infile, outfile):
     maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
-@posttask(partial(pause, '*/*.aligned.fasta'))
 @active_if(config.getboolean('Tasks', 'align_full'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @transform(codon_align, suffix('.bam'), '.fasta')
