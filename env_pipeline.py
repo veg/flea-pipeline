@@ -663,6 +663,16 @@ def aa_freqs(infile, outfile):
 
 
 @active_if(config.getboolean('Tasks', 'hyphy'))
+@jobs_limit(n_local_jobs, local_job_limiter)
+@transform(aa_freqs, formatter(), hyphy_results('turnover.json'))
+@must_work()
+def turnover(infile, outfile):
+    script_path = os.path.join(script_dir, 'AAturn.jl')
+    call("julia {script} {infile} {outfile} 0.01".format(script=script_path,
+                                                         infile=infile, outfile=outfile))
+
+
+@active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
 @merge([write_dates, evo_history, backtranslate_alignment],
        hyphy_results('rates.json'))
