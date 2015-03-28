@@ -5,11 +5,19 @@ Runs the complete pipeline on a set of fasta files.
 Input is a file with the following space-seperated information on each
 line for each time point:
 
-<file> <id> <date>
+<file/id> <visit id> <date>
+
+If an alignment is not provided, the first entry is the filename of
+the raw sequences for a timepoint. Otherwise it is the base id for a
+timepoint.
 
 Usage:
   env_pipeline.py [options] <file>
   env_pipeline.py -h | --help
+
+Options:
+  --alignment [STR]  Fasta file containing codon-aligned sequences
+  --config [STR]   Configuration file
 
 """
 
@@ -48,8 +56,6 @@ from fnmatch import fnmatch
 import tempfile
 from functools import partial
 
-from docopt import docopt
-
 from Bio import SeqIO
 
 from ruffus import pipeline_run
@@ -86,6 +92,9 @@ parser = cmdline.get_argparse(description='Run complete env pipeline',
 parser.add_argument('file')
 parser.add_argument('--config', type=str,
                     help='Configuration file.')
+parser.add_argument('--alignment', type=str,
+                    help='Codon-aligned fasta file.')
+
 
 options = parser.parse_args()
 
@@ -106,18 +115,26 @@ with open(options.file, newline='') as csvfile:
     timepoints = list(Timepoint(f, i, d) for f, i, d in reader)
 
 timepoint_ids = {t.file: t.id for t in timepoints}
-start_files = list(t.file for t in timepoints)
 
-for f in start_files:
-    if not os.path.exists(f):
-        raise Exception('file does not exist: "{}"'.format(f))
+do_alignment = options.alignment is None
+
+if do_alignment:
+    start_files = list(t.file for t in timepoints)
+    for f in start_files:
+        if not os.path.exists(f):
+            raise Exception('file does not exist: "{}"'.format(f))
+else:
+    alignment_file = options.alignment
 
 
 if len(set(t.id for t in timepoints)) != len(timepoints):
     raise Exception('non-unique sequence ids')
 
 # useful directories
-data_dir = os.path.dirname(os.path.abspath(timepoints[0].file))
+if do_alignment:
+    data_dir = os.path.dirname(os.path.abspath(timepoints[0].file))
+else:
+    data_dir = os.path.dirname(os.path.abspath(alignment_file))
 script_dir = os.path.abspath(os.path.split(__file__)[0])
 hyphy_script_dir = os.path.join(script_dir, 'hyphy_scripts')
 hyphy_data_dir = os.path.join(data_dir, "hyphy_data")
@@ -307,294 +324,423 @@ def write_config(outfile):
         config.write(handle)
 
 
+if do_alignment:
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @transform(start_files, suffix(".fastq"), add_inputs([write_config]), '.qfilter.fasta')
+    @must_work()  # my decorators must go before ruffus ones
+    def filter_fastq(infiles, outfile):
+        infile, _ = infiles
+        qmax = config['Parameters']['qmax']
+        min_len = config['Parameters']['min_sequence_length']
+        max_err_rate = config['Parameters']['max_err_rate']
+        cmd = ('{usearch} -fastq_filter {infile} -fastq_maxee_rate {max_err_rate}'
+             ' -threads 1 -fastq_qmax {qmax} -fastq_minlen {min_len} -fastaout {outfile}'
+             ' -relabel "{seq_id}_"'.format(
+                usearch=config['Paths']['usearch'],
+                infile=infile, outfile=outfile, qmax=qmax, min_len=min_len,
+                max_err_rate=max_err_rate, seq_id=timepoint_ids[infile]))
+        maybe_qsub(cmd, outfiles=outfile, name='filter-fastq')
+
+
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @transform(filter_fastq, suffix('.fasta'),
+               ['.uncontam.fasta', '.contam.fasta'])
+    def filter_contaminants(infile, outfiles):
+        uncontam, contam = outfiles
+        cmd = ('{usearch} -usearch_global {infile} -db {db}'
+               ' -id {id} -notmatched {uncontam} -matched {contam}'
+               ' -strand both'.format(usearch=config['Paths']['usearch'],
+                                      infile=infile, db=config['Parameters']['contaminants_db'],
+                                      id=config['Parameters']['contaminant_identity'],
+                                      uncontam=uncontam, contam=contam))
+        maybe_qsub(cmd, outfiles=outfiles, name='filter-contaminants')
+
+
+    def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, name=None):
+        max_accepts = config['Parameters']['max_accepts']
+        max_rejects = config['Parameters']['max_rejects']
+        if nums_only:
+            cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
+                   " -userout {outfile} -top_hit_only -userfields query+target -strand both"
+                   " -maxaccepts {max_accepts} -maxrejects {max_rejects}")
+        else:
+            cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
+                   ' -fastapairs {outfile} -top_hit_only -strand both'
+                   ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
+        if name is None:
+            name = 'usearch-global-pairs'
+        cmd = cmd.format(usearch=config['Paths']['usearch'],
+                         infile=infile, db=dbfile, id=identity, outfile=outfile,
+                         max_accepts=max_accepts, max_rejects=max_rejects)
+        maybe_qsub(cmd, outfiles=outfile, name=name)
+
+
+    def usearch_global_get_pairs(infile, dbfile, identity, name=None):
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            outfile = os.path.join(tmpdirname, 'pairs.txt')
+            usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True, name=name)
+            with open(outfile) as f:
+                return list(line.strip().split("\t") for line in f.readlines())
+
+
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @transform(filter_contaminants, suffix('.uncontam.fasta'),
+               '.uncontam.rfilter.fasta')
+    @must_work()
+    def filter_uncontaminated(infiles, outfile):
+        uncontam, _ = infiles
+        usearch_global_pairs(uncontam, outfile, config['Parameters']['reference_db'],
+                             config['Parameters']['reference_identity'],
+                             name="filter-uncontaminated")
+
+
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @transform(filter_uncontaminated, suffix('.fasta'), '.shifted.fasta')
+    @must_work(seq_ratio=(2, 1))
+    def shift_correction(infile, outfile):
+        correct_shifts_fasta(infile, outfile, keep=True)
+
+
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @transform(shift_correction, suffix('.fasta'), '.sorted.fasta')
+    @must_work(seq_ids=True)
+    def sort_by_length(infile, outfile):
+        cmd = ('{usearch} -sortbylength {infile} -fastaout {outfile}'.format(
+                usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+        maybe_qsub(cmd, outfiles=outfile, name="sort-by-length")
+
+
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @mkdir(sort_by_length, suffix('.fasta'), '.clusters')
+    @subdivide(sort_by_length, formatter(),
+               '{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta',
+               '{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta')
+    @must_produce(n=int(config['Parameters']['min_n_clusters']))
+    def cluster(infile, outfiles, pathname):
+        for f in outfiles:
+            os.unlink(f)
+        outdir = '{}.clusters'.format(infile[:-len('.fasta')])
+        outpattern = os.path.join(outdir, 'cluster_')
+        cmd = ('{usearch} -cluster_fast {infile} -id {id}'
+               ' -clusters {outpattern} -maxaccepts {max_accepts}'
+               ' -maxrejects {max_rejects}'.format(
+                usearch=config['Paths']['usearch'],
+                infile=infile, id=config['Parameters']['cluster_identity'],
+                outpattern=outpattern,
+                max_accepts=config['Parameters']['max_accepts'],
+                max_rejects=config['Parameters']['max_rejects']))
+        maybe_qsub(cmd, name="cluster")
+        r = re.compile(r'^cluster_[0-9]+$')
+        for f in list(f for f in os.listdir(outdir) if r.match(f)):
+            oldfile = os.path.join(outdir, f)
+            newfile = ''.join([oldfile, '.raw.fasta'])
+            os.rename(oldfile, newfile)
+
+
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @transform(cluster, suffix('.fasta'), '.keep.fasta')
+    def select_clusters(infile, outfile):
+        records = list(SeqIO.parse(infile, 'fasta'))
+        minsize = int(config['Parameters']['min_cluster_size'])
+        maxsize = int(config['Parameters']['max_cluster_size'])
+        if len(records) < minsize:
+            touch(outfile)  # empty file; needed for pipeline sanity
+            return
+        if len(records) > maxsize:
+            records = sample(records, maxsize)
+        SeqIO.write(records, outfile, 'fasta')
+
+
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @transform(select_clusters, suffix('.fasta'), '.aligned.fasta')
+    @must_work(maybe=True)
+    def align_clusters(infile, outfile):
+        mafft(infile, outfile)
+
+
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @transform(align_clusters, suffix('.fasta'), '.cons.fasta')
+    @must_work(maybe=True, illegal_chars='-')
+    def cluster_consensus(infile, outfile):
+        ambifile = '{}.info'.format(outfile[:-len('.fasta')])
+        consfile(infile, outfile, ambifile, ungap=True)
+
+
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @collate(cluster_consensus, formatter(), '{subdir[0][0]}.cons.fasta')
+    @must_work(seq_ids=True)
+    def cat_clusters(infiles, outfile):
+        cat_files(infiles, outfile)
+
+
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @transform(cat_clusters, suffix('.fasta'), '.pairs.fasta')
+    @must_work()
+    def consensus_db_search(infile, outfile):
+        usearch_global_pairs(infile, outfile, config['Parameters']['reference_db'],
+                             config['Parameters']['reference_identity'],
+                             name='consensus-db-search')
+
+
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @transform(consensus_db_search, suffix('.fasta'), '.shifted.fasta')
+    @must_work()
+    def consensus_shift_correction(infile, outfile):
+        n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep=False)
+        sumfile = '{}.summary'.format(outfile)
+        write_correction_result(n_seqs, n_fixed, sumfile)
+
+
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @transform(consensus_shift_correction, suffix('.fasta'), '.sorted.fasta')
+    @must_work(seq_ids=True)
+    def sort_consensus(infile, outfile):
+        cmd = ('{usearch} -sortbylength {infile} -fastaout {outfile}'.format(
+                usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+        maybe_qsub(cmd, outfiles=outfile, name='sort-consensus')
+
+
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @transform(sort_consensus, suffix('.fasta'), '.uniques.fasta')
+    @must_work()
+    def unique_consensus(infile, outfile):
+        cmd = ('{usearch} -cluster_fast {infile} -id 1 -centroids {outfile}'.format(
+                usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+        maybe_qsub(cmd, outfiles=outfile, name='unique_consensus')
+
+
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @transform(unique_consensus, suffix('.fasta'), '.perfect.fasta')
+    @must_work()
+    def perfect_orfs(infile, outfile):
+        perfect_file(infile, outfile, min_len=int(config['Parameters']['min_orf_length']),
+                     table=1, verbose=False)
+
+
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @transform(perfect_orfs, suffix('.fasta'), '.udb')
+    @must_work()
+    def make_individual_dbs(infile, outfile):
+        cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
+                usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+        maybe_qsub(cmd,  outfiles=outfile, name='make-individual-dbs')
+
+
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @collate([perfect_orfs, make_individual_dbs, shift_correction],
+             formatter(r'(?P<NAME>.+).qfilter'),
+             '{NAME[0]}.copynumber.fasta',
+             '{NAME[0]}')
+    @must_work(seq_ratio=(1, 1), pattern='*perfect*fasta')
+    def add_copynumber(infiles, outfile, basename):
+        rawfile, perfectfile, dbfile = infiles
+        check_suffix(perfectfile, '.perfect.fasta')
+        check_suffix(dbfile, '.udb')
+        identity = config['Parameters']['raw_to_consensus_identity']
+        pairfile = '{}.copynumber.pairs'.format(basename)
+        usearch_global_pairs(rawfile, pairfile, dbfile, identity,
+                             nums_only=True, name='add-copynumber')
+        with open(pairfile) as f:
+                pairs = list(line.strip().split("\t") for line in f.readlines())
+        consensus_counts = defaultdict(lambda: 1)
+        for raw_id, ref_id in pairs:
+            consensus_counts[str(ref_id).upper()] += 1
+        def new_record(r):
+            r = r[:]
+            _id = str(r.id).upper()
+            r.id = "{}_{}".format(_id, consensus_counts[_id])
+            r.name = ''
+            r.description = ''
+            return r
+        SeqIO.write((new_record(r) for r in SeqIO.parse(perfectfile, 'fasta')),
+                    outfile, 'fasta')
+
+
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @merge(add_copynumber, "all_perfect_orfs.fasta")
+    @must_work(seq_ids=True)
+    def cat_all_perfect(infiles, outfile):
+        if len(infiles) != len(timepoints):
+            raise Exception('Number of input files does not match number'
+                            ' of timepoints')
+        cat_files(infiles, outfile)
+
+
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @transform(cat_all_perfect, suffix('.fasta'), '.translated.fasta')
+    @must_work(seq_ids=True)
+    def translate_perfect(infile, outfile):
+        translate(infile, outfile)
+
+
+    def pause(filename):
+        if config.getboolean('Tasks', 'pause_after_codon_alignment'):
+            input('Paused for manual editing of {}'
+                  '\nPress Enter to continue.'.format(filename))
+
+
+    @posttask(partial(pause, 'hyphy_data/input/merged.prot'))
+    @mkdir(hyphy_input_dir)
+    @mkdir(hyphy_results_dir)
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @transform(translate_perfect, formatter(), hyphy_input('merged.prot'))
+    @must_work(seq_ids=True)
+    def codon_align_perfect(infile, outfile):
+        mafft(infile, outfile)
+
+
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @merge([cat_all_perfect, codon_align_perfect], 'all_backtranslated.fas')
+    @must_work()
+    def backtranslate_alignment(infiles, outfile):
+        perfect, aligned = infiles
+        check_basename(perfect, 'all_perfect_orfs.fasta')
+        backtranslate(aligned, perfect, outfile)
+
+
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @transform(backtranslate_alignment, formatter(), hyphy_input('merged.fas'))
+    @must_work()
+    def copy_alignment(infile, outfile):
+        shutil.copyfile(infile, outfile)
+
+
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @transform(backtranslate_alignment, formatter(), 'all_perfect_orfs_degapped.fasta')
+    @must_work()
+    def degap_backtranslated_alignment(infile, outfile):
+        # we need this in case sequences were removed during hand-editing
+        # of the output of `codon_align_perfect()`.
+        records = (SeqIO.parse(infile, 'fasta'))
+        processed = (update_record_seq(r, r.seq.ungap('-')) for r in records)
+        SeqIO.write(processed, outfile, 'fasta')
+
+
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @transform(degap_backtranslated_alignment, suffix('.fasta'), '.udb')
+    @must_work()
+    def make_full_db(infile, outfile):
+        cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
+                usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
+        maybe_qsub(cmd, outfiles=outfile, name='make_full_db')
+
+
+
+    @active_if(config.getboolean('Tasks', 'align_full'))
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @transform(shift_correction,
+               suffix('.fasta'),
+               add_inputs([make_full_db]),
+               '.pairs.txt')
+    @must_work()
+    def full_timestep_pairs(infiles, outfile):
+        infile, (dbfile,) = infiles
+        identity = config['Parameters']['raw_to_consensus_identity']
+        usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True,
+                             name='full-timestep-pairs')
+
+
+    @active_if(config.getboolean('Tasks', 'align_full'))
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @mkdir(full_timestep_pairs, suffix('.pairs.txt'), '.alignments')
+    @subdivide(full_timestep_pairs,
+               formatter('.*/(?P<NAME>.+).pairs.txt'),
+               add_inputs([degap_backtranslated_alignment]),
+               '{NAME[0]}.alignments/combined.*.unaligned.fasta',
+               '{NAME[0]}')
+    @must_work()
+    def combine_pairs(infiles, outfiles, basename):
+        for f in outfiles:
+            os.unlink(f)
+        infile, (perfectfile,) = infiles
+        seqsfile = '{}.fasta'.format(basename)
+        with open(infile) as handle:
+            pairs = list(line.strip().split("\t") for line in handle.readlines())
+        match_dict = defaultdict(list)
+        for seq, ref in pairs:
+            match_dict[ref].append(seq)
+        references_records = list(SeqIO.parse(perfectfile, "fasta"))
+        seq_records = list(SeqIO.parse(seqsfile, "fasta"))
+        references_dict = {r.id : r for r in references_records}
+        seq_dict = {r.id : r for r in seq_records}
+
+        for ref_id, seq_ids in match_dict.items():
+            outfile = '{}.alignments/combined.{}.unaligned.fasta'.format(basename, ref_id)
+            records = [references_dict[ref_id]]
+            records.extend(list(seq_dict[i] for i in seq_ids))
+            SeqIO.write(records, outfile, "fasta")
+
+
+    @active_if(config.getboolean('Tasks', 'align_full'))
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @transform(combine_pairs,
+               suffix('.unaligned.fasta'),
+               '.aligned.bam')
+    @must_work()
+    def codon_align(infile, outfile):
+        cmd = "{} -R {} {}".format(config['Paths']['bealign'], infile, outfile)
+        stdout = '{}.stdout'.format(outfile)
+        stderr = '{}.stderr'.format(outfile)
+        maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
+
+
+    @active_if(config.getboolean('Tasks', 'align_full'))
+    @jobs_limit(n_remote_jobs, remote_job_limiter)
+    @transform(codon_align, suffix('.bam'), '.fasta')
+    @must_work()
+    def convert_bam_to_fasta(infile, outfile):
+        cmd = "{} {} {}".format(config['Paths']['bam2msa'], infile, outfile)
+        stdout = '{}.stdout'.format(outfile)
+        stderr = '{}.stderr'.format(outfile)
+        maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
+
+
+    @active_if(config.getboolean('Tasks', 'align_full'))
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @transform(convert_bam_to_fasta,
+               suffix('.fasta'),
+               add_inputs([backtranslate_alignment]),
+               '.gapped.fasta')
+    @must_work()
+    def insert_gaps_task(infiles, outfile):
+        infile, (backtranslated,) = infiles
+        ref, *seqs = list(SeqIO.parse(infile, 'fasta'))
+        ref_gapped = list(r for r in SeqIO.parse(backtranslated, 'fasta')
+                          if r.id == ref.id)[0]
+        seqs_gapped = (new_record_seq_str(r, insert_gaps(str(ref_gapped.seq),
+                                                         str(r.seq),
+                                                         '-', '-', skip=1))
+                       for r in seqs)
+        SeqIO.write(seqs_gapped, outfile, "fasta")
+
+
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @active_if(config.getboolean('Tasks', 'align_full'))
+    @merge(insert_gaps_task, 'all_timepoints.aligned.fasta')
+    @must_work(seq_ids=True)
+    def merge_all_timepoints(infiles, outfile):
+        cat_files(infiles, outfile)
+
+else:
+    @mkdir(hyphy_input_dir)
+    @mkdir(hyphy_results_dir)
+    @jobs_limit(n_local_jobs, local_job_limiter)
+    @transform(alignment_file, formatter(), hyphy_input('merged.fas'))
+    @must_work()
+    def copy_alignment(infile, outfile):
+        records = list(SeqIO.parse(infile, 'fasta'))
+        for r in records:
+            parts = r.id.split('_')
+            base = '_'.join(parts[:2])
+            no = parts[2]
+            r.id = '{}_{}_1'.format(timepoint_ids[base], no)
+            r.name = ''
+            r.description = ''
+        SeqIO.write(records, outfile, 'fasta')
+
+
 @jobs_limit(n_local_jobs, local_job_limiter)
-@transform(start_files, suffix(".fastq"), add_inputs([write_config]), '.qfilter.fasta')
-@must_work()  # my decorators must go before ruffus ones
-def filter_fastq(infiles, outfile):
-    infile, _ = infiles
-    qmax = config['Parameters']['qmax']
-    min_len = config['Parameters']['min_sequence_length']
-    max_err_rate = config['Parameters']['max_err_rate']
-    cmd = ('{usearch} -fastq_filter {infile} -fastq_maxee_rate {max_err_rate}'
-         ' -threads 1 -fastq_qmax {qmax} -fastq_minlen {min_len} -fastaout {outfile}'
-         ' -relabel "{seq_id}_"'.format(
-            usearch=config['Paths']['usearch'],
-            infile=infile, outfile=outfile, qmax=qmax, min_len=min_len,
-            max_err_rate=max_err_rate, seq_id=timepoint_ids[infile]))
-    maybe_qsub(cmd, outfiles=outfile, name='filter-fastq')
-
-
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(filter_fastq, suffix('.fasta'),
-           ['.uncontam.fasta', '.contam.fasta'])
-def filter_contaminants(infile, outfiles):
-    uncontam, contam = outfiles
-    cmd = ('{usearch} -usearch_global {infile} -db {db}'
-           ' -id {id} -notmatched {uncontam} -matched {contam}'
-           ' -strand both'.format(usearch=config['Paths']['usearch'],
-                                  infile=infile, db=config['Parameters']['contaminants_db'],
-                                  id=config['Parameters']['contaminant_identity'],
-                                  uncontam=uncontam, contam=contam))
-    maybe_qsub(cmd, outfiles=outfiles, name='filter-contaminants')
-
-
-def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, name=None):
-    max_accepts = config['Parameters']['max_accepts']
-    max_rejects = config['Parameters']['max_rejects']
-    if nums_only:
-        cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
-               " -userout {outfile} -top_hit_only -userfields query+target -strand both"
-               " -maxaccepts {max_accepts} -maxrejects {max_rejects}")
-    else:
-        cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
-               ' -fastapairs {outfile} -top_hit_only -strand both'
-               ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
-    if name is None:
-        name = 'usearch-global-pairs'
-    cmd = cmd.format(usearch=config['Paths']['usearch'],
-                     infile=infile, db=dbfile, id=identity, outfile=outfile,
-                     max_accepts=max_accepts, max_rejects=max_rejects)
-    maybe_qsub(cmd, outfiles=outfile, name=name)
-
-
-def usearch_global_get_pairs(infile, dbfile, identity, name=None):
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        outfile = os.path.join(tmpdirname, 'pairs.txt')
-        usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True, name=name)
-        with open(outfile) as f:
-            return list(line.strip().split("\t") for line in f.readlines())
-
-
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(filter_contaminants, suffix('.uncontam.fasta'),
-           '.uncontam.rfilter.fasta')
-@must_work()
-def filter_uncontaminated(infiles, outfile):
-    uncontam, _ = infiles
-    usearch_global_pairs(uncontam, outfile, config['Parameters']['reference_db'],
-                         config['Parameters']['reference_identity'],
-                         name="filter-uncontaminated")
-
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@transform(filter_uncontaminated, suffix('.fasta'), '.shifted.fasta')
-@must_work(seq_ratio=(2, 1))
-def shift_correction(infile, outfile):
-    correct_shifts_fasta(infile, outfile, keep=True)
-
-
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(shift_correction, suffix('.fasta'), '.sorted.fasta')
-@must_work(seq_ids=True)
-def sort_by_length(infile, outfile):
-    cmd = ('{usearch} -sortbylength {infile} -fastaout {outfile}'.format(
-            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    maybe_qsub(cmd, outfiles=outfile, name="sort-by-length")
-
-
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@mkdir(sort_by_length, suffix('.fasta'), '.clusters')
-@subdivide(sort_by_length, formatter(),
-           '{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta',
-           '{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta')
-@must_produce(n=int(config['Parameters']['min_n_clusters']))
-def cluster(infile, outfiles, pathname):
-    for f in outfiles:
-        os.unlink(f)
-    outdir = '{}.clusters'.format(infile[:-len('.fasta')])
-    outpattern = os.path.join(outdir, 'cluster_')
-    cmd = ('{usearch} -cluster_fast {infile} -id {id}'
-           ' -clusters {outpattern} -maxaccepts {max_accepts}'
-           ' -maxrejects {max_rejects}'.format(
-            usearch=config['Paths']['usearch'],
-            infile=infile, id=config['Parameters']['cluster_identity'],
-            outpattern=outpattern,
-            max_accepts=config['Parameters']['max_accepts'],
-            max_rejects=config['Parameters']['max_rejects']))
-    maybe_qsub(cmd, name="cluster")
-    r = re.compile(r'^cluster_[0-9]+$')
-    for f in list(f for f in os.listdir(outdir) if r.match(f)):
-        oldfile = os.path.join(outdir, f)
-        newfile = ''.join([oldfile, '.raw.fasta'])
-        os.rename(oldfile, newfile)
-
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@transform(cluster, suffix('.fasta'), '.keep.fasta')
-def select_clusters(infile, outfile):
-    records = list(SeqIO.parse(infile, 'fasta'))
-    minsize = int(config['Parameters']['min_cluster_size'])
-    maxsize = int(config['Parameters']['max_cluster_size'])
-    if len(records) < minsize:
-        touch(outfile)  # empty file; needed for pipeline sanity
-        return
-    if len(records) > maxsize:
-        records = sample(records, maxsize)
-    SeqIO.write(records, outfile, 'fasta')
-
-
-def hyphy_call(script_file, name, args):
-    if args:
-        in_str = "".join("{}\n".format(i) for i in args)
-    else:
-        in_str = ''
-    infile = '{}.stdin'.format(name)
-    with open(infile, 'w') as handle:
-        handle.write(in_str)
-    cmd = '{} {} < {}'.format(config['Paths']['hyphy'], script_file, infile)
-    maybe_qsub(cmd, name=name)
-
-
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(select_clusters, suffix('.fasta'), '.aligned.fasta')
-@must_work(maybe=True)
-def align_clusters(infile, outfile):
-    mafft(infile, outfile)
-
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@transform(align_clusters, suffix('.fasta'), '.cons.fasta')
-@must_work(maybe=True, illegal_chars='-')
-def cluster_consensus(infile, outfile):
-    ambifile = '{}.info'.format(outfile[:-len('.fasta')])
-    consfile(infile, outfile, ambifile, ungap=True)
-
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@collate(cluster_consensus, formatter(), '{subdir[0][0]}.cons.fasta')
-@must_work(seq_ids=True)
-def cat_clusters(infiles, outfile):
-    cat_files(infiles, outfile)
-
-
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(cat_clusters, suffix('.fasta'), '.pairs.fasta')
-@must_work()
-def consensus_db_search(infile, outfile):
-    usearch_global_pairs(infile, outfile, config['Parameters']['reference_db'],
-                         config['Parameters']['reference_identity'],
-                         name='consensus-db-search')
-
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@transform(consensus_db_search, suffix('.fasta'), '.shifted.fasta')
-@must_work()
-def consensus_shift_correction(infile, outfile):
-    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep=False)
-    sumfile = '{}.summary'.format(outfile)
-    write_correction_result(n_seqs, n_fixed, sumfile)
-
-
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(consensus_shift_correction, suffix('.fasta'), '.sorted.fasta')
-@must_work(seq_ids=True)
-def sort_consensus(infile, outfile):
-    cmd = ('{usearch} -sortbylength {infile} -fastaout {outfile}'.format(
-            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    maybe_qsub(cmd, outfiles=outfile, name='sort-consensus')
-
-
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(sort_consensus, suffix('.fasta'), '.uniques.fasta')
-@must_work()
-def unique_consensus(infile, outfile):
-    cmd = ('{usearch} -cluster_fast {infile} -id 1 -centroids {outfile}'.format(
-            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    maybe_qsub(cmd, outfiles=outfile, name='unique_consensus')
-
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@transform(unique_consensus, suffix('.fasta'), '.perfect.fasta')
-@must_work()
-def perfect_orfs(infile, outfile):
-    perfect_file(infile, outfile, min_len=int(config['Parameters']['min_orf_length']),
-                 table=1, verbose=False)
-
-
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(perfect_orfs, suffix('.fasta'), '.udb')
-@must_work()
-def make_individual_dbs(infile, outfile):
-    cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
-            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    maybe_qsub(cmd,  outfiles=outfile, name='make-individual-dbs')
-
-
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@collate([perfect_orfs, make_individual_dbs, shift_correction],
-         formatter(r'(?P<NAME>.+).qfilter'),
-         '{NAME[0]}.copynumber.fasta',
-         '{NAME[0]}')
-@must_work(seq_ratio=(1, 1), pattern='*perfect*fasta')
-def add_copynumber(infiles, outfile, basename):
-    rawfile, perfectfile, dbfile = infiles
-    check_suffix(perfectfile, '.perfect.fasta')
-    check_suffix(dbfile, '.udb')
-    identity = config['Parameters']['raw_to_consensus_identity']
-    pairfile = '{}.copynumber.pairs'.format(basename)
-    usearch_global_pairs(rawfile, pairfile, dbfile, identity,
-                         nums_only=True, name='add-copynumber')
-    with open(pairfile) as f:
-            pairs = list(line.strip().split("\t") for line in f.readlines())
-    consensus_counts = defaultdict(lambda: 1)
-    for raw_id, ref_id in pairs:
-        consensus_counts[str(ref_id).upper()] += 1
-    def new_record(r):
-        r = r[:]
-        _id = str(r.id).upper()
-        r.id = "{}_{}".format(_id, consensus_counts[_id])
-        r.name = ''
-        r.description = ''
-        return r
-    SeqIO.write((new_record(r) for r in SeqIO.parse(perfectfile, 'fasta')),
-                outfile, 'fasta')
-
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@merge(add_copynumber, "all_perfect_orfs.fasta")
-@must_work(seq_ids=True)
-def cat_all_perfect(infiles, outfile):
-    if len(infiles) != len(timepoints):
-        raise Exception('Number of input files does not match number'
-                        ' of timepoints')
-    cat_files(infiles, outfile)
-
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@transform(cat_all_perfect, suffix('.fasta'), '.translated.fasta')
-@must_work(seq_ids=True)
-def translate_perfect(infile, outfile):
-    translate(infile, outfile)
-
-
-def pause(filename):
-    if config.getboolean('Tasks', 'pause_after_codon_alignment'):
-        input('Paused for manual editing of {}'
-              '\nPress Enter to continue.'.format(filename))
-
-
-@posttask(partial(pause, 'hyphy_data/input/merged.prot'))
-@mkdir(hyphy_input_dir)
-@mkdir(hyphy_results_dir)
-@jobs_limit(n_local_jobs, local_job_limiter)
-@transform(translate_perfect, formatter(), hyphy_input('merged.prot'))
-@must_work(seq_ids=True)
-def codon_align_perfect(infile, outfile):
-    mafft(infile, outfile)
-
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@merge([cat_all_perfect, codon_align_perfect],
-       hyphy_input('merged.fas'))
-@must_work()
-def backtranslate_alignment(infiles, outfile):
-    perfect, aligned = infiles
-    check_basename(perfect, 'all_perfect_orfs.fasta')
-    backtranslate(aligned, perfect, outfile)
-
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@transform(backtranslate_alignment, formatter(), hyphy_input('merged.dates'))
+@transform(copy_alignment, formatter(), hyphy_input('merged.dates'))
 @must_work()
 def write_dates(infile, outfile):
     # NOTE: we assume the first part of the record id is the timestamp
@@ -620,7 +766,7 @@ def mrca(infile, recordfile, outfile, oldest_id):
 
 
 @jobs_limit(n_local_jobs, local_job_limiter)
-@transform(backtranslate_alignment, formatter(), hyphy_input('earlyCons.seq'))
+@transform(copy_alignment, formatter(), hyphy_input('earlyCons.seq'))
 @must_work(illegal_chars='')
 def compute_mrca(infile, outfile):
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
@@ -629,9 +775,21 @@ def compute_mrca(infile, outfile):
     mrca(infile, oldest_records_filename, outfile, oldest_timepoint.id)
 
 
+def hyphy_call(script_file, name, args):
+    if args:
+        in_str = "".join("{}\n".format(i) for i in args)
+    else:
+        in_str = ''
+    infile = '{}.stdin'.format(name)
+    with open(infile, 'w') as handle:
+        handle.write(in_str)
+    cmd = '{} {} < {}'.format(config['Paths']['hyphy'], script_file, infile)
+    maybe_qsub(cmd, name=name)
+
+
 @active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(backtranslate_alignment, formatter(), hyphy_input('merged.prot.parts'))
+@transform(copy_alignment, formatter(), hyphy_input('merged.prot.parts'))
 @must_work()
 def compute_hxb2_coords(infile, outfile):
     hxb2_script = hyphy_script('HXB2partsSplitter.bf')
@@ -640,7 +798,7 @@ def compute_hxb2_coords(infile, outfile):
 
 @active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
-@merge([write_dates, compute_hxb2_coords, backtranslate_alignment, compute_mrca],
+@merge([write_dates, compute_hxb2_coords, copy_alignment, compute_mrca],
          [hyphy_input('mrca.seq')] + list(hyphy_results(f)
                                           for f in ('rates_pheno.tsv',
                                                     'trees.json',
@@ -653,7 +811,7 @@ def evo_history(infiles, outfile):
 
 @active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
-@merge([write_dates, backtranslate_alignment, compute_mrca],
+@merge([write_dates, copy_alignment, compute_mrca, evo_history],
        hyphy_results('frequencies.json'))
 @must_work()
 def aa_freqs(infile, outfile):
@@ -674,128 +832,12 @@ def turnover(infile, outfile):
 
 @active_if(config.getboolean('Tasks', 'hyphy'))
 @jobs_limit(n_remote_jobs, remote_job_limiter)
-@merge([write_dates, evo_history, backtranslate_alignment],
+@merge([write_dates, evo_history, copy_alignment],
        hyphy_results('rates.json'))
 @must_work()
 def run_fubar(infile, outfile):
     hyphy_call(hyphy_script('runFUBAR.bf'), 'fubar', [hyphy_data_dir])
 
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@transform(backtranslate_alignment, formatter(), 'all_perfect_orfs_degapped.fasta')
-@must_work()
-def degap_backtranslated_alignment(infile, outfile):
-    # we need this in case sequences were removed during hand-editing
-    # of the output of `codon_align_perfect()`.
-    records = (SeqIO.parse(infile, 'fasta'))
-    processed = (update_record_seq(r, r.seq.ungap('-')) for r in records)
-    SeqIO.write(processed, outfile, 'fasta')
-
-
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(degap_backtranslated_alignment, suffix('.fasta'), '.udb')
-@must_work()
-def make_full_db(infile, outfile):
-    cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
-            usearch=config['Paths']['usearch'], infile=infile, outfile=outfile))
-    maybe_qsub(cmd, outfiles=outfile, name='make_full_db')
-
-
-
-@active_if(config.getboolean('Tasks', 'align_full'))
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(shift_correction,
-           suffix('.fasta'),
-           add_inputs([make_full_db]),
-           '.pairs.txt')
-@must_work()
-def full_timestep_pairs(infiles, outfile):
-    infile, (dbfile,) = infiles
-    identity = config['Parameters']['raw_to_consensus_identity']
-    usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True,
-                         name='full-timestep-pairs')
-
-
-@active_if(config.getboolean('Tasks', 'align_full'))
-@jobs_limit(n_local_jobs, local_job_limiter)
-@mkdir(full_timestep_pairs, suffix('.pairs.txt'), '.alignments')
-@subdivide(full_timestep_pairs,
-           formatter('.*/(?P<NAME>.+).pairs.txt'),
-           add_inputs([degap_backtranslated_alignment]),
-           '{NAME[0]}.alignments/combined.*.unaligned.fasta',
-           '{NAME[0]}')
-@must_work()
-def combine_pairs(infiles, outfiles, basename):
-    for f in outfiles:
-        os.unlink(f)
-    infile, (perfectfile,) = infiles
-    seqsfile = '{}.fasta'.format(basename)
-    with open(infile) as handle:
-        pairs = list(line.strip().split("\t") for line in handle.readlines())
-    match_dict = defaultdict(list)
-    for seq, ref in pairs:
-        match_dict[ref].append(seq)
-    references_records = list(SeqIO.parse(perfectfile, "fasta"))
-    seq_records = list(SeqIO.parse(seqsfile, "fasta"))
-    references_dict = {r.id : r for r in references_records}
-    seq_dict = {r.id : r for r in seq_records}
-
-    for ref_id, seq_ids in match_dict.items():
-        outfile = '{}.alignments/combined.{}.unaligned.fasta'.format(basename, ref_id)
-        records = [references_dict[ref_id]]
-        records.extend(list(seq_dict[i] for i in seq_ids))
-        SeqIO.write(records, outfile, "fasta")
-
-
-@active_if(config.getboolean('Tasks', 'align_full'))
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(combine_pairs,
-           suffix('.unaligned.fasta'),
-           '.aligned.bam')
-@must_work()
-def codon_align(infile, outfile):
-    cmd = "{} -R {} {}".format(config['Paths']['bealign'], infile, outfile)
-    stdout = '{}.stdout'.format(outfile)
-    stderr = '{}.stderr'.format(outfile)
-    maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
-
-
-@active_if(config.getboolean('Tasks', 'align_full'))
-@jobs_limit(n_remote_jobs, remote_job_limiter)
-@transform(codon_align, suffix('.bam'), '.fasta')
-@must_work()
-def convert_bam_to_fasta(infile, outfile):
-    cmd = "{} {} {}".format(config['Paths']['bam2msa'], infile, outfile)
-    stdout = '{}.stdout'.format(outfile)
-    stderr = '{}.stderr'.format(outfile)
-    maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
-
-
-@active_if(config.getboolean('Tasks', 'align_full'))
-@jobs_limit(n_local_jobs, local_job_limiter)
-@transform(convert_bam_to_fasta,
-           suffix('.fasta'),
-           add_inputs([backtranslate_alignment]),
-           '.gapped.fasta')
-@must_work()
-def insert_gaps_task(infiles, outfile):
-    infile, (backtranslated,) = infiles
-    ref, *seqs = list(SeqIO.parse(infile, 'fasta'))
-    ref_gapped = list(r for r in SeqIO.parse(backtranslated, 'fasta')
-                      if r.id == ref.id)[0]
-    seqs_gapped = (new_record_seq_str(r, insert_gaps(str(ref_gapped.seq),
-                                                     str(r.seq),
-                                                     '-', '-', skip=1))
-                   for r in seqs)
-    SeqIO.write(seqs_gapped, outfile, "fasta")
-
-
-@jobs_limit(n_local_jobs, local_job_limiter)
-@active_if(config.getboolean('Tasks', 'align_full'))
-@merge(insert_gaps_task, 'all_timepoints.aligned.fasta')
-@must_work(seq_ids=True)
-def merge_all_timepoints(infiles, outfile):
-    cat_files(infiles, outfile)
 
 
 if __name__ == '__main__':
