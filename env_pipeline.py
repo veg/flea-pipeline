@@ -728,14 +728,25 @@ else:
     @transform(alignment_file, formatter(), hyphy_input('merged.fas'))
     @must_work()
     def copy_alignment(infile, outfile):
+        # rename sequence ids to match those expected by HYPHY:
+        # VXX_number_copynumber
         records = list(SeqIO.parse(infile, 'fasta'))
         for r in records:
-            parts = r.id.split('_')
-            base = '_'.join(parts[:2])
-            no = parts[2]
-            r.id = '{}_{}_1'.format(timepoint_ids[base], no)
-            r.name = ''
-            r.description = ''
+            found = False
+            # check every possible key, in case they are different lengths.
+            for k, v in timepoint_ids.items():
+                if r.id.startswith(k):
+                    rest = r.id[len(k):]
+                    rest = rest.strip('_')
+                    if not rest:
+                        raise Exception('sequence id has no unique part')
+                    r.id = '{}_{}_1'.format(v, rest)
+                    r.name = ''
+                    r.description = ''
+                    found = True
+                    break
+            if not found:
+                raise Exception('record id not found in input file')
         SeqIO.write(records, outfile, 'fasta')
 
 
