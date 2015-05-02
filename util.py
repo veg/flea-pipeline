@@ -13,14 +13,16 @@ from functools import wraps
 
 from Bio.Seq import Seq
 
+import pipeline_globals as globals_
+
 
 ################################################################################
 # job handling
 
-def n_jobs(config):
-    n_local_jobs = config.getint('Jobs', 'local_jobs')
-    n_remote_jobs = config.getint('Jobs', 'remote_jobs')
-    use_cluster = config.getboolean('Jobs', 'use_cluster')
+def n_jobs():
+    n_local_jobs = globals_.config.getint('Jobs', 'local_jobs')
+    n_remote_jobs = globals_.config.getint('Jobs', 'remote_jobs')
+    use_cluster = globals_.config.getboolean('Jobs', 'use_cluster')
 
     if n_local_jobs < 1:
         raise Exception('Bad parameters; n_local_jobs="{}"'.format(n_local_jobs))
@@ -148,11 +150,12 @@ def qsub(cmd, outfiles=None, queue=None, nodes=1, ppn=1, sleep=5,
             raise Exception('qsub job "{}" exited with code "{}"'.format(full_cmd, code))
 
 
-def maybe_qsub(cmd, config, **kwargs):
-    if config.getboolean('Jobs', 'use_cluster'):
-        qsub(cmd, walltime=config.getint('Jobs', 'walltime'),
-             queue=config.get('Jobs', 'queue'), nodes=config.get('Jobs', 'nodes'),
-             ppn=config.get('Jobs', 'ppn'), **kwargs)
+def maybe_qsub(cmd, **kwargs):
+    if globals_.config.getboolean('Jobs', 'use_cluster'):
+        qsub(cmd, walltime=globals_.config.getint('Jobs', 'walltime'),
+             queue=globals_.config.get('Jobs', 'queue'),
+             nodes=globals_.config.get('Jobs', 'nodes'),
+             ppn=globals_.config.get('Jobs', 'ppn'), **kwargs)
     else:
         # TODO: handle stdout and stderr kwargs
         call(cmd)
@@ -313,7 +316,7 @@ def check_illegal_chars(f, chars):
                             ' of file "{}"'.format(found, r.id, f))
 
 
-def must_work(options, maybe=False, seq_ratio=None, seq_ids=False, illegal_chars=None, pattern=None):
+def must_work(maybe=False, seq_ratio=None, seq_ids=False, illegal_chars=None, pattern=None):
     """Fail if any output is empty.
 
     maybe: touch output and return if any input is empty
@@ -325,7 +328,7 @@ def must_work(options, maybe=False, seq_ratio=None, seq_ids=False, illegal_chars
     if pattern is None:
         pattern = '*'
     def wrap(fun):
-        if options.touch_files_only or options.just_print:
+        if globals_.options.touch_files_only or globals._options.just_print:
             return fun
         @wraps(fun)  # necessary because ruffus uses function name internally
         def wrapped(infiles, outfiles, *args, **kwargs):
