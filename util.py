@@ -1,5 +1,6 @@
 """Utility functions used in more than one script."""
 
+from fnmatch import fnmatch
 from subprocess import Popen, PIPE, STDOUT
 from itertools import zip_longest
 from itertools import tee
@@ -8,8 +9,35 @@ from collections import defaultdict
 from uuid import uuid4
 import time
 import os
+from functools import wraps
 
 from Bio.Seq import Seq
+
+
+################################################################################
+# job handling
+
+def n_jobs(config):
+    n_local_jobs = config.getint('Jobs', 'local_jobs')
+    n_remote_jobs = config.getint('Jobs', 'remote_jobs')
+    use_cluster = config.getboolean('Jobs', 'use_cluster')
+
+    if n_local_jobs < 1:
+        raise Exception('Bad parameters; n_local_jobs="{}"'.format(n_local_jobs))
+
+    if n_remote_jobs < 1 and use_cluster:
+        raise Exception('Bad parameters; use_cluster="{}"'
+                        ' but remote_jobs="{}"'.format(use_cluster, n_remote_jobs))
+
+    if not use_cluster:
+        n_remote_jobs = n_local_jobs
+    return n_local_jobs, n_remote_jobs
+
+
+local_job_limiter = 'local_jobs'
+remote_job_limiter = 'remote_jobs'
+
+################################################################################
 
 
 # TODO: capture and write all stdout and stderr to files.
@@ -118,6 +146,16 @@ def qsub(cmd, outfiles=None, queue=None, nodes=1, ppn=1, sleep=5,
         code = handle.read().strip()
         if code != '0':
             raise Exception('qsub job "{}" exited with code "{}"'.format(full_cmd, code))
+
+
+def maybe_qsub(cmd, config, **kwargs):
+    if config.getboolean('Jobs', 'use_cluster'):
+        qsub(cmd, walltime=config.getint('Jobs', 'walltime'),
+             queue=config.get('Jobs', 'queue'), nodes=config.get('Jobs', 'nodes'),
+             ppn=config.get('Jobs', 'ppn'), **kwargs)
+    else:
+        # TODO: handle stdout and stderr kwargs
+        call(cmd)
 
 
 def insert_gaps(source, target, src_gap, target_gap, skip):
@@ -236,3 +274,106 @@ def write_to_handle(handle, output):
     finally:
         if do_close:
             handle.close()
+
+            
+def ensure_not_empty(files):
+    for f in strlist(files):
+        if not os.path.exists(f):
+            raise Exception('Expected output file does not'
+                            ' exist: "{}"'.format(f))
+        if os.stat(f).st_size == 0:
+            raise Exception('Empty file: "{}"'.format(f))
+
+
+def check_seq_ids(inputs, output):
+    a_ids = set(r.id for a in inputs for r in SeqIO.parse(a, 'fasta'))
+    b_ids = set(r.id for r in SeqIO.parse(output, 'fasta'))
+    if a_ids != b_ids:
+        raise Exception('IDs from "{}" do not match "{}"'.format(inputs, output))
+
+
+def check_seq_ratio(inputs, output, expected):
+    a_exp, b_exp = expected
+    assert a_exp == int(a_exp)
+    assert b_exp == int(b_exp)
+    a_n = sum(1 for a in inputs for r in SeqIO.parse(a, 'fasta'))
+    b_n = sum(1 for r in SeqIO.parse(output, 'fasta'))
+    if a_n * b_exp != b_n * a_exp:
+        raise Exception('Sequnce ratios do not match.'
+                        ' Expected {}:{}. Got: {}:{}.'
+                        ' Inputs: "{}" Output: "{}"'.format(
+                a_exp, b_exp, a_n, b_n, inputs, output))
+
+
+def check_illegal_chars(f, chars):
+    for r in SeqIO.parse(f, 'fasta'):
+        found = set(chars.upper()).intersection(set(str(r.seq).upper()))
+        if found:
+            raise Exception('Illegal characters "{}" found in sequence "{}"'
+                            ' of file "{}"'.format(found, r.id, f))
+
+
+def must_work(options, maybe=False, seq_ratio=None, seq_ids=False, illegal_chars=None, pattern=None):
+    """Fail if any output is empty.
+
+    maybe: touch output and return if any input is empty
+    seq_ratio: (int, int): ensure numbers of sequences match
+    seq_ids: ensure all ids present in input files are in output file
+    pattern: pattern for determing input files to consider
+
+    """
+    if pattern is None:
+        pattern = '*'
+    def wrap(fun):
+        if options.touch_files_only or options.just_print:
+            return fun
+        @wraps(fun)  # necessary because ruffus uses function name internally
+        def wrapped(infiles, outfiles, *args, **kwargs):
+            if maybe:
+                if any(os.stat(f).st_size == 0 for f in traverse(strlist(infiles))):
+                    for f in traverse(strlist(outfiles)):
+                        touch(f)
+                    return
+            fun(infiles, outfiles, *args, **kwargs)
+            infiles = list(traverse(strlist(infiles)))
+            infiles = list(f for f in infiles if fnmatch(f, pattern))
+            outfiles = strlist(outfiles)
+            ensure_not_empty(outfiles)
+            if seq_ids:
+                assert len(outfiles) == 1
+                check_seq_ids(infiles, outfiles[0])
+            if seq_ratio is not None:
+                assert len(outfiles) == 1
+                check_seq_ratio(infiles, outfiles[0], seq_ratio)
+            if illegal_chars:
+                for f in outfiles:
+                    check_illegal_chars(f, illegal_chars)
+        return wrapped
+    return wrap
+
+
+def must_produce(n):
+    """Check that at least `n` files match the pathname glob"""
+    def wrap(fun):
+        @wraps(fun)
+        def wrapped(infiles, outfiles, pathname, *args, **kwargs):
+            fun(infiles, outfiles, pathname, *args, **kwargs)
+            n_produced = len(glob(pathname))
+            if n_produced < n:
+                raise Exception('Task was supposed to produce at least {}'
+                                ' outputs, but it produced {}'.format(n, n_produced))
+        return wrapped
+    return wrap
+
+
+def check_suffix(name, suffix):
+    assert(name.endswith(suffix))
+
+
+def remove_suffix(name, suffix):
+    check_suffix(name, suffix)
+    return name[:-len(suffix)]
+
+
+def check_basename(name, bn):
+    assert(os.path.basename(name) == bn)
