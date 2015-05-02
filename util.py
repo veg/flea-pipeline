@@ -1,17 +1,18 @@
 """Utility functions used in more than one script."""
 
 from fnmatch import fnmatch
-from subprocess import Popen, PIPE, STDOUT
+from subprocess import Popen, PIPE, CalledProcessError
 from itertools import zip_longest
 from itertools import tee
 from itertools import filterfalse
-from collections import defaultdict
 from uuid import uuid4
 import time
 import os
 from functools import wraps
+from glob import glob
 
 from Bio.Seq import Seq
+from Bio import SeqIO
 
 import pipeline_globals as globals_
 
@@ -316,7 +317,13 @@ def check_illegal_chars(f, chars):
                             ' of file "{}"'.format(found, r.id, f))
 
 
-def must_work(maybe=False, seq_ratio=None, seq_ids=False, illegal_chars=None, pattern=None):
+def must_work_decorator(**kwargs):
+    def wrap(function):
+        return must_work(function, **kwargs)
+    return wrap
+
+
+def must_work(function, maybe=False, seq_ratio=None, seq_ids=False, illegal_chars=None, pattern=None):
     """Fail if any output is empty.
 
     maybe: touch output and return if any input is empty
@@ -325,42 +332,42 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, illegal_chars=None, pa
     pattern: pattern for determing input files to consider
 
     """
+    if globals_.options.touch_files_only or globals_.options.just_print:
+        return function
+
     if pattern is None:
         pattern = '*'
-    def wrap(fun):
-        if globals_.options.touch_files_only or globals._options.just_print:
-            return fun
-        @wraps(fun)  # necessary because ruffus uses function name internally
-        def wrapped(infiles, outfiles, *args, **kwargs):
-            if maybe:
-                if any(os.stat(f).st_size == 0 for f in traverse(strlist(infiles))):
-                    for f in traverse(strlist(outfiles)):
-                        touch(f)
-                    return
-            fun(infiles, outfiles, *args, **kwargs)
-            infiles = list(traverse(strlist(infiles)))
-            infiles = list(f for f in infiles if fnmatch(f, pattern))
-            outfiles = strlist(outfiles)
-            ensure_not_empty(outfiles)
-            if seq_ids:
-                assert len(outfiles) == 1
-                check_seq_ids(infiles, outfiles[0])
-            if seq_ratio is not None:
-                assert len(outfiles) == 1
-                check_seq_ratio(infiles, outfiles[0], seq_ratio)
-            if illegal_chars:
-                for f in outfiles:
-                    check_illegal_chars(f, illegal_chars)
-        return wrapped
-    return wrap
+
+    @wraps(function)  # necessary because ruffus uses function name internally
+    def wrapped(infiles, outfiles, *args, **kwargs):
+        if maybe:
+            if any(os.stat(f).st_size == 0 for f in traverse(strlist(infiles))):
+                for f in traverse(strlist(outfiles)):
+                    touch(f)
+                return
+        function(infiles, outfiles, *args, **kwargs)
+        infiles = list(traverse(strlist(infiles)))
+        infiles = list(f for f in infiles if fnmatch(f, pattern))
+        outfiles = strlist(outfiles)
+        ensure_not_empty(outfiles)
+        if seq_ids:
+            assert len(outfiles) == 1
+            check_seq_ids(infiles, outfiles[0])
+        if seq_ratio is not None:
+            assert len(outfiles) == 1
+            check_seq_ratio(infiles, outfiles[0], seq_ratio)
+        if illegal_chars:
+            for f in outfiles:
+                check_illegal_chars(f, illegal_chars)
+    return wrapped
 
 
 def must_produce(n):
     """Check that at least `n` files match the pathname glob"""
-    def wrap(fun):
-        @wraps(fun)
+    def wrap(function):
+        @wraps(function)
         def wrapped(infiles, outfiles, pathname, *args, **kwargs):
-            fun(infiles, outfiles, pathname, *args, **kwargs)
+            function(infiles, outfiles, pathname, *args, **kwargs)
             n_produced = len(glob(pathname))
             if n_produced < n:
                 raise Exception('Task was supposed to produce at least {}'

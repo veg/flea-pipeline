@@ -8,7 +8,7 @@ from Bio import SeqIO
 
 import pipeline_globals as globals_
 from DNAcons import consfile
-from util import must_work, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter
+from util import must_work_decorator, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter
 
 
 hyphy_script_dir = os.path.join(globals_.script_dir, 'hyphy_scripts')
@@ -29,7 +29,7 @@ def hyphy_results(s):
     return os.path.join(hyphy_results_dir, s)
 
 
-@must_work(globals_.options)
+@must_work_decorator()
 def copy_alignment(infile, outfile):
     # rename sequence ids to match those expected by HYPHY:
     # VXX_number_copynumber
@@ -52,7 +52,7 @@ def copy_alignment(infile, outfile):
             raise Exception('record id not found in input file')
     SeqIO.write(records, outfile, 'fasta')
 
-@must_work(globals_.options)
+@must_work_decorator()
 def write_dates(infile, outfile):
     # NOTE: we assume the first part of the record id is the timestamp
     # id, followed by an underscore.
@@ -76,7 +76,7 @@ def mrca(infile, recordfile, outfile, oldest_id):
     consfile(recordfile, outfile, id_str="mrca", ungap=False)
 
 
-@must_work(globals_.options, illegal_chars='')
+@must_work_decorator(illegal_chars='')
 def compute_mrca(infile, outfile):
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
     oldest_timepoint = min(globals_.timepoints, key=strptime)
@@ -93,36 +93,36 @@ def hyphy_call(script_file, name, args):
     with open(infile, 'w') as handle:
         handle.write(in_str)
     cmd = '{} {} < {}'.format(globals_.config.get('Paths', 'hyphy'), script_file, infile)
-    maybe_qsub(cmd, globals_.config, name=name)
+    maybe_qsub(cmd, name=name)
 
 
-@must_work(globals_.options)
+@must_work_decorator()
 def compute_hxb2_coords(infile, outfile):
     hxb2_script = hyphy_script('HXB2partsSplitter.bf')
     hyphy_call(hxb2_script, 'hxb2_coords', [infile, outfile])
 
 
-@must_work(globals_.options)
+@must_work_decorator()
 def evo_history(infiles, outfile):
     hyphy_call(hyphy_script("obtainEvolutionaryHistory.bf"),
                'evo_history', [hyphy_data_dir])
 
 
-@must_work(globals_.options)
+@must_work_decorator()
 def aa_freqs(infile, outfile):
     hyphy_call(hyphy_script("aminoAcidFrequencies.bf"),
                'aa_freqs',
                [hyphy_data_dir])
 
 
-@must_work(globals_.options)
+@must_work_decorator()
 def turnover(infile, outfile):
     script_path = os.path.join(globals_.script_dir, 'AAturn.jl')
     call("julia {script} {infile} {outfile} 0.01".format(script=script_path,
                                                          infile=infile, outfile=outfile))
 
 
-@must_work(globals_.options)
+@must_work_decorator()
 def run_fubar(infile, outfile):
     hyphy_call(hyphy_script('runFUBAR.bf'), 'fubar', [hyphy_data_dir])
 
@@ -133,8 +133,7 @@ def make_hyphy_pipeline(name=None):
         name = "hyphy_pipeline"
     pipeline = Pipeline(name)
 
-    n_local_jobs, n_remote_jobs = n_jobs(globals_.config)
-    is_active = globals_.config.getboolean('Tasks', 'hyphy')
+    n_local_jobs, n_remote_jobs = n_jobs()
 
     copy_task = pipeline.transform(copy_alignment,
                                     input=None,
@@ -144,7 +143,7 @@ def make_hyphy_pipeline(name=None):
     copy_task.mkdir(hyphy_input_dir)
     copy_task.mkdir(hyphy_results_dir)
     pipeline.set_head_tasks([copy_task])
-    
+
     dates_task = pipeline.transform(write_dates,
                                     input=copy_task,
                                     filter=formatter(),
@@ -162,7 +161,6 @@ def make_hyphy_pipeline(name=None):
                                      filter=formatter(),
                                      output=hyphy_input('merged.prot.parts'))
     coords_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-    coords_task.active_if(is_active)
 
     evo_history_output = list(hyphy_results(f) for f in ('rates_pheno.tsv',
                                                          'trees.json',
@@ -172,26 +170,21 @@ def make_hyphy_pipeline(name=None):
                                       input=[dates_task, coords_task, mrca_task, copy_task],
                                       output=evo_history_output)
     evo_history_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-    evo_history_task.active_if(is_active)
 
     aa_freqs_task = pipeline.merge(aa_freqs,
                                    input=[dates_task, mrca_task, evo_history_task, copy_task],
                                    output=hyphy_results('frequencies.json'))
     aa_freqs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-    aa_freqs_task.active_if(is_active)
-
 
     turnover_task = pipeline.transform(turnover,
                                        input=aa_freqs_task,
                                        filter=formatter(),
                                        output=hyphy_results('turnover.json'))
     turnover_task.jobs_limit(n_local_jobs, local_job_limiter)
-    turnover_task.active_if(is_active)
 
     fubar_task = pipeline.merge(run_fubar,
                                 input=[dates_task, evo_history_task, copy_task],
                                 output=hyphy_results('rates.json'))
     fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-    fubar_task.active_if(is_active)
 
     return pipeline

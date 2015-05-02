@@ -140,11 +140,6 @@ if not os.path.exists(configfile):
 config = ConfigParser(interpolation=ExtendedInterpolation())
 config.read(configfile)
 
-
-# job handling
-n_local_jobs, n_remote_jobs = n_jobs(config)
-options.jobs = max(n_local_jobs, n_remote_jobs)
-
 # write a copy of the configuration file 
 with open(os.path.join(data_dir, 'run_parameters.config'), 'w') as handle:
     config.write(handle)
@@ -159,13 +154,27 @@ globals_.timepoint_ids = timepoint_ids
 globals_.logger = logger
 globals_.logger_mutex = logger_mutex
 
+# job handling
+n_local_jobs, n_remote_jobs = n_jobs()
+options.jobs = max(n_local_jobs, n_remote_jobs)
+
 # construct the pipeline
 pipeline = Pipeline('flea')
 
-if not do_alignment:
-    from hyphy_pipeline import make_hyphy_pipeline
-    pipeline = make_hyphy_pipeline()
-    pipeline.set_input(input=options.alignment)
+from alignment_pipeline import make_alignment_pipeline
+from hyphy_pipeline import make_hyphy_pipeline
+
+if do_alignment:
+    inputs = list(t.file for t in timepoints)
+    p1 = make_alignment_pipeline()
+    p1.set_input(input=inputs)
+    if globals_.config.getboolean('Tasks', 'hyphy'):
+        p2 = make_hyphy_pipeline()
+        p2.set_input(input=p1)
+else:
+    if globals_.config.getboolean('Tasks', 'hyphy'):
+        pipeline = make_hyphy_pipeline()
+        pipeline.set_input(input=options.alignment)
 
 
 if __name__ == '__main__':
