@@ -115,14 +115,16 @@ def format_walltime(seconds):
     return "{:02}:{:02}:{:02}".format(h, m, s)
 
 
-def qsub(cmd, outfiles=None, queue=None, nodes=1, ppn=1, sleep=5,
+def qsub(cmd, outfiles=None, control_dir=None, queue=None, nodes=1, ppn=1, sleep=5,
          walltime=3600, waittime=10, name=None, stdout=None, stderr=None):
     """A blocking qsub."""
+    if control_dir is None:
+        control_dir = '.'
     if walltime < 1:
         raise Exception('walltime={} < 1'.format(walltime))
     if name is None:
         name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
-    sentinel = '{}-{}.complete'.format(name, uuid4())
+    sentinel = os.path.join(control_dir, '{}-{}.complete'.format(name, uuid4()))
     mycmd = '{}; echo \$? > {}'.format(cmd, sentinel)
     fwalltime = format_walltime(walltime)
     qsub_cmd = ('qsub -V -W umask=077 -l'
@@ -130,10 +132,12 @@ def qsub(cmd, outfiles=None, queue=None, nodes=1, ppn=1, sleep=5,
                 ' -d `pwd` -w `pwd`'.format(fwalltime, nodes, ppn, name=name))
     if queue is not None:
         qsub_cmd = "{} -q {}".format(qsub_cmd, queue)
-    if stdout is not None:
-        qsub_cmd = '{} -o {}'.format(qsub_cmd, stdout)
-    if stderr is not None:
-        qsub_cmd = '{} -e {}'.format(qsub_cmd, stderr)
+    if stdout is None:
+        stdout = control_dir
+    qsub_cmd = '{} -o {}'.format(qsub_cmd, stdout)
+    if stderr is None:
+        stderr = control_dir
+    qsub_cmd = '{} -e {}'.format(qsub_cmd, stderr)
     full_cmd = 'echo "{}" | {}'.format(mycmd, qsub_cmd)
     try:
         job_id = call(full_cmd)
@@ -153,7 +157,9 @@ def qsub(cmd, outfiles=None, queue=None, nodes=1, ppn=1, sleep=5,
 
 def maybe_qsub(cmd, **kwargs):
     if globals_.config.getboolean('Jobs', 'use_cluster'):
-        qsub(cmd, walltime=globals_.config.getint('Jobs', 'walltime'),
+        qsub(cmd,
+             control_dir=globals_.qsub_dir,
+             walltime=globals_.config.getint('Jobs', 'walltime'),
              queue=globals_.config.get('Jobs', 'queue'),
              nodes=globals_.config.get('Jobs', 'nodes'),
              ppn=globals_.config.get('Jobs', 'ppn'), **kwargs)

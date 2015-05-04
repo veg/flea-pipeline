@@ -149,10 +149,15 @@ globals_.config = config
 globals_.options = options
 globals_.script_dir = script_dir
 globals_.data_dir = data_dir
+globals_.qsub_dir = os.path.join(data_dir, 'qsub_files')
 globals_.timepoints = timepoints
 globals_.timepoint_ids = timepoint_ids
 globals_.logger = logger
 globals_.logger_mutex = logger_mutex
+
+
+if not os.path.exists(globals_.qsub_dir):
+    os.mkdir(globals_.qsub_dir)
 
 # job handling
 n_local_jobs, n_remote_jobs = n_jobs()

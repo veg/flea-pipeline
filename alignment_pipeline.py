@@ -303,16 +303,16 @@ def combine_pairs(infiles, outfiles, basename):
 @must_work()
 def codon_align(infile, outfile):
     cmd = "{} -R {} {}".format(globals_.config.get('Paths', 'bealign'), infile, outfile)
-    stdout = '{}.stdout'.format(outfile)
-    stderr = '{}.stderr'.format(outfile)
+    stdout = os.path.join(globals_.qsub_dir, '{}.stdout'.format(outfile))
+    stderr = os.path.join(globals_.qsub_dir, '{}.stderr'.format(outfile))
     maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
 @must_work()
 def convert_bam_to_fasta(infile, outfile):
     cmd = "{} {} {}".format(globals_.config.get('Paths', 'bam2msa'), infile, outfile)
-    stdout = '{}.stdout'.format(outfile)
-    stderr = '{}.stderr'.format(outfile)
+    stdout = os.path.join(globals_.qsub_dir, '{}.stdout'.format(outfile))
+    stderr = os.path.join(globals_.qsub_dir, '{}.stderr'.format(outfile))
     maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
