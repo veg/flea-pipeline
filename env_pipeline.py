@@ -169,11 +169,11 @@ if do_alignment:
     p1 = make_alignment_pipeline()
     p1.set_input(input=inputs)
     if globals_.config.getboolean('Tasks', 'hyphy'):
-        p2 = make_hyphy_pipeline()
+        p2 = make_hyphy_pipeline(standalone=False)
         p2.set_input(input=p1)
 else:
     if globals_.config.getboolean('Tasks', 'hyphy'):
-        pipeline = make_hyphy_pipeline()
+        pipeline = make_hyphy_pipeline(standalone=True)
         pipeline.set_input(input=options.alignment)
 
 

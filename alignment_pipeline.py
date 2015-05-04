@@ -11,7 +11,7 @@ from Bio import SeqIO
 
 from util import maybe_qsub, cat_files, touch, strlist, traverse
 from util import new_record_seq_str, insert_gaps, update_record_seq
-from util import must_work, must_work_decorator, must_produce
+from util import must_work, must_produce
 from util import local_job_limiter, remote_job_limiter
 from util import check_suffix, check_basename, n_jobs
 
@@ -30,7 +30,7 @@ def mafft(infile, outfile):
     maybe_qsub(cmd, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
 
 
-@must_work_decorator()
+@must_work()
 def filter_fastq(infile, outfile):
     qmax = globals_.config.get('Parameters', 'qmax')
     min_len = globals_.config.get('Parameters', 'min_sequence_length')
@@ -82,7 +82,7 @@ def usearch_global_get_pairs(infile, dbfile, identity, name=None):
             return list(line.strip().split("\t") for line in f.readlines())
 
 
-@must_work_decorator()
+@must_work()
 def filter_uncontaminated(infiles, outfile):
     uncontam, _ = infiles
     usearch_global_pairs(uncontam, outfile, globals_.config.get('Parameters', 'reference_db'),
@@ -90,12 +90,12 @@ def filter_uncontaminated(infiles, outfile):
                          name="filter-uncontaminated")
 
 
-@must_work_decorator(seq_ratio=(2, 1))
+@must_work(seq_ratio=(2, 1))
 def shift_correction(infile, outfile):
     correct_shifts_fasta(infile, outfile, keep=True)
 
 
-@must_work_decorator(seq_ids=True)
+@must_work(seq_ids=True)
 def sort_by_length(infile, outfile):
     cmd = ('{usearch} -sortbylength {infile} -fastaout {outfile}'.format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
@@ -136,54 +136,77 @@ def select_clusters(infile, outfile):
     SeqIO.write(records, outfile, 'fasta')
 
 
-@must_work_decorator(maybe=True, illegal_chars='-')
+# making wrappers like this is necessary because nested function
+# definitions are not picklable.
+
+@must_work(maybe=True)
+def mafft_wrapper_maybe(infile, outfile):
+    mafft(infile, outfile)
+
+
+@must_work(seq_ids=True)
+def mafft_wrapper_seq_ids(infile, outfile):
+    mafft(infile, outfile)
+
+
+@must_work(seq_ids=True)
+def cat_wrapper(infiles, outfile):
+    cat_files(infiles, outfile)
+
+
+@must_work()
+def translate_wrapper(infile, outfile):
+    translate(infile, outfile)
+
+
+@must_work(maybe=True, illegal_chars='-')
 def cluster_consensus(infile, outfile):
     ambifile = '{}.info'.format(outfile[:-len('.fasta')])
     consfile(infile, outfile, ambifile, ungap=True)
 
 
-@must_work_decorator()
+@must_work()
 def consensus_db_search(infile, outfile):
     usearch_global_pairs(infile, outfile, globals_.config.get('Parameters', 'reference_db'),
                          globals_.config.get('Parameters', 'reference_identity'),
                          name='consensus-db-search')
 
 
-@must_work_decorator()
+@must_work()
 def consensus_shift_correction(infile, outfile):
     n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep=False)
     sumfile = '{}.summary'.format(outfile)
     write_correction_result(n_seqs, n_fixed, sumfile)
 
 
-@must_work_decorator(seq_ids=True)
+@must_work(seq_ids=True)
 def sort_consensus(infile, outfile):
     cmd = ('{usearch} -sortbylength {infile} -fastaout {outfile}'.format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
     maybe_qsub(cmd, outfiles=outfile, name='sort-consensus')
 
 
-@must_work_decorator()
+@must_work()
 def unique_consensus(infile, outfile):
     cmd = ('{usearch} -cluster_fast {infile} -id 1 -centroids {outfile}'.format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
     maybe_qsub(cmd, outfiles=outfile, name='unique_consensus')
 
 
-@must_work_decorator()
+@must_work()
 def perfect_orfs(infile, outfile):
     perfect_file(infile, outfile, min_len=int(globals_.config.get('Parameters', 'min_orf_length')),
                  table=1, verbose=False)
 
 
-@must_work_decorator()
+@must_work()
 def make_individual_dbs(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
     maybe_qsub(cmd,  outfiles=outfile, name='make-individual-dbs')
 
 
-@must_work_decorator(seq_ratio=(1, 1), pattern='*perfect*fasta')
+@must_work(seq_ratio=(1, 1), pattern='*perfect*fasta')
 def add_copynumber(infiles, outfile, basename):
     rawfile, perfectfile, dbfile = infiles
     check_suffix(perfectfile, '.perfect.fasta')
@@ -208,9 +231,9 @@ def add_copynumber(infiles, outfile, basename):
                 outfile, 'fasta')
 
 
-@must_work_decorator(seq_ids=True)
+@must_work(seq_ids=True)
 def cat_all_perfect(infiles, outfile):
-    if len(infiles) != len(timepoints):
+    if len(infiles) != len(globals_.timepoints):
         raise Exception('Number of input files does not match number'
                         ' of timepoints')
     cat_files(infiles, outfile)
@@ -222,14 +245,14 @@ def pause(filename):
               '\nPress Enter to continue.'.format(filename))
 
 
-@must_work_decorator()
+@must_work()
 def backtranslate_alignment(infiles, outfile):
     perfect, aligned = infiles
     check_basename(perfect, 'all_perfect_orfs.fasta')
     backtranslate(aligned, perfect, outfile)
 
 
-@must_work_decorator()
+@must_work()
 def degap_backtranslated_alignment(infile, outfile):
     # we need this in case sequences were removed during hand-editing
     # of the output of `codon_align_perfect()`.
@@ -238,7 +261,7 @@ def degap_backtranslated_alignment(infile, outfile):
     SeqIO.write(processed, outfile, 'fasta')
 
 
-@must_work_decorator()
+@must_work()
 def make_full_db(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
@@ -246,19 +269,19 @@ def make_full_db(infile, outfile):
 
 
 
-@must_work_decorator()
+@must_work()
 def full_timestep_pairs(infiles, outfile):
-    infile, (dbfile,) = infiles
+    infile, dbfile = infiles
     identity = globals_.config.get('Parameters', 'raw_to_consensus_identity')
     usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True,
                          name='full-timestep-pairs')
 
 
-@must_work_decorator()
+@must_work()
 def combine_pairs(infiles, outfiles, basename):
     for f in outfiles:
         os.unlink(f)
-    infile, (perfectfile,) = infiles
+    infile, perfectfile = infiles
     seqsfile = '{}.fasta'.format(basename)
     with open(infile) as handle:
         pairs = list(line.strip().split("\t") for line in handle.readlines())
@@ -277,7 +300,7 @@ def combine_pairs(infiles, outfiles, basename):
         SeqIO.write(records, outfile, "fasta")
 
 
-@must_work_decorator()
+@must_work()
 def codon_align(infile, outfile):
     cmd = "{} -R {} {}".format(globals_.config.get('Paths', 'bealign'), infile, outfile)
     stdout = '{}.stdout'.format(outfile)
@@ -285,7 +308,7 @@ def codon_align(infile, outfile):
     maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
-@must_work_decorator()
+@must_work()
 def convert_bam_to_fasta(infile, outfile):
     cmd = "{} {} {}".format(globals_.config.get('Paths', 'bam2msa'), infile, outfile)
     stdout = '{}.stdout'.format(outfile)
@@ -293,9 +316,9 @@ def convert_bam_to_fasta(infile, outfile):
     maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
-@must_work_decorator()
+@must_work()
 def insert_gaps_task(infiles, outfile):
-    infile, (backtranslated,) = infiles
+    infile, backtranslated = infiles
     ref, *seqs = list(SeqIO.parse(infile, 'fasta'))
     ref_gapped = list(r for r in SeqIO.parse(backtranslated, 'fasta')
                       if r.id == ref.id)[0]
@@ -363,8 +386,8 @@ def make_alignment_pipeline(name=None):
     select_clusters_task.jobs_limit(n_local_jobs, local_job_limiter)
 
 
-    align_clusters_task = pipeline.transform(must_work(mafft, maybe=True),
-                                             name='align_clusters',
+    align_clusters_task = pipeline.transform(mafft_wrapper_maybe,
+                                             name="align_clusters",
                                              input=select_clusters_task,
                                              filter=suffix('.fasta'),
                                              output='.aligned.fasta')
@@ -378,8 +401,8 @@ def make_alignment_pipeline(name=None):
     cluster_consensus_task.jobs_limit(n_local_jobs, local_job_limiter)
 
 
-    cat_clusters_task = pipeline.collate(must_work(cat_files, seq_ids=True),
-                                         name='cat_clusters',
+    cat_clusters_task = pipeline.collate(cat_wrapper,
+                                         name="cat_clusters",
                                          input=cluster_consensus_task,
                                          filter=formatter(),
                                          output='{subdir[0][0]}.cons.fasta')
@@ -441,21 +464,20 @@ def make_alignment_pipeline(name=None):
     cat_all_perfect_task.jobs_limit(n_local_jobs, local_job_limiter)
 
 
-    translate_perfect_task = pipeline.transform(must_work(translate),
+    translate_perfect_task = pipeline.transform(translate_wrapper,
                                                 name='translate_perfect',
                                                 input=cat_all_perfect_task,
                                                 filter=suffix('.fasta'),
                                                 output='.translated.fasta')
     translate_perfect_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    codon_align_perfect_task = pipeline.transform(must_work(mafft, seq_ids=True),
+    codon_align_perfect_task = pipeline.transform(mafft_wrapper_seq_ids,
                                                   name='codon_align_perfect',
                                                   input=translate_perfect_task,
                                                   filter=suffix('.fasta'),
                                                   output='.aligned.fasta')
     codon_align_perfect_task.jobs_limit(n_local_jobs, local_job_limiter)
-    codon_align_perfect_task.posttask(partial(pause, 'merged.prot'))
-
+    codon_align_perfect_task.posttask(partial(pause, 'protein alignment'))
 
     backtranslate_alignment_task = pipeline.merge(backtranslate_alignment,
                                               input=[cat_all_perfect_task,
@@ -514,7 +536,7 @@ def make_alignment_pipeline(name=None):
                                               output='.gapped.fasta')
         insert_gaps_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-        merge_all_timepoints_task = pipeline.merge(must_work(cat_files, seq_ids=True),
+        merge_all_timepoints_task = pipeline.merge(cat_wrapper,
                                                    name='merge_all_timepoints',
                                                    input=insert_gaps_task,
                                                    output='all_timepoints.aligned.fasta')

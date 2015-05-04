@@ -317,13 +317,7 @@ def check_illegal_chars(f, chars):
                             ' of file "{}"'.format(found, r.id, f))
 
 
-def must_work_decorator(**kwargs):
-    def wrap(function):
-        return must_work(function, **kwargs)
-    return wrap
-
-
-def must_work(function, maybe=False, seq_ratio=None, seq_ids=False, illegal_chars=None, pattern=None):
+def must_work(maybe=False, seq_ratio=None, seq_ids=False, illegal_chars=None, pattern=None):
     """Fail if any output is empty.
 
     maybe: touch output and return if any input is empty
@@ -332,34 +326,36 @@ def must_work(function, maybe=False, seq_ratio=None, seq_ids=False, illegal_char
     pattern: pattern for determing input files to consider
 
     """
-    if globals_.options.touch_files_only or globals_.options.just_print:
-        return function
-
     if pattern is None:
         pattern = '*'
 
-    @wraps(function)  # necessary because ruffus uses function name internally
-    def wrapped(infiles, outfiles, *args, **kwargs):
-        if maybe:
-            if any(os.stat(f).st_size == 0 for f in traverse(strlist(infiles))):
-                for f in traverse(strlist(outfiles)):
-                    touch(f)
-                return
-        function(infiles, outfiles, *args, **kwargs)
-        infiles = list(traverse(strlist(infiles)))
-        infiles = list(f for f in infiles if fnmatch(f, pattern))
-        outfiles = strlist(outfiles)
-        ensure_not_empty(outfiles)
-        if seq_ids:
-            assert len(outfiles) == 1
-            check_seq_ids(infiles, outfiles[0])
-        if seq_ratio is not None:
-            assert len(outfiles) == 1
-            check_seq_ratio(infiles, outfiles[0], seq_ratio)
-        if illegal_chars:
-            for f in outfiles:
-                check_illegal_chars(f, illegal_chars)
-    return wrapped
+    def wrap(function):
+        if globals_.options.touch_files_only or globals_.options.just_print:
+            return function
+
+        @wraps(function)  # necessary because ruffus uses function name internally
+        def wrapped(infiles, outfiles, *args, **kwargs):
+            if maybe:
+                if any(os.stat(f).st_size == 0 for f in traverse(strlist(infiles))):
+                    for f in traverse(strlist(outfiles)):
+                        touch(f)
+                    return
+            function(infiles, outfiles, *args, **kwargs)
+            infiles = list(traverse(strlist(infiles)))
+            infiles = list(f for f in infiles if fnmatch(f, pattern))
+            outfiles = strlist(outfiles)
+            ensure_not_empty(outfiles)
+            if seq_ids:
+                assert len(outfiles) == 1
+                check_seq_ids(infiles, outfiles[0])
+            if seq_ratio is not None:
+                assert len(outfiles) == 1
+                check_seq_ratio(infiles, outfiles[0], seq_ratio)
+            if illegal_chars:
+                for f in outfiles:
+                    check_illegal_chars(f, illegal_chars)
+        return wrapped
+    return wrap
 
 
 def must_produce(n):
