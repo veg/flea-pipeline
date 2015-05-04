@@ -317,7 +317,7 @@ def convert_bam_to_fasta(infile, outfile):
 
 
 @must_work()
-def insert_gaps_task(infiles, outfile):
+def insert_gaps_wrapper(infiles, outfile):
     infile, backtranslated = infiles
     ref, *seqs = list(SeqIO.parse(infile, 'fasta'))
     ref_gapped = list(r for r in SeqIO.parse(backtranslated, 'fasta')
@@ -529,7 +529,7 @@ def make_alignment_pipeline(name=None):
                                                        output='.fasta')
         convert_bam_to_fasta_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-        insert_gaps_task = pipeline.transform(insert_gaps,
+        insert_gaps_task = pipeline.transform(insert_gaps_wrapper,
                                               input=convert_bam_to_fasta_task,
                                               filter=suffix('.fasta'),
                                               add_inputs=add_inputs(backtranslate_alignment),
