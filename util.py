@@ -299,7 +299,7 @@ def check_seq_number(filename, min_n):
     found_n = sum(1 for _ in SeqIO.parse(filename, 'fasta'))
     if found_n < min_n:
         raise Exception('file "{}" must have at least {} entries,'
-                        'but it only has {}'.format(min_n, found_n))
+                        'but it only has {}'.format(filename, min_n, found_n))
 
 
 def check_seq_ids(inputs, output):
