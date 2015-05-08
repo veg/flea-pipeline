@@ -4,6 +4,7 @@ from random import sample
 import tempfile
 from functools import partial
 from collections import defaultdict
+import json
 
 from ruffus import Pipeline, suffix, formatter, add_inputs
 
@@ -206,29 +207,34 @@ def make_individual_dbs(infile, outfile):
     maybe_qsub(cmd,  outfiles=outfile, name='make-individual-dbs')
 
 
-@must_work(seq_ratio=(1, 1), pattern='*perfect*fasta')
-def add_copynumber(infiles, outfile, basename):
+# FIXME: this is run with remote job limiter, but part of its task is run locally
+@must_work()
+def compute_copynumbers(infiles, outfile, basename):
     rawfile, perfectfile, dbfile = infiles
     check_suffix(perfectfile, '.perfect.fasta')
     check_suffix(dbfile, '.udb')
     identity = globals_.config.get('Parameters', 'raw_to_consensus_identity')
     pairfile = '{}.copynumber.pairs'.format(basename)
     usearch_global_pairs(rawfile, pairfile, dbfile, identity,
-                         nums_only=True, name='add-copynumber')
+                         nums_only=True, name='compute-copynumber')
     with open(pairfile) as f:
             pairs = list(line.strip().split("\t") for line in f.readlines())
-    consensus_counts = defaultdict(lambda: 1)
+    # FIXME: what if no sequence maps to a consensus?
+    consensus_counts = defaultdict(lambda: 0)
     for raw_id, ref_id in pairs:
-        consensus_counts[str(ref_id).upper()] += 1
-    def new_record(r):
-        r = r[:]
-        _id = str(r.id).upper()
-        r.id = "{}_{}".format(_id, consensus_counts[_id])
-        r.name = ''
-        r.description = ''
-        return r
-    SeqIO.write((new_record(r) for r in SeqIO.parse(perfectfile, 'fasta')),
-                outfile, 'fasta')
+        consensus_counts[ref_id] += 1
+    with open(outfile, 'w') as handle:
+        json.dump(consensus_counts, handle, separators=(",\n", ":"))
+
+
+@must_work()
+def merge_copynumbers(infiles, outfile):
+    result = {}
+    for infile in infiles:
+        with open(infile) as handle:
+            result.update(json.load(handle))
+    with open(outfile, 'w') as handle:
+        json.dump(result, handle, separators=(",\n", ":"))
 
 
 @must_work(seq_ids=True)
@@ -450,19 +456,22 @@ def make_alignment_pipeline(name=None):
     make_individual_dbs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
 
-    add_copynumber_task = pipeline.collate(add_copynumber,
-                                           input=[perfect_orfs_task, make_individual_dbs_task, shift_correction_task],
-                                           filter=formatter(r'(?P<NAME>.+).qfilter'),
-                                           output='{NAME[0]}.copynumber.fasta',
-                                           extras=['{NAME[0]}'])
-    add_copynumber_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+    compute_copynumbers_task = pipeline.collate(compute_copynumbers,
+                                               input=[perfect_orfs_task, make_individual_dbs_task, shift_correction_task],
+                                               filter=formatter(r'(?P<NAME>.+).qfilter'),
+                                               output='{NAME[0]}.copynumbers.json',
+                                               extras=['{NAME[0]}'])
+    compute_copynumbers_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
+    merge_copynumbers_task = pipeline.merge(merge_copynumbers,
+                                            input=compute_copynumbers_task,
+                                            output='copynumbers.json')
+    merge_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     cat_all_perfect_task = pipeline.merge(cat_all_perfect,
-                                          input=add_copynumber_task,
+                                          input=perfect_orfs_task,
                                           output="all_perfect_orfs.fasta")
     cat_all_perfect_task.jobs_limit(n_local_jobs, local_job_limiter)
-
 
     translate_perfect_task = pipeline.transform(translate_wrapper,
                                                 name='translate_perfect',
