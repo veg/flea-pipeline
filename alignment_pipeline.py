@@ -186,7 +186,7 @@ def sort_consensus(infile, outfile):
     maybe_qsub(cmd, outfiles=outfile, name='sort-consensus')
 
 
-@must_work()
+@must_work(min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
 def unique_consensus(infile, outfile):
     cmd = ('{usearch} -cluster_fast {infile} -id 1 -centroids {outfile}'.format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
