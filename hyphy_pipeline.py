@@ -108,7 +108,7 @@ def hyphy_call(script_file, name, args):
         in_str = "".join("{}\n".format(i) for i in args)
     else:
         in_str = ''
-    infile = '{}.stdin'.format(name)
+    infile = os.path.join(globals_.data_dir, '{}.stdin'.format(name))
     with open(infile, 'w') as handle:
         handle.write(in_str)
     cmd = '{} {} < {}'.format(globals_.config.get('Paths', 'hyphy'), script_file, infile)
