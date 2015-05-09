@@ -140,7 +140,7 @@ if not os.path.exists(configfile):
 config = ConfigParser(interpolation=ExtendedInterpolation())
 config.read(configfile)
 
-# write a copy of the configuration file 
+# write a copy of the configuration file
 with open(os.path.join(data_dir, 'run_parameters.config'), 'w') as handle:
     config.write(handle)
 
@@ -170,7 +170,7 @@ from alignment_pipeline import make_alignment_pipeline
 from hyphy_pipeline import make_hyphy_pipeline
 
 if do_alignment:
-    inputs = list(t.file for t in timepoints)
+    inputs = list(os.path.join(data_dir, t.file) for t in timepoints)
     p1 = make_alignment_pipeline()
     p1.set_input(input=inputs)
     if globals_.config.getboolean('Tasks', 'hyphy'):
