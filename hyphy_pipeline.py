@@ -32,8 +32,11 @@ def hyphy_results(s):
 
 @must_work()
 def copy_rename_alignment(infile, outfile):
-    # rename sequence ids to match those expected by HYPHY:
-    # VXX_number_copynumber
+    """rename sequence ids to match those expected by HYPHY:
+
+    VXX_number
+
+    """
     records = list(SeqIO.parse(infile, 'fasta'))
     for r in records:
         found = False
@@ -44,7 +47,7 @@ def copy_rename_alignment(infile, outfile):
                 rest = rest.strip('_')
                 if not rest:
                     raise Exception('sequence id has no unique part')
-                r.id = '{}_{}_1'.format(v, rest)
+                r.id = '{}_{}'.format(v, rest).upper()
                 r.name = ''
                 r.description = ''
                 found = True
@@ -57,6 +60,15 @@ def copy_rename_alignment(infile, outfile):
 @must_work()
 def copy_wrapper(infile, outfile):
     shutil.copyfile(infile, outfile)
+
+
+@must_work()
+def generate_copynumbers(infile, outfile):
+    """generate a copynumber of 1 for each id"""
+    records = list(SeqIO.parse(infile, 'fasta'))
+    result = {r.id : 1 for r in records}
+    with open(outfile, 'w') as handle:
+        json.dump(result, handle, separators=(",\n", ":"))
 
 
 @must_work()
@@ -156,6 +168,13 @@ def make_hyphy_pipeline(standalone, name=None):
     copy_task.mkdir(hyphy_input_dir)
     copy_task.mkdir(hyphy_results_dir)
     pipeline.set_head_tasks([copy_task])
+
+    if standalone:
+        copynumbers_task = pipeline.transform(generate_copynumbers,
+                                              input=copy_task,
+                                              filter=formatter(),
+                                              output='copynumbers.json')
+        copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     dates_task = pipeline.transform(write_dates,
                                     input=copy_task,

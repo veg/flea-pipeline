@@ -29,6 +29,9 @@ max_err_rate: 0.01
 qmax: 55
 max_accepts: 300
 max_rejects: 600
+
+# obtainEvolutionaryHistory.bf fails if there are fewer than 3
+# consensus sequences per time point.
 min_n_clusters: 3
 contaminant_identity: 0.98
 reference_identity: 0.8

@@ -295,6 +295,13 @@ def ensure_not_empty(files):
             raise Exception('Empty file: "{}"'.format(f))
 
 
+def check_seq_number(filename, min_n):
+    found_n = sum(1 for _ in SeqIO.parse(filename, 'fasta'))
+    if found_n < min_n:
+        raise Exception('file "{}" must have at least {} entries,'
+                        'but it only has {}'.format(filename, min_n, found_n))
+
+
 def check_seq_ids(inputs, output):
     a_ids = set(r.id for a in inputs for r in SeqIO.parse(a, 'fasta'))
     b_ids = set(r.id for r in SeqIO.parse(output, 'fasta'))
@@ -323,12 +330,13 @@ def check_illegal_chars(f, chars):
                             ' of file "{}"'.format(found, r.id, f))
 
 
-def must_work(maybe=False, seq_ratio=None, seq_ids=False, illegal_chars=None, pattern=None):
+def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None, illegal_chars=None, pattern=None):
     """Fail if any output is empty.
 
     maybe: touch output and return if any input is empty
     seq_ratio: (int, int): ensure numbers of sequences match
     seq_ids: ensure all ids present in input files are in output file
+    min_seqs: minimum number of sequences in the output file
     pattern: pattern for determing input files to consider
 
     """
@@ -351,6 +359,8 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, illegal_chars=None, pa
             infiles = list(f for f in infiles if fnmatch(f, pattern))
             outfiles = strlist(outfiles)
             ensure_not_empty(outfiles)
+            if min_seqs is not None:
+                check_seq_number(outfiles[0], min_seqs)
             if seq_ids:
                 assert len(outfiles) == 1
                 check_seq_ids(infiles, outfiles[0])
