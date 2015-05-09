@@ -379,7 +379,7 @@ def make_alignment_pipeline(name=None):
     cluster_task = pipeline.subdivide(cluster,
                                       input=sort_by_length_task,
                                       filter=formatter(),
-                                      output=os.path.join(globals_.data_dir, '{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta'),
+                                      output='{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta',
                                       extras=['{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta'])
     cluster_task.jobs_limit(n_remote_jobs, remote_job_limiter)
     cluster_task.mkdir(sort_by_length_task, suffix('.fasta'), '.clusters')
@@ -411,7 +411,7 @@ def make_alignment_pipeline(name=None):
                                          name="cat_clusters",
                                          input=cluster_consensus_task,
                                          filter=formatter(),
-                                         output=os.path.join(globals_.data_dir, '{subdir[0][0]}.cons.fasta'))
+                                         output='{path[0]}.cons.fasta')
     cat_clusters_task.jobs_limit(n_local_jobs, local_job_limiter)
 
 
@@ -459,18 +459,18 @@ def make_alignment_pipeline(name=None):
     compute_copynumbers_task = pipeline.collate(compute_copynumbers,
                                                input=[perfect_orfs_task, make_individual_dbs_task, shift_correction_task],
                                                filter=formatter(r'(?P<NAME>.+).qfilter'),
-                                               output=os.path.join(globals_.data_dir, '{NAME[0]}.copynumbers.json'),
-                                               extras=[os.path.join(globals_.data_dir, '{NAME[0]}')])
+                                               output='{path[0]}/{NAME[0]}.copynumbers.json',
+                                               extras=['{path[0]}/{NAME[0]}'])
     compute_copynumbers_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     merge_copynumbers_task = pipeline.merge(merge_copynumbers,
                                             input=compute_copynumbers_task,
-                                            output='copynumbers.json')
+                                            output=os.path.join(globals_.data_dir, 'copynumbers.json'))
     merge_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     cat_all_perfect_task = pipeline.merge(cat_all_perfect,
                                           input=perfect_orfs_task,
-                                          output="all_perfect_orfs.fasta")
+                                          output=os.path.join(globals_.data_dir, "all_perfect_orfs.fasta"))
     cat_all_perfect_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     translate_perfect_task = pipeline.transform(translate_wrapper,
@@ -491,7 +491,7 @@ def make_alignment_pipeline(name=None):
     backtranslate_alignment_task = pipeline.merge(backtranslate_alignment,
                                               input=[cat_all_perfect_task,
                                                      codon_align_perfect_task],
-                                              output='all_backtranslated.fas')
+                                              output=os.path.join(globals_.data_dir, 'all_backtranslated.fas'))
     backtranslate_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     pipeline.set_tail_tasks([backtranslate_alignment_task])
@@ -500,7 +500,7 @@ def make_alignment_pipeline(name=None):
         degap_backtranslated_alignment_task = pipeline.transform(degap_backtranslated_alignment,
                                                                  input=backtranslate_alignment_task,
                                                                  filter=formatter(),
-                                                                 output=os.path.join(globals_.data_dir, 'all_perfect_orfs_degapped.fasta'))
+                                                                 output='{path[0]}/all_perfect_orfs_degapped.fasta')
         degap_backtranslated_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
 
         make_full_db_task = pipeline.transform(make_full_db,
@@ -521,8 +521,8 @@ def make_alignment_pipeline(name=None):
                                                 input=full_timestep_pairs_task,
                                                 filter=formatter('.*/(?P<NAME>.+).pairs.txt'),
                                                 add_inputs=add_inputs(degap_backtranslated_alignment),
-                                                output=os.path.join(globals_.data_dir, '{NAME[0]}.alignments/combined.*.unaligned.fasta'),
-                                                extras=[os.path.join(globals_.data_dir, '{NAME[0]}')])
+                                                output='{path[0]}/{NAME[0]}.alignments/combined.*.unaligned.fasta',
+                                                extras=['{path[0]}/{NAME[0]}'])
         combine_pairs_task.jobs_limit(n_local_jobs, local_job_limiter)
         combine_pairs_task.mkdir(full_timestep_pairs_task, suffix('.pairs.txt'), '.alignments')
 
@@ -548,7 +548,7 @@ def make_alignment_pipeline(name=None):
         merge_all_timepoints_task = pipeline.merge(cat_wrapper,
                                                    name='merge_all_timepoints',
                                                    input=insert_gaps_task,
-                                                   output='all_timepoints.aligned.fasta')
+                                                   output=os.path.join(globals_.data_dir, 'all_timepoints.aligned.fasta'))
         merge_all_timepoints_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     return pipeline
