@@ -459,8 +459,8 @@ def make_alignment_pipeline(name=None):
     compute_copynumbers_task = pipeline.collate(compute_copynumbers,
                                                input=[perfect_orfs_task, make_individual_dbs_task, shift_correction_task],
                                                filter=formatter(r'(?P<NAME>.+).qfilter'),
-                                               output='{path[0]}/{NAME[0]}.copynumbers.json',
-                                               extras=['{path[0]}/{NAME[0]}'])
+                                               output='{NAME[0]}.copynumbers.json',
+                                               extras=['{NAME[0]}'])
     compute_copynumbers_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     merge_copynumbers_task = pipeline.merge(merge_copynumbers,
