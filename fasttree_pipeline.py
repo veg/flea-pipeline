@@ -79,6 +79,19 @@ def make_frequencies_json(infile, outfile):
         json.dump(result, handle, separators=(",\n", ":"))
 
 
+@must_work()
+def make_rates_json(infile, outfile):
+    # FIXME: this is just a dummy file.
+    records = SeqIO.parse(infile, "fasta")
+    first = list(islice(records, 1))[0]
+    n_posns = len(first)
+    dummy_rates = [[0, 0, 0, 0]] * n_posns
+    result = {t.date : dummy_rates for t in globals_.timepoints}
+    result['Combined'] = dummy_rates
+    with open(outfile, 'w') as handle:
+        json.dump(result, handle)
+
+
 def make_fasttree_pipeline(name=None):
     """Factory for the FastTree sub-pipeline."""
     if name is None:
@@ -131,6 +144,12 @@ def make_fasttree_pipeline(name=None):
                                                filter=formatter(),
                                                output=os.path.join(pipeline_dir, 'frequencies.json'))
     frequencies_json_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    rates_json_task = pipeline.transform(make_rates_json,
+                                         input=translate_task,
+                                         filter=formatter(),
+                                         output=os.path.join(pipeline_dir, 'rates.json'))
+    rates_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     pipeline.set_head_tasks([translate_task, mrca_task])
     return pipeline
