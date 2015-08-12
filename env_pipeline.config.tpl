@@ -43,8 +43,9 @@ min_orf_length: 750
 
 [Tasks]
 pause_after_codon_alignment: False
-align_full: True
+align_full: False
 hyphy: True
+fasttree: True
 
 [Misc]
 # when a task gets re-run

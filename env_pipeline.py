@@ -163,11 +163,9 @@ if not os.path.exists(globals_.qsub_dir):
 n_local_jobs, n_remote_jobs = n_jobs()
 options.jobs = max(n_local_jobs, n_remote_jobs)
 
-# construct the pipeline
-pipeline = Pipeline('flea')
-
 from alignment_pipeline import make_alignment_pipeline
 from hyphy_pipeline import make_hyphy_pipeline
+from fasttree_pipeline import make_fasttree_pipeline
 
 if do_alignment:
     inputs = list(os.path.join(data_dir, t.file) for t in timepoints)
@@ -176,10 +174,16 @@ if do_alignment:
     if globals_.config.getboolean('Tasks', 'hyphy'):
         p2 = make_hyphy_pipeline(standalone=False)
         p2.set_input(input=p1)
+    if globals_.config.getboolean('Tasks', 'fasttree'):
+        p3 = make_fasttree_pipeline()
+        p3.set_input(input=p1)
 else:
     if globals_.config.getboolean('Tasks', 'hyphy'):
-        pipeline = make_hyphy_pipeline(standalone=True)
-        pipeline.set_input(input=options.alignment)
+        p1 = make_hyphy_pipeline(standalone=True)
+        p1.set_input(input=options.alignment)
+    if globals_.config.getboolean('Tasks', 'fasttree'):
+        p2 = make_fasttree_pipeline()
+        p2.set_input(input=options.alignment)
 
 
 if __name__ == '__main__':
