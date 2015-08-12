@@ -5,9 +5,12 @@ import json
 
 from ruffus import Pipeline, formatter, suffix
 
+from Bio import SeqIO
+
 from translate import translate
 import pipeline_globals as globals_
 from util import must_work, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter
+from hyphy_pipeline import compute_mrca
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "fasttree")
@@ -23,6 +26,33 @@ def run_fasttree(infile, outfile):
     stderr = '{}.stderr'.format(outfile)
     cmd = 'FastTree {} > {} 2>{}'.format(infile, outfile, stderr)
     maybe_qsub(cmd, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
+
+
+def name_to_date(name):
+    id_to_date = {t.id : t.date for t in globals_.timepoints}
+    return id_to_date[name.split("_")[0]]
+
+
+@must_work()
+def make_sequences_json(infiles, outfile):
+    alignment_file, mrca_file = infiles
+    result = {}
+
+    # add observed sequences
+    for r in SeqIO.parse(alignment_file, "fasta"):
+        date = name_to_date(r.name)
+        if date not in result:
+            result[date] = {"Observed": {}}
+        result[date]["Observed"][r.id] = str(r.seq)
+
+    # add MRCA
+    mrca = list(SeqIO.parse(mrca_file, "fasta"))
+    assert len(mrca) == 1
+    mrca = mrca[0]
+    result['MRCA'] = str(mrca.seq)
+
+    with open(outfile, 'w') as handle:
+        json.dump(result, handle, separators=(",\n", ":"))
 
 
 def make_fasttree_pipeline(name=None):
@@ -47,5 +77,24 @@ def make_fasttree_pipeline(name=None):
                                        output='.tree')
     fasttree_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    pipeline.set_head_tasks([translate_task])
+    mrca_task = pipeline.transform(compute_mrca,
+                                   name='fasttree_mrca',
+                                   input=None,
+                                   filter=formatter(),
+                                   output=os.path.join(pipeline_dir, 'mrca.fasta'))
+    mrca_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    translate_mrca_task = pipeline.transform(gapped_translate_wrapper,
+                                             name='translate_mrca',
+                                             input=mrca_task,
+                                             filter=suffix('.fasta'),
+                                             output='.translated.fasta')
+    translate_mrca_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    sequences_json_task = pipeline.merge(make_sequences_json,
+                                         input=[translate_task, translate_mrca_task],
+                                         output=os.path.join(pipeline_dir, 'sequences.json'))
+    sequences_json_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    pipeline.set_head_tasks([translate_task, mrca_task])
     return pipeline
