@@ -330,7 +330,7 @@ def insert_gaps_wrapper(infiles, outfile):
                       if r.id == ref.id)[0]
     seqs_gapped = (new_record_seq_str(r, insert_gaps(str(ref_gapped.seq),
                                                      str(r.seq),
-                                                     '-', '-', skip=1))
+                                                     '-', '-'))
                    for r in seqs)
     SeqIO.write(seqs_gapped, outfile, "fasta")
 

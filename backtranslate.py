@@ -45,7 +45,7 @@ def back_translate_gapped(protein, dna):
         dna_str = str(dna.seq)
     gap_char = protein.seq.alphabet.gap_char
     gap_codon = Gapped(dna.seq.alphabet).gap_char * 3
-    result_str = insert_gaps(str(protein.seq), dna_str, gap_char, gap_codon, skip=3)
+    result_str = insert_gaps(str(protein.seq), dna_str, gap_char, gap_codon)
     result = dna[:]
     result.seq = Seq(result_str, alphabet=Gapped(dna.seq.alphabet))
     return result

@@ -15,11 +15,11 @@ class TestInsertGaps(unittest.TestCase):
         src = "a--bc"
         target = "def"
         self.assertRaises(ValueError, insert_gaps, src, target,
-                          src_gap="--", target_gap="-", skip=1)
+                          src_gap="---", target_gap="-")
 
     def test_diff_lengths(self):
         src = "a-bcd"
         target = "def"
         self.assertRaises(ValueError, insert_gaps, src, target,
-                          src_gap="-", target_gap="-", skip=1)
+                          src_gap="-", target_gap="-")
 

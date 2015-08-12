@@ -168,33 +168,44 @@ def maybe_qsub(cmd, **kwargs):
         call(cmd)
 
 
-def insert_gaps(source, target, src_gap, target_gap, skip):
+def insert_gaps(source, target, src_gap, target_gap):
     """Inserts `target_gap` into target string at same positions as
     `src_gap` in `source`.
 
-    >>> insert_gaps("a-bc", "def", "-", "-", 1)
+    >>> insert_gaps("a-bc", "def", "-", "-")
     'd-ef'
 
-    >>> insert_gaps("a-bc", "def", "-", "--", 1)
-    'd--ef'
+    >>> insert_gaps("a-bc", "ddeeff", "-", "--")
+    'dd--eeff'
 
-    >>> insert_gaps("a-bc", "dddeeefff", "-", "---", 3)
+    >>> insert_gaps("a-bc", "dddeeefff", "-", "---")
     'ddd---eeefff'
 
+    >>> insert_gaps("aaa---bbbccc", "abc", "---", "-")
+    'a-bc'
+
     """
-    if len(src_gap) != 1:
-        # TODO: remove this restriction
-        raise ValueError("Argument `src_gap` must be a single character."
-                         " Current value: '{}'".format(src_gap))
-    if len(list(c for c in source if c != src_gap)) * skip != len(target):
+    src_skip = len(src_gap)
+    target_skip = len(target_gap)
+    if len(source) % src_skip != 0:
+        raise ValueError('source length does not match gap length')
+    if len(target) % target_skip != 0:
+        raise ValueError('target length does not match gap length')
+
+    ungapped_src = ''.join(list(''.join(chunk) for chunk in grouper(source, src_skip)
+                                if ''.join(chunk) != src_gap))
+    if len(ungapped_src) % src_skip != 0:
+        raise ValueError('ungapped source length does not match gap length')
+    if len(ungapped_src) / src_skip != len(target) / target_skip:
         raise ValueError("`src` and `target` have different lengths.")
     result = []
-    for c in source:
+    for chunk in grouper(source, src_skip):
+        c = ''.join(chunk)
         if c == src_gap:
             result.append(target_gap)
         else:
-            result.append(target[0:skip])
-            target = target[skip:]
+            result.append(target[0:target_skip])
+            target = target[target_skip:]
     return "".join(result)
 
 
