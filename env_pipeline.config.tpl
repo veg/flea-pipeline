@@ -5,6 +5,7 @@ prinseq: prinseq
 bealign: /opt/talign/env/bin/bealign.py
 bam2msa: /opt/talign/env/bin/bam2msa.py
 hyphy: HYPHYMP
+FastTree: FastTree
 
 [Jobs]
 # maximum number of concurrent jobs

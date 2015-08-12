@@ -23,8 +23,9 @@ def gapped_translate_wrapper(infile, outfile):
 
 @must_work()
 def run_fasttree(infile, outfile):
+    binary = globals_.config.get('Paths', 'FastTree'),
     stderr = '{}.stderr'.format(outfile)
-    cmd = 'FastTree {} > {} 2>{}'.format(infile, outfile, stderr)
+    cmd = '{} {} > {} 2>{}'.format(binary, infile, outfile, stderr)
     maybe_qsub(cmd, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
 
 
