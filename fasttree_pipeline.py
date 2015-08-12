@@ -2,6 +2,7 @@
 
 import os
 import json
+from itertools import islice
 
 from ruffus import Pipeline, formatter, suffix
 
@@ -56,6 +57,28 @@ def make_sequences_json(infiles, outfile):
         json.dump(result, handle, separators=(",\n", ":"))
 
 
+@must_work()
+def make_trees_json(infile, outfile):
+    with open(infile) as handle:
+        newick_string = handle.read()
+    result = {'Combined':
+                  {'all':
+                       {'Maximum Likelihood': newick_string}}}
+    with open(outfile, 'w') as handle:
+        json.dump(result, handle, separators=(",\n", ":"))
+
+
+@must_work()
+def make_frequencies_json(infile, outfile):
+    # FIXME: this is just a dummy file. Actually do alignment.
+    records = SeqIO.parse(infile, "fasta")
+    first = list(islice(records, 1))[0]
+    n_posns = len(first)
+    result = {str(i + 1): {"HXB2": str(i + 1)} for i in range(len(first))}
+    with open(outfile, 'w') as handle:
+        json.dump(result, handle, separators=(",\n", ":"))
+
+
 def make_fasttree_pipeline(name=None):
     """Factory for the FastTree sub-pipeline."""
     if name is None:
@@ -96,6 +119,18 @@ def make_fasttree_pipeline(name=None):
                                          input=[translate_task, translate_mrca_task],
                                          output=os.path.join(pipeline_dir, 'sequences.json'))
     sequences_json_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    trees_json_task = pipeline.transform(make_trees_json,
+                                         input=fasttree_task,
+                                         filter=formatter(),
+                                         output=os.path.join(pipeline_dir, 'trees.json'))
+    trees_json_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    frequencies_json_task = pipeline.transform(make_frequencies_json,
+                                               input=translate_task,
+                                               filter=formatter(),
+                                               output=os.path.join(pipeline_dir, 'frequencies.json'))
+    frequencies_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     pipeline.set_head_tasks([translate_task, mrca_task])
     return pipeline
