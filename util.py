@@ -168,7 +168,7 @@ def maybe_qsub(cmd, **kwargs):
         call(cmd)
 
 
-def insert_gaps(source, target, src_gap, target_gap):
+def insert_gaps(source, target, src_gap, target_gap, gap_char=None):
     """Inserts `target_gap` into target string at same positions as
     `src_gap` in `source`.
 
@@ -185,6 +185,12 @@ def insert_gaps(source, target, src_gap, target_gap):
     'a-bc'
 
     """
+    if gap_char is None:
+        gap_char = '-'
+    if not all(g == gap_char for g in src_gap):
+        raise ValueError('illegal source gap')
+    if not all(g == gap_char for g in target_gap):
+        raise ValueError('illegal target gap')
     src_skip = len(src_gap)
     target_skip = len(target_gap)
     if len(source) % src_skip != 0:
@@ -203,6 +209,8 @@ def insert_gaps(source, target, src_gap, target_gap):
         c = ''.join(chunk)
         if c == src_gap:
             result.append(target_gap)
+        elif gap_char in chunk:
+            raise ValueError('{} contains a gap character'.format(chunk))
         else:
             result.append(target[0:target_skip])
             target = target[target_skip:]
