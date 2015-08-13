@@ -22,8 +22,11 @@ walltime: 86400
 
 [Parameters]
 reference_dir: /path/to/references
+reference_sequence: ${reference_dir}/UMASS_HXB2.translated.fasta
+reference_coordinates: ${reference_dir}/UMASS_HXB2.numbers.csv
+# TODO: generate database files on the fly
+reference_db: ${reference_dir}/UMASS_HXB2.udb
 contaminants_db: ${reference_dir}/ContaminantRef.udb
-reference_db: ${reference_dir}/LANLsubtypeRef.udb
 min_sequence_length: 2200
 max_sequence_length: 2900
 max_err_rate: 0.01
