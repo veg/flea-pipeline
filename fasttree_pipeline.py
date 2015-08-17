@@ -150,8 +150,8 @@ def make_fasttree_pipeline(name=None):
 
     fasttree_task = pipeline.transform(run_fasttree,
                                        input=None,
-                                       filter=suffix('.fasta'),
-                                       output='.tree')
+                                       filter=formatter(),
+                                       output=os.path.join(pipeline_dir, 'tree.newick'))
     fasttree_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     mrca_task = pipeline.transform(compute_mrca,
