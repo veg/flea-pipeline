@@ -45,7 +45,14 @@ def first_index(target, it):
 
 
 def correct_shifts(seq, ref, gap_char=None, keep=False):
-    """Correct frameshifts relative to a reference."""
+    """Correct frameshifts relative to a reference.
+
+    keep: bool
+        If True, keep sequences even if they could not be totally
+        corrected. Otherwise, discard the whole sequence.
+
+    """
+    # FIXME: make this codon-aware
     if gap_char is None:
         gap_char = '-'
     result = []
@@ -58,14 +65,20 @@ def correct_shifts(seq, ref, gap_char=None, keep=False):
         if k == -1:  # match
             result.extend(subseq)
         elif k == 0:  # deletion
-            result.append('X' * (len(subseq) % 3))
+            if len(subseq) % 3 == 0:
+                continue  # keep codon deletions
+            if keep:
+                result.append('X' * (len(subseq) % 3))
+            else:
+                return ''
         else:  # insertion
             if len(subseq) % 3 == 0:
                 result.append(subseq)  # keep codon insertions
             elif len(subseq) < 3:
-                continue  # discard other insertions
+                continue  # discard short insertions
             else:
                 if keep:
+                    # keep out-of-frame long insertions.
                     result.append(subseq)
                 else:  # give up
                     return ''
