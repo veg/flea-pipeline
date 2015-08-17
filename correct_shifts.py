@@ -55,6 +55,8 @@ def correct_shifts(seq, ref, gap_char=None, keep=False):
     # FIXME: make this codon-aware
     if gap_char is None:
         gap_char = '-'
+    if len(list(c for c in ref if c != gap_char)) % 3 != 0:
+        raise Exception('len(reference) is not a multiple of 3')
     result = []
     for k, g in groupby(zip_longest(seq, ref), key=partial(first_index, gap_char)):
         # k tells us where the gap is
@@ -82,17 +84,21 @@ def correct_shifts(seq, ref, gap_char=None, keep=False):
                     result.append(subseq)
                 else:  # give up
                     return ''
+    if gap_char in result:
+        raise Exception('gap character appeared in corrected result')
+    if len(result) % 3 != 0:
+        raise Exception('shift correction failed')
     return ''.join(result)
 
 
-def correct_shifts_fasta(infile, outfile, keep=True):
+def correct_shifts_fasta(infile, outfile, alphabet=None, keep=True):
     """Correct all the pairs in a fasta file.
 
     Returns (n_seqs, n_fixed)
 
     """
     ldict = {}
-    pairs = grouper(SeqIO.parse(infile, 'fasta'), 2)
+    pairs = grouper(SeqIO.parse(infile, 'fasta', alphabet), 2)
     results = (new_record_seq_str(seq, correct_shifts(seq.seq, ref.seq, keep=keep))
                for seq, ref in pairs)
 
