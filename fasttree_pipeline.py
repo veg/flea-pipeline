@@ -68,42 +68,47 @@ def make_trees_json(infile, outfile):
         json.dump(result, handle, separators=(",\n", ":"))
 
 
+def extend_coordinates(coordinates, seq, gap=None):
+    """Extend coordinates to a gappy sequence.
+
+    >>> transfer_coordinates([1, 2, 3, 4], "a-b-cd")
+    [1, 1, 2, 2, 3, 4]
+
+    """
+    if gap is None:
+        gap = "-"
+    if sum(1 for c in seq if c != gap) != len(coordinates):
+        raise Exception('coordinates do not match source')
+    coords_gen = iter(coordinates)
+    cur = -1
+    result = []
+    for char in seq:
+        if char != gap:
+            cur = next(coords_gen)
+        result.append(cur)
+    return result
+
+
 @must_work()
 def make_coordinates_json(infile, outfile):
-    # FIXME: degap MRCA before running
-    # FIXME: refactor and generalize this function
+    # FIXME: degap MRCA before running?
     # FIXME: split up so mafft can run remotely
     combined = 'combined.fasta'
     aligned = 'combined.aligned.fasta'
     cat_files([infile, globals_.config.get('Parameters', 'reference_sequence')], combined)
     mafft(combined, aligned)
-    aligned_mrca, aligned_ref = list(SeqIO.parse(aligned, 'fasta'))
-    ref_coordinates = open(globals_.config.get('Parameters', 'reference_coordinates')).read().strip().split()
+    pairwise_mrca, pairwise_ref = list(SeqIO.parse(aligned, 'fasta'))
+    ref_coords = open(globals_.config.get('Parameters', 'reference_coordinates')).read().strip().split()
 
-    # map coordinates to pairwise alignment
-    ref_alignment_coords = []
-    ref_coords_gen = iter(ref_coordinates)
-    coord = -1
-    for char in str(aligned_ref.seq):
-        if char != "-":
-            coord = next(ref_coords_gen)
-        ref_alignment_coords.append(coord)
+    # transfer coordinates to MRCA
+    pairwise_coords = extend_coordinates(ref_coords, str(pairwise_ref.seq))
+    mrca_coords = list(coord for char, coord in zip(str(pairwise_mrca.seq),
+                                                    pairwise_coords)
+                       if char != "-")
 
-    # assign coordinates to original MRCA
-    # we only care about coordinates for non-gap characters; gap characters get previous
-    def coords_gen():
-        for char, coord in zip(aligned_mrca, ref_alignment_coords):
-            if char != '-':
-                yield coord
-
-    cgen = coords_gen()
-    result = []
+    # extend MRCA coords to full MSA
     mrca = read_single_record(infile, 'fasta', True)
-    aln_idx = -1
-    for i, char in enumerate(str(mrca.seq)):
-        if char != "-":
-            coord = next(cgen)
-        result.append(coord)
+    result = extend_coordinates(mrca_coords, str(mrca.seq))
 
     rdict = {'coordinates': result}
     with open(outfile, 'w') as handle:
