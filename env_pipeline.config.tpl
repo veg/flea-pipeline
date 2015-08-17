@@ -25,10 +25,9 @@ reference_dir: /path/to/references
 reference_sequence: ${reference_dir}/UMASS_HXB2.translated.fasta
 reference_coordinates: ${reference_dir}/UMASS_HXB2.numbers.csv
 # TODO: generate database files on the fly
-reference_db: ${reference_dir}/UMASS_HXB2.udb
+reference_db: ${reference_dir}/UMASSLANLsubtypeRef.udb
 contaminants_db: ${reference_dir}/ContaminantRef.udb
-min_sequence_length: 2200
-max_sequence_length: 2900
+min_sequence_length: .8
 max_err_rate: 0.01
 qmax: 55
 max_accepts: 300

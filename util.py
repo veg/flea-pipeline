@@ -314,6 +314,13 @@ def ensure_not_empty(files):
             raise Exception('Empty file: "{}"'.format(f))
 
 
+def read_single_record(filename, format, expected=None):
+    records = list(SeqIO.parse(filename, format))
+    if expected is not None and len(records) != expected:
+        raise Exception('expected only {} records in {}'.format(expected, filename))
+    return records[0]
+
+
 def check_seq_number(filename, min_n):
     found_n = sum(1 for _ in SeqIO.parse(filename, 'fasta'))
     if found_n < min_n:

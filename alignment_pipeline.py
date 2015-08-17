@@ -15,6 +15,7 @@ from util import new_record_seq_str, insert_gaps, update_record_seq
 from util import must_work, must_produce
 from util import local_job_limiter, remote_job_limiter
 from util import check_suffix, check_basename, n_jobs
+from util import read_single_record
 
 import pipeline_globals as globals_
 
@@ -34,7 +35,9 @@ def mafft(infile, outfile):
 @must_work()
 def filter_fastq(infile, outfile):
     qmax = globals_.config.get('Parameters', 'qmax')
-    min_len = globals_.config.get('Parameters', 'min_sequence_length')
+    min_len_fraction = globals_.config.getfloat('Parameters', 'min_sequence_length')
+    ref_file = globals_.config.get('Parameters', 'reference_sequence')
+    min_len = int(min_len_fraction * len(read_single_record(ref_file, 'fasta').seq))
     max_err_rate = globals_.config.get('Parameters', 'max_err_rate')
     cmd = ('{usearch} -fastq_filter {infile} -fastq_maxee_rate {max_err_rate}'
          ' -threads 1 -fastq_qmax {qmax} -fastq_minlen {min_len} -fastaout {outfile}'

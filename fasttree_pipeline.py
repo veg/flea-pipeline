@@ -10,20 +10,13 @@ from Bio import SeqIO
 
 from translate import translate
 import pipeline_globals as globals_
-from util import must_work, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter
+from util import must_work, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter, read_single_record, cat_files
 
 from alignment_pipeline import mafft_wrapper_seq_ids
 from hyphy_pipeline import compute_mrca
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "fasttree")
-
-
-def read_single_record(filename, format, expected=None):
-    records = list(SeqIO.parse(infile, format))
-    if expected is not None and len(records) != expected:
-        raise Exception('expected only {} records in {}'.format(expected, filename))
-    return records[0]
 
 
 @must_work()
