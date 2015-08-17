@@ -12,7 +12,7 @@ from translate import translate
 import pipeline_globals as globals_
 from util import must_work, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter, read_single_record, cat_files
 
-from alignment_pipeline import mafft_wrapper_seq_ids
+from alignment_pipeline import mafft
 from hyphy_pipeline import compute_mrca
 
 
@@ -72,6 +72,7 @@ def make_trees_json(infile, outfile):
 def make_coordinates_json(infile, outfile):
     # FIXME: degap MRCA before running
     # FIXME: refactor and generalize this function
+    # FIXME: split up so mafft can run remotely
     combined = 'combined.fasta'
     aligned = 'combined.aligned.fasta'
     cat_files([infile, globals_.config.get('Parameters', 'reference_sequence')], combined)
@@ -81,7 +82,7 @@ def make_coordinates_json(infile, outfile):
 
     # map coordinates to pairwise alignment
     ref_alignment_coords = []
-    ref_coords_gen = iter(ref_coords)
+    ref_coords_gen = iter(ref_coordinates)
     coord = -1
     for char in str(aligned_ref.seq):
         if char != "-":
@@ -114,7 +115,7 @@ def make_coordinates_json(infile, outfile):
 def make_frequencies_json(infile, outfile):
     with open(infile) as handle:
         coordinates = json.load(handle)['coordinates']
-    result = {str(i + 1): {"HXB2": val} for i, val in enumerate(result)}
+    result = {str(i + 1): {"HXB2": val} for i, val in enumerate(coordinates)}
     with open(outfile, 'w') as handle:
         json.dump(result, handle, separators=(",\n", ":"))
 
