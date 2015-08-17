@@ -93,8 +93,8 @@ def extend_coordinates(coordinates, seq, gap=None):
 def make_coordinates_json(infile, outfile):
     # FIXME: degap MRCA before running?
     # FIXME: split up so mafft can run remotely
-    combined = 'combined.fasta'
-    aligned = 'combined.aligned.fasta'
+    combined = os.path.join(pipeline_dir, 'combined.fasta')
+    aligned = os.path.join(pipeline_dir, 'combined.aligned.fasta')
     cat_files([infile, globals_.config.get('Parameters', 'reference_sequence')], combined)
     mafft(combined, aligned)
     pairwise_mrca, pairwise_ref = list(SeqIO.parse(aligned, 'fasta'))
