@@ -33,9 +33,9 @@ def gapped_translate_wrapper(infile, outfile):
 
 @must_work()
 def run_fasttree(infile, outfile):
-    binary = globals_.config.get('Paths', 'FastTree'),
+    binary = globals_.config.get('Paths', 'FastTree')
     stderr = '{}.stderr'.format(outfile)
-    cmd = '{} {} > {} 2>{}'.format(binary, infile, outfile, stderr)
+    cmd = '{} -gtr -nt {} > {} 2>{}'.format(binary, infile, outfile, stderr)
     maybe_qsub(cmd, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
 
 
@@ -147,7 +147,7 @@ def make_fasttree_pipeline(name=None):
     n_local_jobs, n_remote_jobs = n_jobs()
 
     translate_task = pipeline.transform(gapped_translate_wrapper,
-                                        name='translate_for_fasttree',
+                                        name='translate_gapped',
                                         input=None,
                                         filter=formatter(),
                                         output=os.path.join(pipeline_dir, 'translated.fasta'))
@@ -155,7 +155,7 @@ def make_fasttree_pipeline(name=None):
     translate_task.mkdir(pipeline_dir)
 
     fasttree_task = pipeline.transform(run_fasttree,
-                                       input=translate_task,
+                                       input=None,
                                        filter=suffix('.fasta'),
                                        output='.tree')
     fasttree_task.jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -203,5 +203,5 @@ def make_fasttree_pipeline(name=None):
                                          output=os.path.join(pipeline_dir, 'rates.json'))
     rates_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    pipeline.set_head_tasks([translate_task, mrca_task])
+    pipeline.set_head_tasks([translate_task, fasttree_task, mrca_task])
     return pipeline
