@@ -62,14 +62,14 @@ def filter_contaminants(infile, outfiles):
 def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, name=None):
     max_accepts = globals_.config.get('Parameters', 'max_accepts')
     max_rejects = globals_.config.get('Parameters', 'max_rejects')
+    # TODO: combine both versions
     if nums_only:
         cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
-               " -userout {outfile} -top_hit_only -userfields query+target -strand both"
-               " -maxaccepts {max_accepts} -maxrejects {max_rejects}")
+               " -userout {outfile} -top_hit_only -userfields query+target -strand both")
     else:
         cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
-               ' -fastapairs {outfile} -top_hit_only -strand both'
-               ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
+               ' -fastapairs {outfile} -alnout {outfile}.human -userout {outfile}.calns'
+               ' -userfields caln -top_hit_only -strand both')
     if name is None:
         name = 'usearch-global-pairs'
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
@@ -96,7 +96,7 @@ def filter_uncontaminated(infiles, outfile):
 
 @must_work(seq_ratio=(2, 1))
 def shift_correction(infile, outfile):
-    correct_shifts_fasta(infile, outfile, keep=True)
+    correct_shifts_fasta(infile, outfile, calnfile="{}.calns".format(infile), keep=True)
 
 
 @must_work(seq_ids=True)
@@ -169,6 +169,13 @@ def cluster_consensus(infile, outfile):
     consfile(infile, outfile, ambifile, ungap=True)
 
 
+@must_work(illegal_chars='X')
+def filter_ambiguous(infile, outfile):
+    records = (SeqIO.parse(infile, 'fasta'))
+    processed = (r for r in records if 'X' not in str(r.seq))
+    SeqIO.write(processed, outfile, 'fasta')
+
+
 @must_work()
 def consensus_db_search(infile, outfile):
     usearch_global_pairs(infile, outfile, globals_.config.get('Parameters', 'reference_db'),
@@ -178,7 +185,7 @@ def consensus_db_search(infile, outfile):
 
 @must_work()
 def consensus_shift_correction(infile, outfile):
-    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep=False)
+    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, calnfile="{}.calns".format(infile), keep=False)
     sumfile = '{}.summary'.format(outfile)
     write_correction_result(n_seqs, n_fixed, sumfile)
 
@@ -214,7 +221,8 @@ def make_individual_dbs(infile, outfile):
 @must_work()
 def compute_copynumbers(infiles, outfile, basename):
     rawfile, perfectfile, dbfile = infiles
-    check_suffix(perfectfile, '.perfect.fasta')
+    # make sure this suffix changes depending on what task comes before
+    check_suffix(perfectfile, '.uniques.fasta')
     check_suffix(dbfile, '.udb')
     identity = globals_.config.get('Parameters', 'raw_to_consensus_identity')
     pairfile = '{}.copynumber.pairs'.format(basename)
@@ -275,7 +283,6 @@ def make_full_db(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
     maybe_qsub(cmd, outfiles=outfile, name='make_full_db')
-
 
 
 @must_work()
@@ -358,20 +365,17 @@ def make_alignment_pipeline(name=None):
                                                   output=['.uncontam.fasta', '.contam.fasta'],)
     filter_contaminants_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-
     filter_uncontaminated_task = pipeline.transform(filter_uncontaminated,
                                                     input=filter_contaminants_task,
                                                     filter=suffix('.uncontam.fasta'),
                                                     output='.uncontam.rfilter.fasta')
     filter_uncontaminated_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-
     shift_correction_task = pipeline.transform(shift_correction,
                                                input=filter_uncontaminated_task,
                                                filter=suffix('.fasta'),
                                                output='.shifted.fasta')
     shift_correction_task.jobs_limit(n_local_jobs, local_job_limiter)
-
 
     sort_by_length_task = pipeline.transform(sort_by_length,
                                              input=shift_correction_task,
@@ -387,13 +391,11 @@ def make_alignment_pipeline(name=None):
     cluster_task.jobs_limit(n_remote_jobs, remote_job_limiter)
     cluster_task.mkdir(sort_by_length_task, suffix('.fasta'), '.clusters')
 
-
     select_clusters_task = pipeline.transform(select_clusters,
                                               input=cluster_task,
                                               filter=suffix('.fasta'),
                                               output='.keep.fasta')
     select_clusters_task.jobs_limit(n_local_jobs, local_job_limiter)
-
 
     align_clusters_task = pipeline.transform(mafft_wrapper_maybe,
                                              name="align_clusters",
@@ -402,13 +404,11 @@ def make_alignment_pipeline(name=None):
                                              output='.aligned.fasta')
     align_clusters_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-
     cluster_consensus_task = pipeline.transform(cluster_consensus,
                                                 input=align_clusters_task,
                                                 filter=suffix('.fasta'),
                                                 output='.cons.fasta')
     cluster_consensus_task.jobs_limit(n_local_jobs, local_job_limiter)
-
 
     cat_clusters_task = pipeline.collate(cat_wrapper,
                                          name="cat_clusters",
@@ -417,20 +417,24 @@ def make_alignment_pipeline(name=None):
                                          output='{path[0]}.cons.fasta')
     cat_clusters_task.jobs_limit(n_local_jobs, local_job_limiter)
 
+    # FIXME: this step should not be necessary
+    filter_ambiguous_task = pipeline.transform(filter_ambiguous,
+                                               input=cat_clusters_task,
+                                               filter=suffix('.fasta'),
+                                               output='.unambiguous.fasta')
+    filter_ambiguous_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     consensus_db_search_task = pipeline.transform(consensus_db_search,
-                                                  input=cat_clusters_task,
+                                                  input=filter_ambiguous_task,
                                                   filter=suffix('.fasta'),
                                                   output='.pairs.fasta')
     consensus_db_search_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-
 
     consensus_shift_correction_task = pipeline.transform(consensus_shift_correction,
                                                          input=consensus_db_search_task,
                                                          filter=suffix('.fasta'),
                                                          output='.shifted.fasta')
     consensus_shift_correction_task.jobs_limit(n_local_jobs, local_job_limiter)
-
 
     sort_consensus_task = pipeline.transform(sort_consensus,
                                              input=consensus_shift_correction_task,
@@ -444,23 +448,21 @@ def make_alignment_pipeline(name=None):
                                                output='.uniques.fasta')
     unique_consensus_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-
-    perfect_orfs_task = pipeline.transform(perfect_orfs,
-                                           input=unique_consensus_task,
-                                           filter=suffix('.fasta'),
-                                           output='.perfect.fasta')
-    perfect_orfs_task.jobs_limit(n_local_jobs, local_job_limiter)
-
+    # FIXME: fix this step. allow for case when amplicon does not include stop codon.
+    # perfect_orfs_task = pipeline.transform(perfect_orfs,
+    #                                        input=unique_consensus_task,
+    #                                        filter=suffix('.fasta'),
+    #                                        output='.perfect.fasta')
+    # perfect_orfs_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     make_individual_dbs_task = pipeline.transform(make_individual_dbs,
-                                                  input=perfect_orfs_task,
+                                                  input=unique_consensus_task,
                                                   filter=suffix('.fasta'),
                                                   output='.udb')
     make_individual_dbs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-
     compute_copynumbers_task = pipeline.collate(compute_copynumbers,
-                                               input=[perfect_orfs_task, make_individual_dbs_task, shift_correction_task],
+                                               input=[unique_consensus_task, make_individual_dbs_task, shift_correction_task],
                                                filter=formatter(r'(?P<NAME>.+).qfilter'),
                                                output='{NAME[0]}.copynumbers.json',
                                                extras=['{NAME[0]}'])
@@ -472,7 +474,7 @@ def make_alignment_pipeline(name=None):
     merge_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     cat_all_perfect_task = pipeline.merge(cat_all_perfect,
-                                          input=perfect_orfs_task,
+                                          input=unique_consensus_task,
                                           output=os.path.join(globals_.data_dir, "all_perfect_orfs.fasta"))
     cat_all_perfect_task.jobs_limit(n_local_jobs, local_job_limiter)
 
@@ -511,7 +513,6 @@ def make_alignment_pipeline(name=None):
                                                filter=suffix('.fasta'),
                                                output='.udb')
         make_full_db_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-
 
         full_timestep_pairs_task = pipeline.transform(full_timestep_pairs,
                                                       input=shift_correction_task,

@@ -5,6 +5,7 @@ from subprocess import Popen, PIPE, CalledProcessError
 from itertools import zip_longest
 from itertools import tee
 from itertools import filterfalse
+from itertools import islice
 from uuid import uuid4
 import time
 import os
@@ -231,6 +232,11 @@ def partition(pred, iterable):
     return filterfalse(pred, t1), filter(pred, t2)
 
 
+def nth(iterable, n, default=None):
+    "Returns the nth item or a default value"
+    return next(islice(iterable, n, None), default)
+
+
 def genlen(gen, ldict, name):
     """A bit of a hack to get the length of a generator after its been run.
 
@@ -304,7 +310,7 @@ def write_to_handle(handle, output):
         if do_close:
             handle.close()
 
-            
+
 def ensure_not_empty(files):
     for f in strlist(files):
         if not os.path.exists(f):

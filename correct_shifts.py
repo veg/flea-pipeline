@@ -14,6 +14,7 @@ Usage:
 
 Options:
   --keep                 Do not discard sequences, even with bad inserts [default: False]
+  --calns=<FILE>         File with run-length encoded alignment summaries.
   -v --verbose           Print summary [default: False]
   -h --help              Show this screen
 
@@ -23,6 +24,7 @@ from itertools import groupby, repeat
 from itertools import zip_longest
 from functools import partial
 import sys
+import re
 
 from docopt import docopt
 
@@ -34,6 +36,7 @@ from util import new_record_seq_str
 from util import partition
 from util import genlen
 from util import write_to_handle
+from util import nth
 
 
 def first_index(target, it):
@@ -44,102 +47,80 @@ def first_index(target, it):
     return -1
 
 
-def nth_nongap(seq, n, gap_char=None, reverse=False):
+def decode_caln(caln):
     """
-
-    >>> nth_nongap('--a--bcd', 1)
-    2
-
-    >>> nth_nongap('--abc---', 1, reverse=True)
-    4
-
-    >>> nth_nongap('a--bcd', 1)
-    0
-
-    >>> nth_nongap('a--bcd', 2)
-    3
-
-    >>> nth_nongap('a--bc-d', 1, reverse=True)
-    6
-
-    >>> nth_nongap('a--bc-d', 2, reverse=True)
-    4
+    >>> decode_caln('3IDM2I2M')
+    'IIIDMIIMM'
 
     """
-    if gap_char is None:
-        gap_char = '-'
-    if reverse:
-        seq = list(reversed(seq))
-    count = 0
-    found = False
-    result = -1
-    for i, char in enumerate(seq):
-        if char != gap_char:
-            count += 1
-        if count == n:
-            found = True
-            result = i
-            break
-    if not found:
-        raise Exception('n is too large')
-    if reverse:
-        result = len(seq) - result - 1
+    parts = re.findall(r'[0-9]*[IDM]', caln)
+    if sum(map(len, parts)) != len(caln):
+        raise Exception('badly formatted alignment encoding: {}'.format(caln))
+    result = ''.join(part if len(part) == 1 else part[-1] * int(part[:-1])
+                     for part in parts)
     return result
 
 
-def alignment_slice(ref, offsets=None, gap_char=None):
+def alignment_slice(caln):
     """
-    offsets are [start, stop]
+    usearch trims leading and trailing insertions and deletions
 
-    >>> alignment_slice("aaccc---ggg", [1, 8])
-    (2, 11)
+    >>> alignment_slice("IMMMMMMMI")
+    (2, 5)
 
-    >>> alignment_slice("aaa--bbb", [0, 5])
-    (0, 8)
+    >>> alignment_slice("MMMDMMM")
+    (0, 7)
 
-    >>> alignment_slice("aaa--bb", [0, 4])
+    >>> alignment_slice("IMMMMM")
+    (2, 5)
+
+    >>> alignment_slice("MMMMMI")
     (0, 3)
 
-    >>> alignment_slice("aabbbcccd", [1, 9])
-    (2, 8)
-
-    >>> alignment_slice("abbbcccdd", [2, 10])
-    (1, 7)
-
-    >>> alignment_slice("abbbcccddd", [2, 11])
-    (1, 10)
-
-    >>> alignment_slice("---aaa---", [0, 2])
+    >>> alignment_slice("D9MD")
     (0, 9)
 
+    >>> alignment_slice("D8MI")
+    (0, 6)
+
     """
-    # FIXME: leading and trailing insertions relative to reference
-    if gap_char is None:
-        gap_char = '-'
-    start = 0
-    stop = len(ref)
-    if offsets is None:
-        return start, stop
-    ungapped_len = sum(1 for c in ref if c != gap_char)
-    if offsets[1] - offsets[0] + 1 != ungapped_len:
-        raise Exception('offsets are wrong')
-    trim_start = (3 - (offsets[0] % 3)) % 3
-    start = nth_nongap(ref, trim_start + 1, gap_char)
+    aln = decode_caln(caln)
+    if sum(1 for c in aln if c in 'MI') % 3 != 0:
+        raise Exception('alignment has len(reference) not a multiple of 3')
+    start_gaps = re.search('[M]', aln).start()
+    end_gaps = re.search('[M]', aln[::-1]).start()
 
-    trim_stop = (offsets[1] + 1) % 3
-    stop = nth_nongap(ref, trim_stop + 1, gap_char, reverse=True) + 1
+    start_insertions = sum(1 for c in aln[:start_gaps] if c == "I")
+    end_insertions = sum(1 for c in aln[len(aln) - end_gaps:] if c == "I")
 
-    new_len = len(list(c for c in ref[start:stop] if c != gap_char))
-    if (new_len % 3) != 0:
-        print(len(ref), ref)
-        print(offsets)
-        print(start, stop)
-        print(sum(1 for c in ref[start:stop] if c != gap_char))
-        raise Exception('alignment_slice failed to make an in-frame reference')
+    # make aln match given alignment
+    aln = aln[start_gaps:len(aln) - end_gaps]
+
+    start_trim = (3 - start_insertions) % 3
+    if start_trim > 0:
+        # find start_trim'th match or insertion
+        match = nth(re.finditer('[MI]', aln), start_trim)
+        if match is None:
+            raise Exception('deal with this')
+        start = match.start()
+    else:
+        start = 0
+
+    # find length of aligned target segment
+    tlen = sum(1 for c in aln[start:] if c in 'MI')
+    end_trim = (tlen - 3) % 3
+    if end_trim > 0:
+        # find end_trim'th match or insertion
+        match = nth(re.finditer('[MI]', aln[::-1]), end_trim)
+        if match is None:
+            raise Exception('deal with this')
+        stop = len(aln) - match.start()
+    else:
+        stop = len(aln)
     return start, stop
 
 
-def correct_shifts(seq, ref, offsets=None, gap_char=None, keep=False):
+def correct_shifts(seq, ref, caln=None, gap_char=None, keep=False):
     """Correct frameshifts relative to a reference.
 
     keep: bool
@@ -150,10 +131,11 @@ def correct_shifts(seq, ref, offsets=None, gap_char=None, keep=False):
     # FIXME: make this codon-aware
     if gap_char is None:
         gap_char = '-'
-    start, stop = alignment_slice(ref, offsets, gap_char)
-    seq = seq[start:stop]
-    ref = ref[start:stop]
-    if sum(1 for c in ref if c != gap_char) % 3 != 0:
+    if caln is not None:
+        start, stop = alignment_slice(caln)
+        seq = seq[start:stop]
+        ref = ref[start:stop]
+    if len(ref.ungap(gap_char)) % 3 != 0:
         raise Exception('len(reference) is not a multiple of 3')
     result = []
     for k, g in groupby(zip_longest(seq, ref), key=partial(first_index, gap_char)):
@@ -184,12 +166,13 @@ def correct_shifts(seq, ref, offsets=None, gap_char=None, keep=False):
                     return ''
     if gap_char in result:
         raise Exception('gap character appeared in corrected result')
-    if len(result) % 3 != 0:
+    result = ''.join(result)
+    if not keep and len(result) % 3 != 0:
         raise Exception('shift correction failed')
-    return ''.join(result)
+    return result
 
 
-def correct_shifts_fasta(infile, outfile, offsetfile=None, alphabet=None, keep=True):
+def correct_shifts_fasta(infile, outfile, calnfile=None, alphabet=None, keep=True):
     """Correct all the pairs in a fasta file.
 
     Returns (n_seqs, n_fixed)
@@ -197,13 +180,13 @@ def correct_shifts_fasta(infile, outfile, offsetfile=None, alphabet=None, keep=T
     """
     ldict = {}
     pairs = grouper(SeqIO.parse(infile, 'fasta', alphabet), 2)
-    if offsetfile is None:
-        offsets = repeat(None)
+    if calnfile is None:
+        calns = repeat(None)
     else:
-        with open(offsetfile) as handle:
-            offsets = grouper(map(int, handle.read().split()), 2)
+        with open(calnfile) as handle:
+            calns = handle.read().strip().split()
     results = (new_record_seq_str(seq, correct_shifts(seq.seq, ref.seq, off, keep=keep))
-               for (seq, ref), off in zip(pairs, offsets))
+               for (seq, ref), off in zip(pairs, calns))
 
     results = genlen(results, ldict, 'n_seqs')
     fixed = genlen(filter(lambda r: r.seq, results), ldict, 'n_fixed')
@@ -223,7 +206,8 @@ if __name__ == "__main__":
     args = docopt(__doc__)
     infile = args["<infile>"]
     outfile = args["<outfile>"]
-    keep = args['<--keep-inserts>']
-    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, keep)
+    keep = args['--keep']
+    calnfile = args['--calns']
+    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, calnfile=calnfile, keep=keep)
     if args['--verbose']:
         write_correction_result(n_seqs, n_fixed, sys.stdout)
