@@ -39,7 +39,7 @@ def name_to_date(name):
 
 @must_work()
 def make_sequences_json(infiles, outfile):
-    alignment_file, mrca_file = infiles
+    alignment_file, mrca_file, coords_file = infiles
     result = {}
 
     # add observed sequences
@@ -52,6 +52,16 @@ def make_sequences_json(infiles, outfile):
     # add MRCA
     mrca = read_single_record(mrca_file, 'fasta', True)
     result['MRCA'] = str(mrca.seq)
+
+    # add reference
+    reference = read_single_record(globals_.config.get('Parameters', 'reference_sequence'), 'fasta', True)
+    rstr = str(reference.seq)
+    with open(coords_file) as handle:
+        alignment_coords = json.load(handle)['coordinates']
+    ref_coords = open(globals_.config.get('Parameters', 'reference_coordinates')).read().strip().split()
+    cmap = dict((c, i) for i, c in enumerate(ref_coords))
+    ref_result = ''.join(list(rstr[cmap[c]] for c in alignment_coords))
+    result['Reference'] = ref_result
 
     with open(outfile, 'w') as handle:
         json.dump(result, handle, separators=(",\n", ":"))
@@ -180,7 +190,7 @@ def make_fasttree_pipeline(name=None):
     coordinates_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     sequences_json_task = pipeline.merge(make_sequences_json,
-                                         input=[translate_task, translate_mrca_task],
+                                         input=[translate_task, translate_mrca_task, make_coordinates_json],
                                          output=os.path.join(pipeline_dir, 'sequences.json'))
     sequences_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
