@@ -22,11 +22,11 @@ walltime: 86400
 
 [Parameters]
 reference_dir: /path/to/references
-reference_sequence: ${reference_dir}/UMASS_HXB2.translated.fasta
-reference_coordinates: ${reference_dir}/UMASS_HXB2.numbers.csv
+reference_sequence: ${reference_dir}/reference.translated.fasta
+reference_coordinates: ${reference_dir}/reference.numbers.csv
 # TODO: generate database files on the fly
-reference_db: ${reference_dir}/UMASSLANLsubtypeRef.udb
-contaminants_db: ${reference_dir}/ContaminantRef.udb
+reference_db: ${reference_dir}/reference.database.udb
+contaminants_db: ${reference_dir}/contaminants.database.udb
 min_sequence_length: .8
 max_err_rate: 0.01
 qmax: 55
@@ -42,7 +42,6 @@ cluster_identity: 0.99
 raw_to_consensus_identity: 0.95
 min_cluster_size: 5
 max_cluster_size: 30
-min_orf_length: 750
 
 [Tasks]
 pause_after_codon_alignment: False
