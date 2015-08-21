@@ -65,11 +65,13 @@ def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, nam
     # TODO: combine both versions
     if nums_only:
         cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
-               " -userout {outfile} -top_hit_only -userfields query+target -strand both")
+               " -userout {outfile} -top_hit_only -userfields query+target -strand both"
+               " -maxaccepts {max_accepts} -maxrejects {max_rejects}")
     else:
         cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
                ' -fastapairs {outfile} -alnout {outfile}.human -userout {outfile}.calns'
-               ' -userfields caln -top_hit_only -strand both')
+               ' -userfields caln -top_hit_only -strand both'
+               ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
     if name is None:
         name = 'usearch-global-pairs'
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
