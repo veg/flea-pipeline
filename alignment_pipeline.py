@@ -154,6 +154,10 @@ def mafft_wrapper_seq_ids(infile, outfile):
 
 
 @must_work(seq_ids=True)
+def cat_wrapper_ids(infiles, outfile):
+    cat_files(infiles, outfile)
+
+
 def cat_wrapper(infiles, outfile):
     cat_files(infiles, outfile)
 
@@ -239,15 +243,16 @@ def compute_copynumbers(infiles, outfile, basename):
         if i not in consensus_counts:
             consensus_counts[i] = 0
     with open(outfile, 'w') as handle:
-        json.dump(consensus_counts, handle, separators=(",\n", ":"))
+        for id_, count in consensus_counts.items():
+            handle.write('{}\t{}\n'.format(id_, count))
 
 
 @must_work()
-def merge_copynumbers(infiles, outfile):
-    result = {}
-    for infile in infiles:
-        with open(infile) as handle:
-            result.update(json.load(handle))
+def copynumber_json(infile, outfile):
+    with open(infile) as handle:
+        lines = handle.read().strip().split('\n')
+    pairs = list(line.split() for line in lines)
+    result = dict((key, value) for key, value in pairs)
     with open(outfile, 'w') as handle:
         json.dump(result, handle, separators=(",\n", ":"))
 
@@ -414,7 +419,7 @@ def make_alignment_pipeline(name=None):
                                                 output='.cons.fasta')
     cluster_consensus_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    cat_clusters_task = pipeline.collate(cat_wrapper,
+    cat_clusters_task = pipeline.collate(cat_wrapper_ids,
                                          name="cat_clusters",
                                          input=cluster_consensus_task,
                                          filter=formatter(),
@@ -468,14 +473,21 @@ def make_alignment_pipeline(name=None):
     compute_copynumbers_task = pipeline.collate(compute_copynumbers,
                                                input=[unique_consensus_task, make_individual_dbs_task, shift_correction_task],
                                                filter=formatter(r'(?P<NAME>.+).qfilter'),
-                                               output='{NAME[0]}.copynumbers.json',
+                                               output='{NAME[0]}.copynumbers.tsv',
                                                extras=['{NAME[0]}'])
     compute_copynumbers_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    merge_copynumbers_task = pipeline.merge(merge_copynumbers,
+    merge_copynumbers_task = pipeline.merge(cat_wrapper,
+                                            name='cat_copynumbers',
                                             input=compute_copynumbers_task,
-                                            output=os.path.join(globals_.data_dir, 'copynumbers.json'))
+                                            output=os.path.join(globals_.data_dir, 'copynumbers.tsv'))
     merge_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    copynumber_json_task = pipeline.transform(copynumber_json,
+                                              input=merge_copynumbers_task,
+                                              filter=suffix('.tsv'),
+                                              output='.json')
+    copynumber_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     cat_all_perfect_task = pipeline.merge(cat_all_perfect,
                                           input=unique_consensus_task,
@@ -503,7 +515,7 @@ def make_alignment_pipeline(name=None):
                                               output=os.path.join(globals_.data_dir, 'all_backtranslated.fas'))
     backtranslate_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    pipeline.set_tail_tasks([backtranslate_alignment_task])
+    pipeline.set_tail_tasks([backtranslate_alignment_task, merge_copynumbers_task])
 
     if globals_.config.getboolean('Tasks', 'align_full'):
         degap_backtranslated_alignment_task = pipeline.transform(degap_backtranslated_alignment,
@@ -553,7 +565,7 @@ def make_alignment_pipeline(name=None):
                                               output='.gapped.fasta')
         insert_gaps_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-        merge_all_timepoints_task = pipeline.merge(cat_wrapper,
+        merge_all_timepoints_task = pipeline.merge(cat_wrapper_ids,
                                                    name='merge_all_timepoints',
                                                    input=insert_gaps_task,
                                                    output=os.path.join(globals_.data_dir, 'all_timepoints.aligned.fasta'))

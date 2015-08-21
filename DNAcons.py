@@ -21,7 +21,7 @@ Options:
 
 import sys
 import random
-from collections import Counter
+from collections import defaultdict
 
 from docopt import docopt
 
@@ -34,36 +34,38 @@ from Bio.Align import AlignInfo
 from Bio.Alphabet import IUPAC
 
 
-def _column_consensus(counter, n_cols, seed=None):
+def _column_consensus(counter, seed=None):
     r = random
     if seed is not None:
         r = random.Random(seed)
-    mc = counter.most_common()
-    count = mc[0][1]
-    cands = ''.join(sorted(c for c, n in mc if n == count))
+    max_count = max(counter.values())
+    cands = ''.join(sorted(char for char, count in counter.items()
+                           if count == max_count))
     char = r.choice(cands)
     assert(char in cands)
-    ambi = (count / n_cols, cands)
+    total = sum(counter.values())
+    ambi = (max_count / total, cands)
     return char, ambi
 
 
-def consensus(seqs, seed=None):
-    pwm = list(Counter() for _ in range(len(seqs[0])))
-    for seq in seqs:
-        for i, char in enumerate(seq):
-            pwm[i].update([char])
-    n_cols = len(seqs)
-    pairs = (_column_consensus(c, n_cols, seed) for c in pwm)
+def consensus(seqs, copies=None, seed=None):
+    if copies is None:
+        copies = [1] * len(seqs)
+    counters = list(defaultdict(lambda: 0) for _ in range(len(seqs[0])))
+    for seq, cn in zip(seqs, copies):
+        for column, char in enumerate(seq):
+            counters[column][char] += cn
+    pairs = (_column_consensus(c, seed) for c in counters)
     cons, ambi = zip(*pairs)
     cons = ''.join(cons)
     assert(len(cons) == len(ambi))
     for i, char in enumerate(cons):
         assert(char in ambi[i][1])
-    return ''.join(cons), ambi
+    return cons, ambi
 
 
-def consfile(filename, outfile=None, ambifile=None, id_str=None,
-             ungap=True, verbose=False, seed=None):
+def consfile(filename, outfile=None, ambifile=None, copynumber_file=None,
+             id_str=None, ungap=True, verbose=False, seed=None):
     """Computes a consensus sequence and writes it to a file.
 
     Breaks ties independently for each position by choosing randomly
@@ -77,7 +79,15 @@ def consfile(filename, outfile=None, ambifile=None, id_str=None,
     """
     alignment = AlignIO.read(filename, "fasta")
     seqs = list(r.seq for r in alignment)
-    _consensus, ambiguous = consensus(seqs, seed=seed)
+    if copynumber_file is None:
+        copies = None
+    else:
+        with open(copynumber_file) as handle:
+            lines = handle.read().strip().split('\n')
+            pairs = list(e.split() for e in lines)
+            cdict = dict((key, int(val)) for key, val in pairs)
+            copies = list(cdict[r.id] for r in alignment)
+    _consensus, ambiguous = consensus(seqs, copies, seed=seed)
     if ungap:
         # cannot just call _consensus.ungap('-'), because that will
         # mess up ambiguity information

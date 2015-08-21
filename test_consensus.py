@@ -15,11 +15,11 @@ from DNAcons import consensus
 from DNAcons import consfile
 
 
-class TestBacktranslate(unittest.TestCase):
+class TestConsensus(unittest.TestCase):
 
     def _col_helper(self, seq, expected):
         c = Counter(seq)
-        result = _column_consensus(c, len(seq), seed=0)
+        result = _column_consensus(c, seed=0)
         self.assertEquals(expected, result)
 
     def test_column_consensus(self):
@@ -33,7 +33,6 @@ class TestBacktranslate(unittest.TestCase):
         for seq, expected in tests:
             self._col_helper(seq, expected)
 
-
     def test_simple_consensus(self):
         result, ambi = consensus(['aab', 'abb'], seed=0)
         self.assertEquals(result, 'abb')
@@ -43,6 +42,11 @@ class TestBacktranslate(unittest.TestCase):
         result, ambi = consensus(['aab'], seed=0)
         self.assertEquals(result, 'aab')
         self.assertEquals(ambi, ((1.0, 'a'), (1.0, 'a'), (1.0, 'b')))
+
+    def test_weighted_consensus(self):
+        result, ambi = consensus(['aaa', 'aaa', 'bbb'], copies=[1, 1, 8], seed=0)
+        self.assertEquals(result, 'bbb')
+        self.assertEquals(ambi, ((0.8, 'b'), (0.8, 'b'), (0.8, 'b')))
 
     def consfile_helper(self, seqs, expected, expected_ambi, ungap):
         records = list(SeqRecord(Seq(s, alphabet=Gapped(IUPAC.unambiguous_dna)))

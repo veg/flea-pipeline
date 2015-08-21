@@ -1,6 +1,5 @@
 import os
 import json
-from datetime import datetime
 import shutil
 
 from ruffus import Pipeline, formatter
@@ -8,8 +7,8 @@ from ruffus import Pipeline, formatter
 from Bio import SeqIO
 
 import pipeline_globals as globals_
-from DNAcons import consfile
 from util import must_work, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter
+from fasttree_pipeline import compute_mrca
 
 
 hyphy_script_dir = os.path.join(globals_.script_dir, 'hyphy_scripts')
@@ -80,27 +79,6 @@ def write_dates(infile, outfile):
     with open(outfile, "w") as handle:
         outdict = {r.id: id_to_date[r.id.split("_")[0]] for r in records}
         json.dump(outdict, handle, separators=(",\n", ":"))
-
-
-def mrca(infile, recordfile, outfile, oldest_id):
-    """Writes records from `infile` to `recordfile` that have an ID
-    corresponding to `oldest_id`. Then runs DNAcons, writing result to
-    `outfile`.
-
-    """
-    len_id = len(oldest_id)
-    records = SeqIO.parse(infile, "fasta")
-    oldest_records = (r for r in records if r.id.startswith(oldest_id))
-    SeqIO.write(oldest_records, recordfile, "fasta")
-    consfile(recordfile, outfile, id_str="mrca", ungap=False)
-
-
-@must_work(illegal_chars='')
-def compute_mrca(infile, outfile):
-    strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
-    oldest_timepoint = min(globals_.timepoints, key=strptime)
-    oldest_records_filename = '.'.join([infile, "oldest_{}".format(oldest_timepoint.id)])
-    mrca(infile, oldest_records_filename, outfile, oldest_timepoint.id)
 
 
 def hyphy_call(script_file, name, args):

@@ -3,6 +3,7 @@
 import os
 import json
 from itertools import islice
+from datetime import datetime
 
 from ruffus import Pipeline, formatter, suffix
 
@@ -11,25 +12,54 @@ from Bio import SeqIO
 from translate import translate
 import pipeline_globals as globals_
 from util import must_work, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter, read_single_record, cat_files
-
+from DNAcons import consfile
 from alignment_pipeline import mafft
-from hyphy_pipeline import compute_mrca
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "fasttree")
 
 
 @must_work()
-def gapped_translate_wrapper(infile, outfile):
+def gapped_translate_wrapper(infiles, outfile):
+    # hack to use either single infile or first of list
+    if isinstance(infiles, str):
+        infile = infiles
+    else:
+        infile, _ = infiles
     translate(infile, outfile, gapped=True)
 
 
 @must_work()
-def run_fasttree(infile, outfile):
+def run_fasttree(infiles, outfile):
+    infile, _ = infiles
     binary = globals_.config.get('Paths', 'FastTree')
     stderr = '{}.stderr'.format(outfile)
     cmd = '{} -gtr -nt {} > {} 2>{}'.format(binary, infile, outfile, stderr)
     maybe_qsub(cmd, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
+
+
+def mrca(infile, recordfile, copynumber_file, outfile, oldest_id):
+    """Writes records from `infile` to `recordfile` that have an ID
+    corresponding to `oldest_id`. Then runs DNAcons, writing result to
+    `outfile`.
+
+    """
+    len_id = len(oldest_id)
+    records = SeqIO.parse(infile, "fasta")
+    oldest_records = (r for r in records if r.id.startswith(oldest_id))
+    SeqIO.write(oldest_records, recordfile, "fasta")
+    consfile(recordfile, outfile, copynumber_file=copynumber_file,
+             id_str="mrca", ungap=False,)
+
+
+@must_work(illegal_chars='')
+def compute_mrca(infiles, outfile):
+    alignment_file, copynumber_file = infiles
+    strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
+    oldest_timepoint = min(globals_.timepoints, key=strptime)
+    oldest_records_filename = '.'.join([alignment_file, "oldest_{}".format(oldest_timepoint.id)])
+    mrca(alignment_file, oldest_records_filename, copynumber_file,
+         outfile, oldest_timepoint.id)
 
 
 def name_to_date(name):
@@ -155,26 +185,26 @@ def make_fasttree_pipeline(name=None):
 
     n_local_jobs, n_remote_jobs = n_jobs()
 
-    translate_task = pipeline.transform(gapped_translate_wrapper,
-                                        name='translate_gapped',
-                                        input=None,
-                                        filter=formatter(),
-                                        output=os.path.join(pipeline_dir, 'translated.fasta'))
+    translate_task = pipeline.merge(gapped_translate_wrapper,
+                                    name='translate_gapped',
+                                    input=None,
+                                    output=os.path.join(pipeline_dir, 'translated.fasta'))
     translate_task.jobs_limit(n_local_jobs, local_job_limiter)
+    # all head tasks need to make this directory, because their run order is unspecified
     translate_task.mkdir(pipeline_dir)
 
-    fasttree_task = pipeline.transform(run_fasttree,
-                                       input=None,
-                                       filter=formatter(),
-                                       output=os.path.join(pipeline_dir, 'tree.newick'))
-    fasttree_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-
-    mrca_task = pipeline.transform(compute_mrca,
-                                   name='fasttree_mrca',
+    fasttree_task = pipeline.merge(run_fasttree,
                                    input=None,
-                                   filter=formatter(),
-                                   output=os.path.join(pipeline_dir, 'mrca.fasta'))
+                                   output=os.path.join(pipeline_dir, 'tree.newick'))
+    fasttree_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+    fasttree_task.mkdir(pipeline_dir)
+
+    mrca_task = pipeline.merge(compute_mrca,
+                               name='fasttree_mrca',
+                               input=None,
+                               output=os.path.join(pipeline_dir, 'mrca.fasta'))
     mrca_task.jobs_limit(n_local_jobs, local_job_limiter)
+    mrca_task.mkdir(pipeline_dir)
 
     translate_mrca_task = pipeline.transform(gapped_translate_wrapper,
                                              name='translate_mrca',
