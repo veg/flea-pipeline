@@ -230,10 +230,14 @@ def compute_copynumbers(infiles, outfile, basename):
                          nums_only=True, name='compute-copynumber')
     with open(pairfile) as f:
             pairs = list(line.strip().split("\t") for line in f.readlines())
-    # FIXME: what if no sequence maps to a consensus?
     consensus_counts = defaultdict(lambda: 0)
     for raw_id, ref_id in pairs:
         consensus_counts[ref_id] += 1
+    # deal with consensus sequences with no copynumber by giving them 0
+    ids = list(r.id for r in SeqIO.parse(perfectfile, 'fasta'))
+    for i in ids:
+        if i not in consensus_counts:
+            consensus_counts[i] = 0
     with open(outfile, 'w') as handle:
         json.dump(consensus_counts, handle, separators=(",\n", ":"))
 
