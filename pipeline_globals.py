@@ -12,4 +12,3 @@ timepoints = None
 timepoint_ids = None
 logger = None
 logger_mutex = None
-

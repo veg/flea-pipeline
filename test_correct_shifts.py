@@ -10,36 +10,47 @@ class TestCorrectShifts(unittest.TestCase):
     def test_correct_shifts(self):
         cases = (
             # deletions
-            ('AC-T', 'ACGT', 'ACXT'),
-            ('AC--T', 'ACGGT', 'ACXXT'),
-            ('AC---T', 'ACGGGT', 'ACT'),
-            ('AC----T', 'ACGGGGT', 'ACXT'),
+            ('AC---T', 'ACGACG', 'ACT'),
 
             # insertions
             ('ACGT', 'AC-T', 'ACT'),
             ('ACGTT', 'AC--T', 'ACT'),
             ('ACGTGT', 'AC---T', 'ACGTGT'),
-            ('ACAAAGT', 'AC---GT', 'ACAAAGT'),
-            ('ACAAAAGT', 'AC----GT', ''),
-            ('ACAAACCCGT', 'AC------GT', 'ACAAACCCGT'),
+            ('ACAAAG', 'AC---G', 'ACAAAG'),
+            ('ACAAAAG', 'AC----G', ''),
+            ('ACAAACCCG', 'AC------G', 'ACAAACCCG'),
 
-            # both
-            ('AG-GTTT', 'ACC-TTT', 'AGXTTT'),
+            # both; keep=False
+            ('AG-GTTT', 'ACC-TTT', ''),
         )
         for seq, ref, expected in cases:
             self._test(seq, ref, expected)
 
     def test_keep(self):
         cases = (
-            ('ACAAAAGT', 'AC----GT', 'ACAAAAGT'),
+            ('ACAAAAG', 'AC----G', 'ACAAAAG'),
+
+            # deletions
+            ('AC-ACG', 'ACGACG', 'ACXACG'),
+            ('AC--CG', 'ACGACG', 'ACXXCG'),
+            ('AC---T', 'ACGACG', 'ACT'),
+            ('AC----ACG', 'ACGACGACG', 'ACXACG'),
+
+            # both; keep=True
+            ('AC-TTTT', 'ACCTTT-', 'ACXTTT'),
         )
         for seq, ref, expected in cases:
             self._test(seq, ref, expected, keep=True)
 
 
     def test_mismatched_lengths(self):
-        seq = 'ACC'
-        ref = 'AC'
+        seq = 'AC'
+        ref = 'ACC'
+        self.assertRaises(ValueError, correct_shifts, seq, ref)
+
+    def test_reference_length(self):
+        seq = 'AC'
+        ref = 'ACCC'
         self.assertRaises(ValueError, correct_shifts, seq, ref)
 
 

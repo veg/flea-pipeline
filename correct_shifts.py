@@ -135,8 +135,8 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=False):
         start, stop = alignment_slice(caln)
         seq = seq[start:stop]
         ref = ref[start:stop]
-    if len(ref.ungap(gap_char)) % 3 != 0:
-        raise Exception('len(reference) is not a multiple of 3')
+    if sum(1 for i in ref if i != gap_char) % 3 != 0:
+        raise ValueError('len(reference) is not a multiple of 3')
     result = []
     for k, g in groupby(zip_longest(seq, ref), key=partial(first_index, gap_char)):
         # k tells us where the gap is
