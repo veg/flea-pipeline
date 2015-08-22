@@ -30,12 +30,13 @@ def hyphy_results(s):
 
 
 @must_work()
-def copy_rename_alignment(infile, outfile):
+def copy_rename_alignment(infiles, outfile):
     """rename sequence ids to match those expected by HYPHY:
 
     VXX_number
 
     """
+    infile, _ = infiles
     records = list(SeqIO.parse(infile, 'fasta'))
     for r in records:
         found = False
@@ -57,7 +58,8 @@ def copy_rename_alignment(infile, outfile):
 
 
 @must_work()
-def copy_wrapper(infile, outfile):
+def copy_wrapper(infiles, outfile):
+    infile, _ = infiles
     shutil.copyfile(infile, outfile)
 
 
@@ -137,15 +139,13 @@ def make_hyphy_pipeline(standalone, name=None):
     else:
         copy_function = copy_wrapper
 
-    copy_task = pipeline.transform(copy_function,
-                                   name="copy_alignment",
-                                   input=None,
-                                   filter=formatter(),
-                                   output=hyphy_input('merged.fas'))
+    copy_task = pipeline.merge(copy_function,
+                               name="copy_alignment",
+                               input=None,
+                               output=hyphy_input('merged.fas'))
     copy_task.jobs_limit(n_local_jobs, local_job_limiter)
     copy_task.mkdir(hyphy_input_dir)
     copy_task.mkdir(hyphy_results_dir)
-    pipeline.set_head_tasks([copy_task])
 
     if standalone:
         copynumbers_task = pipeline.transform(generate_copynumbers,
@@ -160,10 +160,9 @@ def make_hyphy_pipeline(standalone, name=None):
                                     output=hyphy_input('merged.dates'))
     dates_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    mrca_task = pipeline.transform(compute_mrca,
-                                   input=copy_task,
-                                   filter=formatter(),
-                                   output=hyphy_input('earlyCons.seq'))
+    mrca_task = pipeline.merge(compute_mrca,
+                               input=None,
+                               output=hyphy_input('earlyCons.seq'))
     mrca_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     coords_task = pipeline.transform(compute_hxb2_coords,
@@ -197,4 +196,5 @@ def make_hyphy_pipeline(standalone, name=None):
                                 output=hyphy_results('rates.json'))
     fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
+    pipeline.set_head_tasks([copy_task, mrca_task])
     return pipeline

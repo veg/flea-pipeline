@@ -173,10 +173,12 @@ if do_alignment:
     p1.set_input(input=inputs)
     if globals_.config.getboolean('Tasks', 'hyphy'):
         p2 = make_hyphy_pipeline(standalone=False)
-        p2.set_input(input=p1)
+        # p2.set_input(input=p1)
+        for task in p2.head_tasks:
+            task.set_input(input=p1.tail_tasks)
     if globals_.config.getboolean('Tasks', 'fasttree'):
         p3 = make_fasttree_pipeline()
-        # p3.set_input(input=p1)
+        p3.set_input(input=p1)
         for task in p3.head_tasks:
             task.set_input(input=p1.tail_tasks)
 else:
