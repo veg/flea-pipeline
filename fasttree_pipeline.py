@@ -5,6 +5,7 @@ import json
 from itertools import islice
 from datetime import datetime
 from collections import defaultdict
+import shutil
 
 from ruffus import Pipeline, formatter, suffix
 
@@ -38,18 +39,18 @@ def hyphy_call(script_file, name, args):
 
 
 @must_work()
-def gapped_translate_wrapper(infiles, outfile):
-    # hack to use either single infile or first of list
-    if isinstance(infiles, str):
-        infile = infiles
-    else:
-        infile, _ = infiles
+def copy_wrapper(infiles, outfile):
+    infile, _ = infiles
+    shutil.copyfile(infile, outfile)
+
+
+@must_work()
+def gapped_translate_wrapper(infile, outfile):
     translate(infile, outfile, gapped=True)
 
 
 @must_work()
-def run_fasttree(infiles, outfile):
-    infile, _ = infiles
+def run_fasttree(infile, outfile):
     binary = globals_.config.get('Paths', 'FastTree')
     stderr = '{}.stderr'.format(outfile)
     cmd = '{} -gtr -nt {} > {} 2>{}'.format(binary, infile, outfile, stderr)
@@ -209,10 +210,9 @@ def make_rates_json(infile, outfile):
 
 
 @must_work()
-def write_dates(infiles, outfile):
+def write_dates(infile, outfile):
     # NOTE: we assume the first part of the record id is the timestamp
     # id, followed by an underscore.
-    infile, _ = infiles
     records = list(SeqIO.parse(infile, "fasta"))
     id_to_date = {t.id : t.date for t in globals_.timepoints}
     with open(outfile, "w") as handle:
@@ -226,7 +226,6 @@ def compute_hxb2_regions(infile, outfile):
     hyphy_call(hxb2_script, 'hxb2_regions', [infile, outfile])
 
 
-
 def make_fasttree_pipeline(name=None):
     """Factory for the FastTree sub-pipeline."""
     if name is None:
@@ -235,19 +234,29 @@ def make_fasttree_pipeline(name=None):
 
     n_local_jobs, n_remote_jobs = n_jobs()
 
-    translate_task = pipeline.merge(gapped_translate_wrapper,
-                                    name='translate_gapped',
-                                    input=None,
-                                    output=os.path.join(pipeline_dir, 'translated.fasta'))
-    translate_task.jobs_limit(n_local_jobs, local_job_limiter)
+    # make a copy of the nucleotide alignment, because some tasks need
+    # only that as input.  especially needed to get evo_history task
+    # to work.
+    copy_alignment_task = pipeline.merge(copy_wrapper,
+                                         name="copy_alignment",
+                                         input=None,
+                                         output=os.path.join(pipeline_dir, 'msa.fasta'))
+    copy_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
     # all head tasks need to make this directory, because their run order is unspecified
-    translate_task.mkdir(pipeline_dir)
+    copy_alignment_task.mkdir(pipeline_dir)
 
-    fasttree_task = pipeline.merge(run_fasttree,
-                                   input=None,
-                                   output=os.path.join(pipeline_dir, 'tree.newick'))
+    translate_task = pipeline.transform(gapped_translate_wrapper,
+                                        name='translate_gapped',
+                                        input=copy_alignment_task,
+                                        filter=formatter(),
+                                        output=os.path.join(pipeline_dir, 'translated.fasta'))
+    translate_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    fasttree_task = pipeline.transform(run_fasttree,
+                                       input=copy_alignment_task,
+                                       filter=formatter(),
+                                       output=os.path.join(pipeline_dir, 'tree.newick'))
     fasttree_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-    fasttree_task.mkdir(pipeline_dir)
 
     mrca_task = pipeline.merge(compute_mrca,
                                name='fasttree_mrca',
@@ -298,9 +307,10 @@ def make_fasttree_pipeline(name=None):
                                          output=os.path.join(pipeline_dir, 'rates.json'))
     rates_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    dates_task = pipeline.merge(write_dates,
-                                input=None,
-                                output=os.path.join(pipeline_dir, 'dates.json'))
+    dates_task = pipeline.transform(write_dates,
+                                    input=copy_alignment_task,
+                                    filter=formatter(),
+                                    output=os.path.join(pipeline_dir, 'dates.json'))
     dates_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     region_coords_task = pipeline.transform(compute_hxb2_regions,
@@ -309,5 +319,5 @@ def make_fasttree_pipeline(name=None):
                                             output=os.path.join(pipeline_dir, 'region_coords.json'))
     region_coords_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    pipeline.set_head_tasks([translate_task, fasttree_task, mrca_task, dates_task])
+    pipeline.set_head_tasks([copy_alignment_task, mrca_task])
     return pipeline
