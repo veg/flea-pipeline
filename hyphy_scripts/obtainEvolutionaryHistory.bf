@@ -12,20 +12,32 @@ LoadFunctionLibrary ("CodonTools");
 LoadFunctionLibrary ("lib/tools.bf");
 LoadFunctionLibrary ("BranchLengthFitters");
 
-fprintf(stdout,"\nPlease enter the base path:");
-fscanf  (stdin, "String", basePath);
+fprintf(stdout,"\nEnter the alignment file:");
+fscanf  (stdin, "String", _nucSequences);
 
-fprintf(stdout,"\n", basePath, "\n");
+fprintf(stdout,"\nEnter the dates file:");
+fscanf  (stdin, "String", _dates);
 
-_nucSequences = "`basePath`/input/merged.fas";
-_dates        = "`basePath`/input/merged.dates";
-_regions      = "`basePath`/input/merged.prot.parts";
-_earlyCons    = "`basePath`/input/earlyCons.seq";
-_mrcaTo       = "`basePath`/input/mrca.seq";
-_ratesTo          = "`basePath`/results/rates_pheno.tsv";
-_treesTo          = "`basePath`/results/trees.json";
-_ancestralTo  = "`basePath`/input/ancestral_sequences.fas";
-_sequenceInfo = "`basePath`/results/sequences.json";
+fprintf(stdout,"\nEnter the regions file:");
+fscanf  (stdin, "String", _regions);
+
+fprintf(stdout,"\nEnter the earlyCons file:");
+fscanf  (stdin, "String", _earlyCons);
+
+fprintf(stdout,"\nEnter the MRCA file:");
+fscanf  (stdin, "String", _mrcaTo);
+
+fprintf(stdout,"\nEnter the rates file:");
+fscanf  (stdin, "String", _ratesTo);
+
+fprintf(stdout,"\nEnter the trees file:");
+fscanf  (stdin, "String", _treesTo);
+
+fprintf(stdout,"\nEnter the ancestral file:");
+fscanf  (stdin, "String", _ancestralTo);
+
+fprintf(stdout,"\nEnter the sequences file:");
+fscanf  (stdin, "String", _sequenceInfo);
 
 DataSet allData  = ReadDataFile (_nucSequences);
 HarvestFrequencies (positionalFrequencies, allData,3,1,1);
