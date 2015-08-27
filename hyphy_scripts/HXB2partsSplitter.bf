@@ -3,7 +3,6 @@ LoadFunctionLibrary ("DescriptiveStatistics");
 LoadFunctionLibrary ("CodonTools");
 LoadFunctionLibrary ("ReadDelimitedFiles");
 
-_use_copy_numbers = "_([0-9]+)$";
 fprintf(stdout,"\nPlease enter the path of the final nucleotide alignment:");
 fscanf  (stdin, "String", _nucSequences);
 
