@@ -18,6 +18,23 @@ from alignment_pipeline import mafft
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "fasttree")
+hyphy_script_dir = os.path.join(globals_.script_dir, 'hyphy_scripts')
+
+
+def hyphy_script(name):
+    return os.path.join(hyphy_script_dir, name)
+
+
+def hyphy_call(script_file, name, args):
+    if args:
+        in_str = "".join("{}\n".format(i) for i in args)
+    else:
+        in_str = ''
+    infile = os.path.join(globals_.data_dir, '{}.stdin'.format(name))
+    with open(infile, 'w') as handle:
+        handle.write(in_str)
+    cmd = '{} {} < {}'.format(globals_.config.get('Paths', 'hyphy'), script_file, infile)
+    maybe_qsub(cmd, name=name)
 
 
 @must_work()
@@ -191,6 +208,25 @@ def make_rates_json(infile, outfile):
         json.dump(result, handle)
 
 
+@must_work()
+def write_dates(infiles, outfile):
+    # NOTE: we assume the first part of the record id is the timestamp
+    # id, followed by an underscore.
+    infile, _ = infiles
+    records = list(SeqIO.parse(infile, "fasta"))
+    id_to_date = {t.id : t.date for t in globals_.timepoints}
+    with open(outfile, "w") as handle:
+        outdict = {r.id: id_to_date[r.id.split("_")[0]] for r in records}
+        json.dump(outdict, handle, separators=(",\n", ":"))
+
+
+@must_work()
+def compute_hxb2_regions(infile, outfile):
+    hxb2_script = hyphy_script('HXB2partsSplitter.bf')
+    hyphy_call(hxb2_script, 'hxb2_regions', [infile, outfile])
+
+
+
 def make_fasttree_pipeline(name=None):
     """Factory for the FastTree sub-pipeline."""
     if name is None:
@@ -262,5 +298,16 @@ def make_fasttree_pipeline(name=None):
                                          output=os.path.join(pipeline_dir, 'rates.json'))
     rates_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    pipeline.set_head_tasks([translate_task, fasttree_task, mrca_task])
+    dates_task = pipeline.merge(write_dates,
+                                input=None,
+                                output=os.path.join(pipeline_dir, 'dates.json'))
+    dates_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    region_coords_task = pipeline.transform(compute_hxb2_regions,
+                                            input=mrca_task,
+                                            filter=formatter(),
+                                            output=os.path.join(pipeline_dir, 'region_coords.json'))
+    region_coords_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+
+    pipeline.set_head_tasks([translate_task, fasttree_task, mrca_task, dates_task])
     return pipeline
