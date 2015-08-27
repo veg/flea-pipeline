@@ -6,17 +6,21 @@ LoadFunctionLibrary ("NJ");
 LoadFunctionLibrary ("ReadDelimitedFiles");
 LoadFunctionLibrary ("lib/tools.bf");
 
-/* important -- specify as the absolute path, otherwise FUBAR breaks */
-fprintf(stdout,"\nPlease enter the absolute base path:");
-fscanf  (stdin, "String", basePath);
+/* important -- specify as absolute paths, otherwise FUBAR breaks */
+fprintf(stdout,"\Enter the alignment file:");
+fscanf  (stdin, "String", _nucSequences);
 
-_nucSequences = "`basePath`/input/merged.fas";
-_dates        = "`basePath`/input/merged.dates";
-_mrca_from        = "`basePath`/input/mrca.seq";
+fprintf(stdout,"\Enter the dates file:");
+fscanf  (stdin, "String", _dates);
 
-_fubar_directory = "`basePath`/results/";
+fprintf(stdout,"\Enter the mrca file:");
+fscanf  (stdin, "String", _mrca_from);
 
-_rates_to               = "`basePath`/results/rates.json";
+fprintf(stdout,"\Enter the working directory:");
+fscanf  (stdin, "String", _fubar_directory);
+
+fprintf(stdout,"\Enter the rates output file:");
+fscanf  (stdin, "String", _rates_to);
 
 _c2p_mapping = defineCodonToAA ();
 COUNT_GAPS_IN_FREQUENCIES = 0;
