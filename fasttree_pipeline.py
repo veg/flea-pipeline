@@ -4,6 +4,7 @@ import os
 import json
 from itertools import islice
 from datetime import datetime
+from collections import defaultdict
 
 from ruffus import Pipeline, formatter, suffix
 
@@ -156,13 +157,26 @@ def make_coordinates_json(infile, outfile):
 
 
 @must_work()
-# FIXME: change frontend to not require this
+# TODO: modify turnover script to not need json input
 def make_frequencies_json(infile, outfile):
-    with open(infile) as handle:
-        coordinates = json.load(handle)['coordinates']
-    result = {str(i + 1): {"HXB2": val} for i, val in enumerate(coordinates)}
+    id_to_date = {t.id : t.date for t in globals_.timepoints}
+    def name_to_date(name):
+        return id_to_date[name.split("_")[0]]
+
+    records = SeqIO.parse(infile, "fasta")
+    result = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    for r in records:
+        for i, residue in enumerate(str(r.seq)):
+            result[i + 1][name_to_date(r.id)][residue] += 1
     with open(outfile, 'w') as handle:
         json.dump(result, handle, separators=(",\n", ":"))
+
+
+@must_work()
+def turnover(infile, outfile):
+    script_path = os.path.join(globals_.script_dir, 'AAturn.jl')
+    call("julia {script} {infile} {outfile} 0.01".format(script=script_path,
+                                                         infile=infile, outfile=outfile))
 
 
 @must_work()
@@ -230,11 +244,17 @@ def make_fasttree_pipeline(name=None):
                                          output=os.path.join(pipeline_dir, 'trees.json'))
     trees_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    frequencies_json_task = pipeline.transform(make_frequencies_json,
-                                               input=coordinates_json_task,
+    frequencies_task = pipeline.transform(make_frequencies_json,
+                                               input=translate_task,
                                                filter=formatter(),
                                                output=os.path.join(pipeline_dir, 'frequencies.json'))
-    frequencies_json_task.jobs_limit(n_local_jobs, local_job_limiter)
+    frequencies_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    turnover_task = pipeline.transform(turnover,
+                                       input=frequencies_task,
+                                       filter=formatter(),
+                                       output=os.path.join(pipeline_dir, 'turnover.json'))
+    turnover_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     rates_json_task = pipeline.transform(make_rates_json,
                                          input=translate_task,
