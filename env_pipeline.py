@@ -164,30 +164,22 @@ n_local_jobs, n_remote_jobs = n_jobs()
 options.jobs = max(n_local_jobs, n_remote_jobs)
 
 from alignment_pipeline import make_alignment_pipeline
-from hyphy_pipeline import make_hyphy_pipeline
 from fasttree_pipeline import make_fasttree_pipeline
 
 if do_alignment:
     inputs = list(os.path.join(data_dir, t.file) for t in timepoints)
     p1 = make_alignment_pipeline()
     p1.set_input(input=inputs)
-    if globals_.config.getboolean('Tasks', 'hyphy'):
-        p2 = make_hyphy_pipeline(standalone=False)
-        # p2.set_input(input=p1)
+    if globals_.config.getboolean('Tasks', 'analysis'):
+        p2 = make_fasttree_pipeline(do_hyphy=globals_.config.getboolean('Tasks', 'hyphy_analysis'))
+        p2.set_input(input=p1)
         for task in p2.head_tasks:
             task.set_input(input=p1.tail_tasks)
-    if globals_.config.getboolean('Tasks', 'fasttree'):
-        p3 = make_fasttree_pipeline()
-        p3.set_input(input=p1)
-        for task in p3.head_tasks:
-            task.set_input(input=p1.tail_tasks)
 else:
-    if globals_.config.getboolean('Tasks', 'hyphy'):
-        p1 = make_hyphy_pipeline(standalone=True)
-        p1.set_input(input=options.alignment)
-    if globals_.config.getboolean('Tasks', 'fasttree'):
-        p2 = make_fasttree_pipeline()
-        p2.set_input(input=options.alignment)
+    if globals_.config.getboolean('Tasks', 'analysis'):
+        p1 = make_fasttree_pipeline(do_hyphy=globals_.config.getboolean('Tasks', 'hyphy_analysis'))
+        p1 = make_fasttree_pipeline()
+        p1.set_input(input=options.alignment)  # FIXME: needs copynumber file
 
 
 if __name__ == '__main__':

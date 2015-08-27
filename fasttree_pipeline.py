@@ -233,7 +233,7 @@ def run_fubar(infiles, outfile):
     hyphy_call(hyphy_script('runFUBAR.bf'), 'fubar', params)
 
 
-def make_fasttree_pipeline(name=None):
+def make_fasttree_pipeline(do_hyphy, name=None):
     """Factory for the FastTree sub-pipeline."""
     if name is None:
         name = "fasttree_pipeline"
@@ -314,21 +314,22 @@ def make_fasttree_pipeline(name=None):
                                     output=os.path.join(pipeline_dir, 'dates.json'))
     dates_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    region_coords_task = pipeline.transform(compute_hxb2_regions,
-                                            input=mrca_task,
-                                            filter=formatter(),
-                                            output=os.path.join(pipeline_dir, 'region_coords.json'))
-    region_coords_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+    if do_hyphy:
+        region_coords_task = pipeline.transform(compute_hxb2_regions,
+                                                input=mrca_task,
+                                                filter=formatter(),
+                                                output=os.path.join(pipeline_dir, 'region_coords.json'))
+        region_coords_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    evo_history_task = pipeline.merge(evo_history,
-                                      input=[copy_alignment_task, dates_task, region_coords_task, mrca_task],
-                                      output=os.path.join(pipeline_dir, 'rates_pheno.tsv'))
-    evo_history_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+        evo_history_task = pipeline.merge(evo_history,
+                                          input=[copy_alignment_task, dates_task, region_coords_task, mrca_task],
+                                          output=os.path.join(pipeline_dir, 'rates_pheno.tsv'))
+        evo_history_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    fubar_task = pipeline.merge(run_fubar,
-                                input=[copy_alignment_task, dates_task, mrca_task],
-                                output=os.path.join(pipeline_dir, 'rates.json'))
-    fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+        fubar_task = pipeline.merge(run_fubar,
+                                    input=[copy_alignment_task, dates_task, mrca_task],
+                                    output=os.path.join(pipeline_dir, 'rates.json'))
+        fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     pipeline.set_head_tasks([copy_alignment_task, mrca_task])
     return pipeline

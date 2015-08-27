@@ -46,8 +46,10 @@ max_cluster_size: 30
 [Tasks]
 pause_after_codon_alignment: False
 align_full: False
-hyphy: True
-fasttree: True
+# if False, stop after generating alignment
+analysis: True
+# if True, run evolutionary history and FUBAR scripts
+hyphy_analysis: True
 
 [Misc]
 # when a task gets re-run
