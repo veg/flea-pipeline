@@ -9,12 +9,13 @@ from collections import defaultdict
 from ruffus import Pipeline, formatter, suffix
 
 from Bio import SeqIO
+from Bio import Phylo
 
 from translate import translate
 import pipeline_globals as globals_
 from util import must_work, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter, read_single_record, cat_files
 from DNAcons import consfile
-from alignment_pipeline import mafft
+from alignment_pipeline import mafft, cat_wrapper_ids
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "analysis")
@@ -65,6 +66,14 @@ def run_fasttree(infile, outfile):
     stderr = '{}.stderr'.format(outfile)
     cmd = '{} -gtr -nt {} > {} 2>{}'.format(binary, infile, outfile, stderr)
     maybe_qsub(cmd, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
+
+
+@must_work()
+def reroot_at_mrca(infile, outfile):
+    tree = next(Phylo.parse(infile, 'newick'))
+    clade = next(tree.find_clades('mrca'))
+    tree.root_with_outgroup(clade)
+    Phylo.write([tree], outfile, 'newick')
 
 
 def mrca(infile, recordfile, copynumber_file, outfile, oldest_id):
@@ -260,25 +269,42 @@ def make_analysis_pipeline(do_hyphy, name=None):
     # all head tasks need to make this directory, because their run order is unspecified
     add_copynumbers_task.mkdir(pipeline_dir)
 
+    mrca_task = pipeline.merge(compute_mrca,
+                               name='compute_mrca',
+                               input=None,
+                               output=os.path.join(pipeline_dir, 'mrca.fasta'))
+    mrca_task.jobs_limit(n_local_jobs, local_job_limiter)
+    mrca_task.mkdir(pipeline_dir)
+
+    add_mrca_task = pipeline.merge(cat_wrapper_ids,
+                                   name='add_mrca',
+                                   input=[mrca_task, add_copynumbers_task],
+                                   output=os.path.join(pipeline_dir, 'msa_with_mrca.fasta'))
+    add_mrca_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    fasttree_task = pipeline.transform(run_fasttree,
+                                       input=add_mrca_task,
+                                       filter=formatter(),
+                                       output=os.path.join(pipeline_dir, 'tree.newick'))
+    fasttree_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+
+    reroot_task = pipeline.transform(reroot_at_mrca,
+                                     input=fasttree_task,
+                                     filter=suffix('.newick'),
+                                     output='.rerooted.newick')
+
+    trees_json_task = pipeline.transform(make_trees_json,
+                                         input=reroot_task,
+                                         filter=formatter(),
+                                         output=os.path.join(pipeline_dir, 'trees.json'))
+    trees_json_task.jobs_limit(n_local_jobs, local_job_limiter)
+
     translate_task = pipeline.transform(gapped_translate_wrapper,
                                         name='translate_gapped',
                                         input=add_copynumbers_task,
                                         filter=formatter(),
                                         output=os.path.join(pipeline_dir, 'translated.fasta'))
     translate_task.jobs_limit(n_local_jobs, local_job_limiter)
-
-    fasttree_task = pipeline.transform(run_fasttree,
-                                       input=add_copynumbers_task,
-                                       filter=formatter(),
-                                       output=os.path.join(pipeline_dir, 'tree.newick'))
-    fasttree_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-
-    mrca_task = pipeline.merge(compute_mrca,
-                               name='fasttree_mrca',
-                               input=None,
-                               output=os.path.join(pipeline_dir, 'mrca.fasta'))
-    mrca_task.jobs_limit(n_local_jobs, local_job_limiter)
-    mrca_task.mkdir(pipeline_dir)
 
     translate_mrca_task = pipeline.transform(gapped_translate_wrapper,
                                              name='translate_mrca',
@@ -297,12 +323,6 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                          input=[translate_task, translate_mrca_task, make_coordinates_json],
                                          output=os.path.join(pipeline_dir, 'sequences.json'))
     sequences_json_task.jobs_limit(n_local_jobs, local_job_limiter)
-
-    trees_json_task = pipeline.transform(make_trees_json,
-                                         input=fasttree_task,
-                                         filter=formatter(),
-                                         output=os.path.join(pipeline_dir, 'trees.json'))
-    trees_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     frequencies_task = pipeline.transform(make_frequencies_json,
                                                input=translate_task,
