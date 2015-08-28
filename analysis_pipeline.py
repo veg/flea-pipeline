@@ -18,7 +18,7 @@ from DNAcons import consfile
 from alignment_pipeline import mafft
 
 
-pipeline_dir = os.path.join(globals_.data_dir, "fasttree")
+pipeline_dir = os.path.join(globals_.data_dir, "analysis")
 hyphy_script_dir = os.path.join(globals_.script_dir, 'hyphy_scripts')
 
 
@@ -229,14 +229,14 @@ def evo_history(infiles, outfile):
 
 @must_work()
 def run_fubar(infiles, outfile):
-    params = infiles + [pipeline_dir, outfile]
+    params = infiles + ["{}/".format(pipeline_dir), outfile]
     hyphy_call(hyphy_script('runFUBAR.bf'), 'fubar', params)
 
 
-def make_fasttree_pipeline(do_hyphy, name=None):
-    """Factory for the FastTree sub-pipeline."""
+def make_analysis_pipeline(do_hyphy, name=None):
+    """Factory for the analysis sub-pipeline."""
     if name is None:
-        name = "fasttree_pipeline"
+        name = "analysis_pipeline"
     pipeline = Pipeline(name)
 
     n_local_jobs, n_remote_jobs = n_jobs()
