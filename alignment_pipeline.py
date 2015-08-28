@@ -472,7 +472,7 @@ def make_alignment_pipeline(name=None):
     merge_copynumbers_task = pipeline.merge(cat_wrapper,
                                             name='cat_copynumbers',
                                             input=compute_copynumbers_task,
-                                            output=os.path.join(globals_.data_dir, 'copynumbers.tsv'))
+                                            output=os.path.join(pipeline_dir, 'copynumbers.tsv'))
     merge_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     copynumber_json_task = pipeline.transform(copynumber_json,
@@ -483,7 +483,7 @@ def make_alignment_pipeline(name=None):
 
     cat_all_perfect_task = pipeline.merge(cat_all_perfect,
                                           input=unique_consensus_task,
-                                          output=os.path.join(globals_.data_dir, "all_uniques.fasta"))
+                                          output=os.path.join(pipeline_dir, "all_uniques.fasta"))
     cat_all_perfect_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     translate_perfect_task = pipeline.transform(translate_wrapper,
@@ -504,7 +504,7 @@ def make_alignment_pipeline(name=None):
     backtranslate_alignment_task = pipeline.merge(backtranslate_alignment,
                                               input=[cat_all_perfect_task,
                                                      codon_align_perfect_task],
-                                              output=os.path.join(globals_.data_dir, 'all_backtranslated.fasta'))
+                                              output=os.path.join(pipeline_dir, 'all_backtranslated.fasta'))
     backtranslate_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     pipeline.set_head_tasks([filter_fastq_task])
@@ -561,7 +561,7 @@ def make_alignment_pipeline(name=None):
         merge_all_timepoints_task = pipeline.merge(cat_wrapper_ids,
                                                    name='merge_all_timepoints',
                                                    input=insert_gaps_task,
-                                                   output=os.path.join(globals_.data_dir, 'all_timepoints.aligned.fasta'))
+                                                   output=os.path.join(pipeline_dir, 'all_timepoints.aligned.fasta'))
         merge_all_timepoints_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     return pipeline
