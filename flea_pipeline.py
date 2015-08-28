@@ -12,8 +12,8 @@ the raw sequences for a timepoint. Otherwise it is the base id for a
 timepoint.
 
 Usage:
-  env_pipeline.py [options] <file>
-  env_pipeline.py -h | --help
+  flea_pipeline.py [options] <file>
+  flea_pipeline.py -h | --help
 
 Options:
   --alignment [STR]  Fasta file containing codon-aligned sequences.
@@ -121,9 +121,9 @@ script_dir = os.path.abspath(os.path.split(__file__)[0])
 
 # read configuration
 if options.config is None:
-    configfile = os.path.join(data_dir, 'env_pipeline.config')
+    configfile = os.path.join(data_dir, 'flea_pipeline.config')
     if not os.path.exists(configfile):
-        configfile = os.path.join(script_dir, 'env_pipeline.config')
+        configfile = os.path.join(script_dir, 'flea_pipeline.config')
 else:
     configfile = options.config
 if not os.path.exists(configfile):

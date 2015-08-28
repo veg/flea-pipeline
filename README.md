@@ -14,13 +14,13 @@ Python dependencies
 
 Setup
 -----
-1. Copy `env_pipeline.config.tpl` to `env_pipeline.config`.
+1. Copy `flea_pipeline.config.tpl` to `flea_pipeline.config`.
 
 2. Download contaminants and references files.
 
 3. Generate usearch databases for each. (http://www.drive5.com/usearch/manual/cmd_makeudb_usearch.html)
 
-4. Edit paths in `env_pipeline.config` to point to those databases.
+4. Edit paths in `flea_pipeline.config` to point to those databases.
 
 
 Usage
@@ -31,7 +31,7 @@ activate it like so:
 
 `source /opt/talign/env/bin/activate`
 
-Run the whole pipeline with `env_pipeline.py <control file>`.
+Run the whole pipeline with `flea_pipeline.py <control file>`.
 
 The `<control file>` argument is a file containing a list of fasta
 files, their sequence ids, and their dates, seperated by spaces.
