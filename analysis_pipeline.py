@@ -5,7 +5,6 @@ import json
 from itertools import islice
 from datetime import datetime
 from collections import defaultdict
-import shutil
 
 from ruffus import Pipeline, formatter, suffix
 
@@ -38,10 +37,21 @@ def hyphy_call(script_file, name, args):
     maybe_qsub(cmd, name=name)
 
 
+def replace_name(record, name):
+    record.name = name
+    return record
+
+
 @must_work()
-def copy_wrapper(infiles, outfile):
-    infile, _ = infiles
-    shutil.copyfile(infile, outfile)
+def add_copynumbers(infiles, outfile):
+    msafile, copyfile = infiles
+    with open(copyfile) as handle:
+        lines = handle.read().strip().split('\n')
+    name_to_cn = dict(line.split() for line in lines)
+    records = SeqIO.parse(msafile, 'fasta')
+    result = (replace_name(r, "{}_{}".format(r.name, name_to_cn[r.name]))
+              for r in records)
+    SeqIO.write(result, outfile, "fasta")
 
 
 @must_work()
@@ -241,26 +251,24 @@ def make_analysis_pipeline(do_hyphy, name=None):
 
     n_local_jobs, n_remote_jobs = n_jobs()
 
-    # make a copy of the nucleotide alignment, because some tasks need
-    # only that as input.  especially needed to get evo_history task
-    # to work.
-    copy_alignment_task = pipeline.merge(copy_wrapper,
-                                         name="copy_alignment",
-                                         input=None,
-                                         output=os.path.join(pipeline_dir, 'msa.fasta'))
-    copy_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
+    # evo_history needs copynumbers in sequence names
+    add_copynumbers_task = pipeline.merge(add_copynumbers,
+                                          name="add_copynumbers",
+                                          input=None,
+                                          output=os.path.join(pipeline_dir, "msa_with_copynumbers.fasta"))
+    add_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
     # all head tasks need to make this directory, because their run order is unspecified
-    copy_alignment_task.mkdir(pipeline_dir)
+    add_copynumbers_task.mkdir(pipeline_dir)
 
     translate_task = pipeline.transform(gapped_translate_wrapper,
                                         name='translate_gapped',
-                                        input=copy_alignment_task,
+                                        input=add_copynumbers_task,
                                         filter=formatter(),
                                         output=os.path.join(pipeline_dir, 'translated.fasta'))
     translate_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     fasttree_task = pipeline.transform(run_fasttree,
-                                       input=copy_alignment_task,
+                                       input=add_copynumbers_task,
                                        filter=formatter(),
                                        output=os.path.join(pipeline_dir, 'tree.newick'))
     fasttree_task.jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -309,7 +317,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
     turnover_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     dates_task = pipeline.transform(write_dates,
-                                    input=copy_alignment_task,
+                                    input=add_copynumbers_task,
                                     filter=formatter(),
                                     output=os.path.join(pipeline_dir, 'dates.json'))
     dates_task.jobs_limit(n_local_jobs, local_job_limiter)
@@ -322,14 +330,14 @@ def make_analysis_pipeline(do_hyphy, name=None):
         region_coords_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
         evo_history_task = pipeline.merge(evo_history,
-                                          input=[copy_alignment_task, dates_task, region_coords_task, mrca_task],
+                                          input=[add_copynumbers_task, dates_task, region_coords_task, mrca_task],
                                           output=os.path.join(pipeline_dir, 'rates_pheno.tsv'))
         evo_history_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
         fubar_task = pipeline.merge(run_fubar,
-                                    input=[copy_alignment_task, dates_task, mrca_task],
+                                    input=[add_copynumbers_task, dates_task, mrca_task],
                                     output=os.path.join(pipeline_dir, 'rates.json'))
         fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    pipeline.set_head_tasks([copy_alignment_task, mrca_task])
+    pipeline.set_head_tasks([add_copynumbers_task, mrca_task])
     return pipeline
