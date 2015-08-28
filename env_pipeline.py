@@ -21,16 +21,7 @@ Options:
 
 """
 
-# TODO:
-# - run as many tasks as possible on the cluster
-# - order of input files not guaranteed; make more robust
-# - check everywhere usearch is used; summarize # seqs lost
-# - are identities re-used correctly?
-# - rename files; flea and test subdirectories
-# - logging
-# - update to latest versions of dependencies
-# - replace unnecessary dependencies
-# - update README
+__version__ = "0.2.0"
 
 # FIXME: for now, filenames cannot have spaces. Make this more
 # robust. For instance use tab-seperated values.
@@ -39,6 +30,7 @@ Options:
 
 import os
 import csv
+import json
 from collections import namedtuple, defaultdict
 
 from configparser import ConfigParser, ExtendedInterpolation
@@ -182,5 +174,15 @@ else:
 
 
 if __name__ == '__main__':
+    # write run info file
+    run_info = {}
+    run_info['version'] = __version__
+    config_dict = {}
+    for section in config:
+        config_dict[section] = dict(config[section])
+    run_info['configuration'] = config_dict
+    with open(os.path.join(data_dir, 'run_info.json'), 'w') as handle:
+        json.dump(run_info, handle, separators=(",\n", ":"))
+
     checksum_level = config.getint('Misc', 'checksum_level')
     cmdline.run(options, checksum_level=checksum_level)
