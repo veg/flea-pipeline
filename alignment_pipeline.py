@@ -214,12 +214,6 @@ def unique_consensus(infile, outfile):
 
 
 @must_work()
-def perfect_orfs(infile, outfile):
-    perfect_file(infile, outfile, min_len=int(globals_.config.get('Parameters', 'min_orf_length')),
-                 table=1, verbose=False)
-
-
-@must_work()
 def make_individual_dbs(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
@@ -279,7 +273,7 @@ def pause(filename):
 @must_work()
 def backtranslate_alignment(infiles, outfile):
     perfect, aligned = infiles
-    check_basename(perfect, 'all_perfect_orfs.fasta')
+    check_basename(perfect, 'all_uniques.fasta')
     backtranslate(aligned, perfect, outfile)
 
 
@@ -462,13 +456,6 @@ def make_alignment_pipeline(name=None):
                                                output='.uniques.fasta')
     unique_consensus_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    # FIXME: fix this step. allow for case when amplicon does not include stop codon.
-    # perfect_orfs_task = pipeline.transform(perfect_orfs,
-    #                                        input=unique_consensus_task,
-    #                                        filter=suffix('.fasta'),
-    #                                        output='.perfect.fasta')
-    # perfect_orfs_task.jobs_limit(n_local_jobs, local_job_limiter)
-
     make_individual_dbs_task = pipeline.transform(make_individual_dbs,
                                                   input=unique_consensus_task,
                                                   filter=suffix('.fasta'),
@@ -496,7 +483,7 @@ def make_alignment_pipeline(name=None):
 
     cat_all_perfect_task = pipeline.merge(cat_all_perfect,
                                           input=unique_consensus_task,
-                                          output=os.path.join(globals_.data_dir, "all_perfect_orfs.fasta"))
+                                          output=os.path.join(globals_.data_dir, "all_uniques.fasta"))
     cat_all_perfect_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     translate_perfect_task = pipeline.transform(translate_wrapper,
@@ -517,7 +504,7 @@ def make_alignment_pipeline(name=None):
     backtranslate_alignment_task = pipeline.merge(backtranslate_alignment,
                                               input=[cat_all_perfect_task,
                                                      codon_align_perfect_task],
-                                              output=os.path.join(globals_.data_dir, 'all_backtranslated.fas'))
+                                              output=os.path.join(globals_.data_dir, 'all_backtranslated.fasta'))
     backtranslate_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     pipeline.set_head_tasks([filter_fastq_task])
@@ -527,7 +514,7 @@ def make_alignment_pipeline(name=None):
         degap_backtranslated_alignment_task = pipeline.transform(degap_backtranslated_alignment,
                                                                  input=backtranslate_alignment_task,
                                                                  filter=formatter(),
-                                                                 output='{path[0]}/all_perfect_orfs_degapped.fasta')
+                                                                 output='{path[0]}/all_uniques_degapped.fasta')
         degap_backtranslated_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
 
         make_full_db_task = pipeline.transform(make_full_db,
