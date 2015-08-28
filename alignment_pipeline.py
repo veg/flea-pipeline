@@ -26,6 +26,9 @@ from correct_shifts import correct_shifts_fasta, write_correction_result
 from perfectORFs import perfect_file
 
 
+pipeline_dir = os.path.join(globals_.data_dir, "alignment")
+
+
 def mafft(infile, outfile):
     stderr = '{}.stderr'.format(outfile)
     cmd = 'mafft-fftns --ep 0.5 --quiet --preservecase {} > {} 2>{}'.format(infile, outfile, stderr)
@@ -365,10 +368,10 @@ def make_alignment_pipeline(name=None):
 
     filter_fastq_task = pipeline.transform(filter_fastq,
                                            input=None,
-                                           filter=suffix(".fastq"),
-                                           output='.qfilter.fasta')
-    filter_fastq_task.jobs_limit(n_local_jobs, local_job_limiter)
-    pipeline.set_head_tasks([filter_fastq_task])
+                                           filter=formatter(),
+                                           output=os.path.join(pipeline_dir, '{basename[0]}{ext[0]}.qfilter.fasta'))
+    filter_fastq_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+    filter_fastq_task.mkdir(pipeline_dir)
 
     filter_contaminants_task = pipeline.transform(filter_contaminants,
                                                   input=filter_fastq_task,
@@ -517,6 +520,7 @@ def make_alignment_pipeline(name=None):
                                               output=os.path.join(globals_.data_dir, 'all_backtranslated.fas'))
     backtranslate_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
 
+    pipeline.set_head_tasks([filter_fastq_task])
     pipeline.set_tail_tasks([backtranslate_alignment_task, merge_copynumbers_task])
 
     if globals_.config.getboolean('Tasks', 'align_full'):
