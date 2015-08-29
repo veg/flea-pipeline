@@ -9,6 +9,6 @@ script_dir = None
 data_dir = None
 qsub_dir = None
 timepoints = None
-timepoint_ids = None
+key_to_label = None
 logger = None
 logger_mutex = None

@@ -66,13 +66,13 @@ logger, logger_mutex = cmdline.setup_logging(__name__,
 
 ################################################################################
 # TODO: encapsulate this timepoint business
-Timepoint = namedtuple('Timepoint', ['key', 'id', 'date'])
+Timepoint = namedtuple('Timepoint', ['key', 'label', 'date'])
 
 with open(options.file, newline='') as csvfile:
     reader = csv.reader(csvfile, delimiter=' ')
     timepoints = list(Timepoint(f, i, d) for f, i, d in reader)
 
-timepoint_ids = {t.key: t.id for t in timepoints}
+key_to_label = {t.key: t.label for t in timepoints}
 
 do_alignment = options.alignment is None
 
@@ -94,7 +94,7 @@ else:
     for r in records:
         found = False
         # check every possible key, in case they are different lengths.
-        for k, v in timepoint_ids.items():
+        for k, v in key_to_label.items():
             if r.id.startswith(k):
                 rest = r.id[len(k):]
                 rest = rest.strip('_')
@@ -110,8 +110,8 @@ else:
             raise Exception('timepoint {} has only {} sequences'.format(k, v))
 
 
-if len(set(t.id for t in timepoints)) != len(timepoints):
-    raise Exception('non-unique sequence ids')
+if len(set(t.label for t in timepoints)) != len(timepoints):
+    raise Exception('non-unique timepoint labels')
 
 ################################################################################
 
@@ -143,7 +143,7 @@ globals_.script_dir = script_dir
 globals_.data_dir = data_dir
 globals_.qsub_dir = os.path.join(data_dir, 'qsub_files')
 globals_.timepoints = timepoints
-globals_.timepoint_ids = timepoint_ids
+globals_.key_to_label = key_to_label
 globals_.logger = logger
 globals_.logger_mutex = logger_mutex
 

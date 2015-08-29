@@ -47,7 +47,7 @@ def filter_fastq(infile, outfile):
          ' -relabel "{seq_id}_"'.format(
             usearch=globals_.config.get('Paths', 'usearch'),
             infile=infile, outfile=outfile, qmax=qmax, min_len=min_len,
-            max_err_rate=max_err_rate, seq_id=globals_.timepoint_ids[infile]))
+            max_err_rate=max_err_rate, seq_id=globals_.key_to_label[infile]))
     maybe_qsub(cmd, outfiles=outfile, name='filter-fastq')
 
 

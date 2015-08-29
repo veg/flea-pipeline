@@ -99,12 +99,12 @@ def compute_mrca(infiles, outfile):
     oldest_timepoint = min(globals_.timepoints, key=strptime)
     oldest_records_filename = os.path.join(pipeline_dir, 'oldest_sequences.fasta')
     mrca(alignment_file, oldest_records_filename, copynumber_file,
-         outfile, oldest_timepoint.id)
+         outfile, oldest_timepoint.label)
 
 
 def name_to_date(name):
-    id_to_date = {t.id : t.date for t in globals_.timepoints}
-    return id_to_date[name.split("_")[0]]
+    label_to_date = {t.label : t.date for t in globals_.timepoints}
+    return label_to_date[name.split("_")[0]]
 
 
 @must_work()
@@ -198,7 +198,7 @@ def make_coordinates_json(infile, outfile):
 @must_work()
 # TODO: modify turnover script to not need json input
 def make_frequencies_json(infile, outfile):
-    id_to_date = {t.id : t.date for t in globals_.timepoints}
+    id_to_date = {t.label : t.date for t in globals_.timepoints}
     def name_to_date(name):
         return id_to_date[name.split("_")[0]]
 
@@ -223,7 +223,7 @@ def write_dates(infile, outfile):
     # NOTE: we assume the first part of the record id is the timestamp
     # id, followed by an underscore.
     records = list(SeqIO.parse(infile, "fasta"))
-    id_to_date = {t.id : t.date for t in globals_.timepoints}
+    id_to_date = {t.label : t.date for t in globals_.timepoints}
     with open(outfile, "w") as handle:
         outdict = {r.id: id_to_date[r.id.split("_")[0]] for r in records}
         json.dump(outdict, handle, separators=(",\n", ":"))
