@@ -362,7 +362,16 @@ def check_illegal_chars(f, chars):
                             ' of file "{}"'.format(found, r.id, f))
 
 
-def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None, illegal_chars=None, pattern=None):
+def check_in_frame(f):
+    for r in SeqIO.parse(f, 'fasta'):
+        len_ = len(r.seq.ungap('-'))
+        if len_ % 3 != 0:
+            raise Exception('Sequence "{}" in file "{}" has length={} not multiple'
+                            ' of 3'.format(r.id, f, len_))
+
+
+def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
+              illegal_chars=None, pattern=None, in_frame=False):
     """Fail if any output is empty.
 
     maybe: touch output and return if any input is empty
@@ -402,6 +411,9 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None, illegal
             if illegal_chars:
                 for f in outfiles:
                     check_illegal_chars(f, illegal_chars)
+            if in_frame:
+                for f in outfiles:
+                    check_in_frame(f)
         return wrapped
     return wrap
 

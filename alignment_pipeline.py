@@ -192,7 +192,7 @@ def consensus_db_search(infile, outfile):
                          name='consensus-db-search')
 
 
-@must_work()
+@must_work(in_frame=True)
 def consensus_shift_correction(infile, outfile):
     n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, calnfile="{}.calns".format(infile), keep=False)
     sumfile = '{}.summary'.format(outfile)

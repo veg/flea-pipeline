@@ -90,7 +90,7 @@ def mrca(infile, recordfile, copynumber_file, outfile, oldest_id):
              id_str="mrca", ungap=False,)
 
 
-@must_work(illegal_chars='')
+@must_work(in_frame=True)
 def compute_mrca(infiles, outfile):
     alignment_file, copynumber_file = infiles
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
