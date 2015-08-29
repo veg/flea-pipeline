@@ -63,6 +63,11 @@ logger, logger_mutex = cmdline.setup_logging(__name__,
                                              options.log_file,
                                              options.verbose)
 
+do_alignment = options.alignment is None
+
+# useful directories
+data_dir = os.path.dirname(os.path.abspath(options.file))
+script_dir = os.path.abspath(os.path.split(__file__)[0])
 
 ################################################################################
 # TODO: encapsulate this timepoint business
@@ -70,11 +75,12 @@ Timepoint = namedtuple('Timepoint', ['key', 'label', 'date'])
 
 with open(options.file, newline='') as csvfile:
     reader = csv.reader(csvfile, delimiter=' ')
-    timepoints = list(Timepoint(f, i, d) for f, i, d in reader)
+    keymod = lambda k: k
+    if do_alignment:
+        keymod = lambda f: os.path.abspath(os.path.join(data_dir, f))
+    timepoints = list(Timepoint(keymod(k), a, d) for k, a, d in reader)
 
 key_to_label = {t.key: t.label for t in timepoints}
-
-do_alignment = options.alignment is None
 
 if do_alignment:
     start_files = list(t.key for t in timepoints)
@@ -114,10 +120,6 @@ if len(set(t.label for t in timepoints)) != len(timepoints):
     raise Exception('non-unique timepoint labels')
 
 ################################################################################
-
-# useful directories
-data_dir = os.path.dirname(os.path.abspath(options.file))
-script_dir = os.path.abspath(os.path.split(__file__)[0])
 
 # read configuration
 if options.config is None:
