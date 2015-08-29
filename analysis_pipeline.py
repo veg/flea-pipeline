@@ -14,6 +14,7 @@ from Bio import Phylo
 from translate import translate
 import pipeline_globals as globals_
 from util import must_work, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter, read_single_record, cat_files
+from util import name_to_date
 from DNAcons import consfile
 from alignment_pipeline import mafft, cat_wrapper_ids
 
@@ -100,11 +101,6 @@ def compute_mrca(infiles, outfile):
     oldest_records_filename = os.path.join(pipeline_dir, 'oldest_sequences.fasta')
     mrca(alignment_file, oldest_records_filename, copynumber_file,
          outfile, oldest_timepoint.label)
-
-
-def name_to_date(name):
-    label_to_date = {t.label : t.date for t in globals_.timepoints}
-    return label_to_date[name.split("_")[0]]
 
 
 @must_work()
@@ -198,10 +194,6 @@ def make_coordinates_json(infile, outfile):
 @must_work()
 # TODO: modify turnover script to not need json input
 def make_frequencies_json(infile, outfile):
-    id_to_date = {t.label : t.date for t in globals_.timepoints}
-    def name_to_date(name):
-        return id_to_date[name.split("_")[0]]
-
     records = SeqIO.parse(infile, "fasta")
     result = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     for r in records:
@@ -220,12 +212,9 @@ def turnover(infile, outfile):
 
 @must_work()
 def write_dates(infile, outfile):
-    # NOTE: we assume the first part of the record id is the timestamp
-    # id, followed by an underscore.
     records = list(SeqIO.parse(infile, "fasta"))
-    id_to_date = {t.label : t.date for t in globals_.timepoints}
     with open(outfile, "w") as handle:
-        outdict = {r.id: id_to_date[r.id.split("_")[0]] for r in records}
+        outdict = {r.id: name_to_date(r.id) for r in records}
         json.dump(outdict, handle, separators=(",\n", ":"))
 
 

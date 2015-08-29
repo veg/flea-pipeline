@@ -443,3 +443,21 @@ def remove_suffix(name, suffix):
 
 def check_basename(name, bn):
     assert(os.path.basename(name) == bn)
+
+
+def name_to_label(name):
+    cands = list(t.label for t in globals_.timepoints
+                 if name.startswith(t.label))
+    if len(cands) != 1:
+        raise Exception('name starts with non-unique'
+                        ' label: "{}"'.format(name))
+    label = cands[0]
+    rest = name[len(label):].strip('_')
+    if not rest:
+        raise Exception('name has no unique part:'
+                        ' "{}"'.format(name))
+    return label
+
+
+def name_to_date(name):
+    return globals_.label_to_date[name_to_label(name)]

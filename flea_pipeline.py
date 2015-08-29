@@ -39,7 +39,7 @@ from ruffus import cmdline, Pipeline
 
 from Bio import SeqIO
 
-from util import n_jobs
+from util import n_jobs, name_to_label
 import pipeline_globals as globals_
 
 
@@ -80,44 +80,26 @@ with open(options.file, newline='') as csvfile:
         keymod = lambda f: os.path.abspath(os.path.join(data_dir, f))
     timepoints = list(Timepoint(keymod(k), a, d) for k, a, d in reader)
 
-key_to_label = {t.key: t.label for t in timepoints}
+key_to_label = dict((t.key, t.label) for t in timepoints)
+label_to_date = dict((t.label, t.date) for t in timepoints)
 
-if do_alignment:
-    start_files = list(t.key for t in timepoints)
-    for f in start_files:
-        if not os.path.exists(f):
-            raise Exception('file does not exist: "{}"'.format(f))
-else:
+if len(set(t.label for t in timepoints)) != len(timepoints):
+    raise Exception('non-unique timepoint labels')
+
+if not do_alignment:
     # check every timepoint has at least three sequences, and
     # every sequence belongs to a timepoint
     records = list(SeqIO.parse(options.alignment, 'fasta'))
-    timepoint_counts = defaultdict(int)
-
     if len(set(r.id for r in records)) != len(records):
         raise Exception('non-unique ids')
-
-    # TODO: code duplication
+    timepoint_counts = defaultdict(int)
     for r in records:
-        found = False
-        # check every possible key, in case they are different lengths.
-        for k, v in key_to_label.items():
-            if r.id.startswith(k):
-                rest = r.id[len(k):]
-                rest = rest.strip('_')
-                if not rest:
-                    raise Exception('sequence id has no unique part')
-                found = True
-                timepoint_counts[k] += 1
-                break
-        if not found:
-            raise Exception('record id not found in input file')
+        label = name_to_label(r.id)
+        timepoint_counts[label] += 1
     for k, v in timepoint_counts.items():
         if v < 3:
             raise Exception('timepoint {} has only {} sequences'.format(k, v))
 
-
-if len(set(t.label for t in timepoints)) != len(timepoints):
-    raise Exception('non-unique timepoint labels')
 
 ################################################################################
 
@@ -146,6 +128,7 @@ globals_.data_dir = data_dir
 globals_.qsub_dir = os.path.join(data_dir, 'qsub_files')
 globals_.timepoints = timepoints
 globals_.key_to_label = key_to_label
+globals_.label_to_date = label_to_date
 globals_.logger = logger
 globals_.logger_mutex = logger_mutex
 
@@ -162,6 +145,9 @@ from analysis_pipeline import make_analysis_pipeline
 
 if do_alignment:
     inputs = list(t.key for t in timepoints)
+    for f in inputs:
+        if not os.path.exists(f):
+            raise Exception('file does not exist: "{}"'.format(f))
     p1 = make_alignment_pipeline()
     p1.set_input(input=inputs)
     if globals_.config.getboolean('Tasks', 'analysis'):
