@@ -1,13 +1,14 @@
 import os
 from shutil import copyfile
 
-from ruffus import Pipeline
+from ruffus import Pipeline, suffix
 
 from Bio import SeqIO
 
 import pipeline_globals as globals_
 from util import must_work, n_jobs, local_job_limiter, remote_job_limiter
 from util import split_name
+from alignment_pipeline import copynumber_json
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "preanalysis")
@@ -56,8 +57,14 @@ def make_preanalysis_pipeline(copynumbers_file, name=None):
     make_copynumbers_task = pipeline.merge(make_copynumbers,
                                            name="make_copynumbers",
                                            input=[rename_records, copynumbers_file],
-                                           output=os.path.join(pipeline_dir, "copynumbers.txt"))
+                                           output=os.path.join(pipeline_dir, "copynumbers.tsv"))
     make_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    copynumber_json_task = pipeline.transform(copynumber_json,
+                                              input=make_copynumbers_task,
+                                              filter=suffix('.tsv'),
+                                              output='.json')
+    copynumber_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
 
     pipeline.set_head_tasks([rename_records_task])
