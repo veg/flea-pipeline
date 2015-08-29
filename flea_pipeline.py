@@ -66,18 +66,18 @@ logger, logger_mutex = cmdline.setup_logging(__name__,
 
 ################################################################################
 # TODO: encapsulate this timepoint business
-Timepoint = namedtuple('Timepoint', ['file', 'id', 'date'])
+Timepoint = namedtuple('Timepoint', ['key', 'id', 'date'])
 
 with open(options.file, newline='') as csvfile:
     reader = csv.reader(csvfile, delimiter=' ')
     timepoints = list(Timepoint(f, i, d) for f, i, d in reader)
 
-timepoint_ids = {t.file: t.id for t in timepoints}
+timepoint_ids = {t.key: t.id for t in timepoints}
 
 do_alignment = options.alignment is None
 
 if do_alignment:
-    start_files = list(t.file for t in timepoints)
+    start_files = list(t.key for t in timepoints)
     for f in start_files:
         if not os.path.exists(f):
             raise Exception('file does not exist: "{}"'.format(f))
@@ -159,7 +159,7 @@ from alignment_pipeline import make_alignment_pipeline
 from analysis_pipeline import make_analysis_pipeline
 
 if do_alignment:
-    inputs = list(os.path.join(data_dir, t.file) for t in timepoints)
+    inputs = list(os.path.join(data_dir, t.key) for t in timepoints)
     p1 = make_alignment_pipeline()
     p1.set_input(input=inputs)
     if globals_.config.getboolean('Tasks', 'analysis'):
