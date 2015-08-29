@@ -39,7 +39,8 @@ def filter_fastq(infile, outfile):
     qmax = globals_.config.get('Parameters', 'qmax')
     min_len_fraction = globals_.config.getfloat('Parameters', 'min_sequence_length')
     ref_file = globals_.config.get('Parameters', 'reference_sequence')
-    min_len = int(min_len_fraction * len(read_single_record(ref_file, 'fasta').seq))
+    # multiple by 3 because reference sequence is translated.
+    min_len = 3 * int(min_len_fraction * len(read_single_record(ref_file, 'fasta').seq))
     max_err_rate = globals_.config.get('Parameters', 'max_err_rate')
     cmd = ('{usearch} -fastq_filter {infile} -fastq_maxee_rate {max_err_rate}'
          ' -threads 1 -fastq_qmax {qmax} -fastq_minlen {min_len} -fastaout {outfile}'
