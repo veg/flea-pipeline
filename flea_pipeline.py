@@ -161,7 +161,7 @@ from alignment_pipeline import make_alignment_pipeline
 from analysis_pipeline import make_analysis_pipeline
 
 if do_alignment:
-    inputs = list(os.path.join(data_dir, t.key) for t in timepoints)
+    inputs = list(t.key for t in timepoints)
     p1 = make_alignment_pipeline()
     p1.set_input(input=inputs)
     if globals_.config.getboolean('Tasks', 'analysis'):
