@@ -95,7 +95,7 @@ def compute_mrca(infiles, outfile):
     alignment_file, copynumber_file = infiles
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
     oldest_timepoint = min(globals_.timepoints, key=strptime)
-    oldest_records_filename = '.'.join([alignment_file, "oldest_{}".format(oldest_timepoint.id)])
+    oldest_records_filename = os.path.join(pipeline_dir, 'oldest_sequences.fasta')
     mrca(alignment_file, oldest_records_filename, copynumber_file,
          outfile, oldest_timepoint.id)
 
