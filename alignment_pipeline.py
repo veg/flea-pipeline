@@ -4,7 +4,6 @@ from random import sample
 import tempfile
 from functools import partial
 from collections import defaultdict
-import json
 
 from ruffus import Pipeline, suffix, formatter, add_inputs
 
@@ -246,16 +245,6 @@ def compute_copynumbers(infiles, outfile, basename):
             handle.write('{}\t{}\n'.format(id_, count))
 
 
-@must_work()
-def copynumber_json(infile, outfile):
-    with open(infile) as handle:
-        lines = handle.read().strip().split('\n')
-    pairs = list(line.split() for line in lines)
-    result = dict((key, value) for key, value in pairs)
-    with open(outfile, 'w') as handle:
-        json.dump(result, handle, separators=(",\n", ":"))
-
-
 @must_work(seq_ids=True)
 def cat_all_perfect(infiles, outfile):
     if len(infiles) != len(globals_.timepoints):
@@ -473,12 +462,6 @@ def make_alignment_pipeline(name=None):
                                             input=compute_copynumbers_task,
                                             output=os.path.join(pipeline_dir, 'copynumbers.tsv'))
     merge_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
-
-    copynumber_json_task = pipeline.transform(copynumber_json,
-                                              input=merge_copynumbers_task,
-                                              filter=suffix('.tsv'),
-                                              output='.json')
-    copynumber_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     cat_all_perfect_task = pipeline.merge(cat_all_perfect,
                                           input=unique_consensus_task,

@@ -59,6 +59,19 @@ def add_copynumbers(infiles, outfile):
 
 
 @must_work()
+def copynumber_json(infiles, outfile):
+    _, infile = infiles
+    with open(infile) as handle:
+        lines = handle.read().strip().split('\n')
+    pairs = list(line.split() for line in lines)
+    # add copynumber to name, to match rest of this pipeline
+    result = dict(("{}_{}".format(key, value), value)
+                  for key, value in pairs)
+    with open(outfile, 'w') as handle:
+        json.dump(result, handle, separators=(",\n", ":"))
+
+
+@must_work()
 def gapped_translate_wrapper(infile, outfile):
     translate(infile, outfile, gapped=True)
 
@@ -258,6 +271,11 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                           output=os.path.join(pipeline_dir, "msa_with_copynumbers.fasta"))
     add_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
+    copynumber_json_task = pipeline.merge(copynumber_json,
+                                          input=None,
+                                          output=os.path.join(pipeline_dir, 'copynumbers.json'))
+    copynumber_json_task.jobs_limit(n_local_jobs, local_job_limiter)
+
     mrca_task = pipeline.merge(compute_mrca,
                                name='compute_mrca',
                                input=None,
@@ -347,7 +365,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                     output=os.path.join(pipeline_dir, 'rates.json'))
         fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    pipeline.set_head_tasks([add_copynumbers_task, mrca_task])
+    pipeline.set_head_tasks([add_copynumbers_task, copynumber_json_task, mrca_task])
     for task in pipeline.head_tasks:
         task.mkdir(pipeline_dir)
 
