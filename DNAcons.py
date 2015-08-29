@@ -10,12 +10,13 @@ Usage:
   DNAcons.py -h | --help
 
 Options:
-  -v --verbose           Print progress to STDERR
-  --keep-gaps            Do not ungap the consensus
-  --id=<STRING>          Record id for the fasta output
-  -o --outfile=<STRING>  Name of output file
+  -v --verbose            Print progress to STDERR
+  --keep-gaps             Do not ungap the consensus
+  --copynumbers=<STRING>  File containing "<id>\t<num>" lines.
+  --id=<STRING>           Record id for the fasta output
+  -o --outfile=<STRING>   Name of output file
   --ambifile=<STRING>
-  -h --help              Show this screen
+  -h --help               Show this screen
 
 """
 
@@ -121,11 +122,13 @@ def consfile(filename, outfile=None, ambifile=None, copynumber_file=None,
 if __name__ == "__main__":
     args = docopt(__doc__)
     filename = args["<infile>"]
+    copynumber_file = args["--copynumbers"]
     verbose = args["--verbose"]
     id_str = args["--id"]
     outfile = args["--outfile"]
     ambifile = args['--ambifile']
     keep_gap = args["--keep-gaps"]
     ungap = not keep_gap
-    consfile(filename, outfile, ambifile, id_str, ungap=ungap, verbose=verbose)
+    consfile(filename, outfile, copynumber_file=copynumber_file,
+             ambifile=ambifile, id_str=id_str, ungap=ungap, verbose=verbose)
 
