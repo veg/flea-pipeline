@@ -378,7 +378,7 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
     seq_ratio: (int, int): ensure numbers of sequences match
     seq_ids: ensure all ids present in input files are in output file
     min_seqs: minimum number of sequences in the output file
-    pattern: pattern for determing input files to consider
+    pattern: pattern for determining input files to consider
 
     """
     if pattern is None:
@@ -396,8 +396,9 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
                         touch(f)
                     return
             function(infiles, outfiles, *args, **kwargs)
-            infiles = list(traverse(strlist(infiles)))
-            infiles = list(f for f in infiles if fnmatch(f, pattern))
+            if seq_ids or seq_ratio:
+                infiles = list(traverse(strlist(infiles)))
+                infiles = list(f for f in infiles if fnmatch(f, pattern))
             outfiles = strlist(outfiles)
             ensure_not_empty(outfiles)
             if min_seqs is not None:
@@ -443,6 +444,26 @@ def remove_suffix(name, suffix):
 
 def check_basename(name, bn):
     assert(os.path.basename(name) == bn)
+
+
+def split_name(name):
+    # TODO: duplicate code with name_to_label
+    cands = list(t.key for t in globals_.timepoints
+                 if name.startswith(t.key))
+    if len(cands) != 1:
+        raise Exception('name starts with non-unique'
+                        ' key: "{}"'.format(name))
+    key = cands[0]
+    rest = name[len(key):].strip('_')
+    if not rest:
+        raise Exception('name has no unique part:'
+                        ' "{}"'.format(name))
+    return key, rest
+
+
+def name_key_to_label(name):
+    key, _ =split_name(name)
+    return globals_.key_to_label[key]
 
 
 def name_to_label(name):

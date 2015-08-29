@@ -257,15 +257,12 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                           input=None,
                                           output=os.path.join(pipeline_dir, "msa_with_copynumbers.fasta"))
     add_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
-    # all head tasks need to make this directory, because their run order is unspecified
-    add_copynumbers_task.mkdir(pipeline_dir)
 
     mrca_task = pipeline.merge(compute_mrca,
                                name='compute_mrca',
                                input=None,
                                output=os.path.join(pipeline_dir, 'mrca.fasta'))
     mrca_task.jobs_limit(n_local_jobs, local_job_limiter)
-    mrca_task.mkdir(pipeline_dir)
 
     add_mrca_task = pipeline.merge(cat_wrapper_ids,
                                    name='add_mrca',
@@ -351,4 +348,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
         fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     pipeline.set_head_tasks([add_copynumbers_task, mrca_task])
+    for task in pipeline.head_tasks:
+        task.mkdir(pipeline_dir)
+
     return pipeline

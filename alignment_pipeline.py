@@ -365,7 +365,6 @@ def make_alignment_pipeline(name=None):
                                            filter=formatter(),
                                            output=os.path.join(pipeline_dir, '{basename[0]}{ext[0]}.qfilter.fasta'))
     filter_fastq_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-    filter_fastq_task.mkdir(pipeline_dir)
 
     filter_contaminants_task = pipeline.transform(filter_contaminants,
                                                   input=filter_fastq_task,
@@ -563,5 +562,8 @@ def make_alignment_pipeline(name=None):
                                                    input=insert_gaps_task,
                                                    output=os.path.join(pipeline_dir, 'all_timepoints.aligned.fasta'))
         merge_all_timepoints_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    for task in pipeline.head_tasks:
+        task.mkdir(pipeline_dir)
 
     return pipeline

@@ -17,6 +17,7 @@ Usage:
 
 Options:
   --alignment [STR]  Fasta file containing codon-aligned sequences.
+  --copynumbers [STR]  tsv file containing "<id>\t<number>" lines.
   --config [STR]   Configuration file.
 
 """
@@ -39,7 +40,7 @@ from ruffus import cmdline, Pipeline
 
 from Bio import SeqIO
 
-from util import n_jobs, name_to_label
+from util import n_jobs, name_key_to_label
 import pipeline_globals as globals_
 
 
@@ -50,6 +51,8 @@ parser.add_argument('--config', type=str,
                     help='Configuration file.')
 parser.add_argument('--alignment', type=str,
                     help='Codon-aligned fasta file.')
+parser.add_argument('--copynumbers', type=str,
+                    help='Copynumber file.')
 
 
 options = parser.parse_args()
@@ -69,40 +72,6 @@ do_alignment = options.alignment is None
 data_dir = os.path.dirname(os.path.abspath(options.file))
 script_dir = os.path.abspath(os.path.split(__file__)[0])
 
-################################################################################
-# TODO: encapsulate this timepoint business
-Timepoint = namedtuple('Timepoint', ['key', 'label', 'date'])
-
-with open(options.file, newline='') as csvfile:
-    reader = csv.reader(csvfile, delimiter=' ')
-    keymod = lambda k: k
-    if do_alignment:
-        keymod = lambda f: os.path.abspath(os.path.join(data_dir, f))
-    timepoints = list(Timepoint(keymod(k), a, d) for k, a, d in reader)
-
-key_to_label = dict((t.key, t.label) for t in timepoints)
-label_to_date = dict((t.label, t.date) for t in timepoints)
-
-if len(set(t.label for t in timepoints)) != len(timepoints):
-    raise Exception('non-unique timepoint labels')
-
-if not do_alignment:
-    # check every timepoint has at least three sequences, and
-    # every sequence belongs to a timepoint
-    records = list(SeqIO.parse(options.alignment, 'fasta'))
-    if len(set(r.id for r in records)) != len(records):
-        raise Exception('non-unique ids')
-    timepoint_counts = defaultdict(int)
-    for r in records:
-        label = name_to_label(r.id)
-        timepoint_counts[label] += 1
-    for k, v in timepoint_counts.items():
-        if v < 3:
-            raise Exception('timepoint {} has only {} sequences'.format(k, v))
-
-
-################################################################################
-
 # read configuration
 if options.config is None:
     configfile = os.path.join(data_dir, 'flea_pipeline.config')
@@ -120,18 +89,37 @@ config.read(configfile)
 with open(os.path.join(data_dir, 'run_parameters.config'), 'w') as handle:
     config.write(handle)
 
+
+################################################################################
+# TODO: encapsulate this timepoint business
+Timepoint = namedtuple('Timepoint', ['key', 'label', 'date'])
+
+with open(options.file, newline='') as csvfile:
+    reader = csv.reader(csvfile, delimiter=' ')
+    keymod = lambda k: k
+    if do_alignment:
+        keymod = lambda f: os.path.abspath(os.path.join(data_dir, f))
+    timepoints = list(Timepoint(keymod(k), a, d) for k, a, d in reader)
+
+key_to_label = dict((t.key, t.label) for t in timepoints)
+label_to_date = dict((t.label, t.date) for t in timepoints)
+
+if len(set(t.label for t in timepoints)) != len(timepoints):
+    raise Exception('non-unique timepoint labels')
+
+
 # set globals
 globals_.config = config
 globals_.options = options
 globals_.script_dir = script_dir
 globals_.data_dir = data_dir
 globals_.qsub_dir = os.path.join(data_dir, 'qsub_files')
-globals_.timepoints = timepoints
-globals_.key_to_label = key_to_label
-globals_.label_to_date = label_to_date
 globals_.logger = logger
 globals_.logger_mutex = logger_mutex
 
+globals_.timepoints = timepoints
+globals_.key_to_label = key_to_label
+globals_.label_to_date = label_to_date
 
 if not os.path.exists(globals_.qsub_dir):
     os.mkdir(globals_.qsub_dir)
@@ -140,8 +128,33 @@ if not os.path.exists(globals_.qsub_dir):
 n_local_jobs, n_remote_jobs = n_jobs()
 options.jobs = max(n_local_jobs, n_remote_jobs)
 
+
+#################################################################################
+
+# check alignment options
+
+if do_alignment:
+    if options.copynumbers is not None:
+        raise Exception('--copynumber option is invalid without --alignment')
+else:
+    # check every timepoint has at least three sequences, and
+    # every sequence belongs to a timepoint
+    records = list(SeqIO.parse(options.alignment, 'fasta'))
+    if len(set(r.id for r in records)) != len(records):
+        raise Exception('non-unique ids')
+    timepoint_counts = defaultdict(int)
+    for r in records:
+        label = name_key_to_label(r.id)
+        timepoint_counts[label] += 1
+    for k, v in timepoint_counts.items():
+        if v < 3:
+            raise Exception('timepoint {} has only {} sequences'.format(k, v))
+
+# make pipelines
 from alignment_pipeline import make_alignment_pipeline
 from analysis_pipeline import make_analysis_pipeline
+from preanalysis_pipeline import make_preanalysis_pipeline
+
 
 if do_alignment:
     inputs = list(t.key for t in timepoints)
@@ -157,8 +170,11 @@ if do_alignment:
             task.set_input(input=p1.tail_tasks)
 else:
     if globals_.config.getboolean('Tasks', 'analysis'):
-        p1 = make_analysis_pipeline(do_hyphy=globals_.config.getboolean('Tasks', 'hyphy_analysis'))
-        p1.set_input(input=options.alignment)  # FIXME: needs copynumber file
+        p1 = make_preanalysis_pipeline(options.copynumbers)
+        p1.set_input(input=options.alignment)
+        p2 = make_analysis_pipeline(do_hyphy=globals_.config.getboolean('Tasks', 'hyphy_analysis'))
+        for task in p2.head_tasks:
+            task.set_input(input=p1.tail_tasks)
 
 
 if __name__ == '__main__':
