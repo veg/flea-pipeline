@@ -38,8 +38,10 @@ def hyphy_call(script_file, name, args):
     maybe_qsub(cmd, name=name)
 
 
-def replace_name(record, name):
-    record.name = name
+def replace_id(record, id_):
+    # FIXME: do not modify in-place
+    record.id = id_
+    record.name = id_
     return record
 
 
@@ -48,9 +50,9 @@ def add_copynumbers(infiles, outfile):
     msafile, copyfile = infiles
     with open(copyfile) as handle:
         lines = handle.read().strip().split('\n')
-    name_to_cn = dict(line.split() for line in lines)
+    id_to_cn = dict(line.split() for line in lines)
     records = SeqIO.parse(msafile, 'fasta')
-    result = (replace_name(r, "{}_{}".format(r.name, name_to_cn[r.name]))
+    result = (replace_id(r, "{}_{}".format(r.id, id_to_cn[r.id]))
               for r in records)
     SeqIO.write(result, outfile, "fasta")
 
