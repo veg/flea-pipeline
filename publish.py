@@ -4,12 +4,10 @@
 Publish a run to test.datamonkey.org.
 
 Usage:
-  publish [options] <directory> <name>
+  publish [options] <directory> [<target>]
   publish -h | --help
 
 Options:
-  --host=<string>         Hostname [default: test.datamonkey.org]
-  -u --username=<string>  Username on target host
   -h --help               Show this screen.
 
 """
@@ -24,16 +22,10 @@ import shlex
 
 from docopt import docopt
 
-REMOTE_DIR = "/var/www/html/veg/FLEA/"
+DEFAULT_HOST = "test.datamonkey.org"
+DEFAULT_PATH = "/var/www/html/veg/FLEA3"
 
 RSYNC_CMD = "rsync {src} {remote_user}@{remote_host}:{dest_path}"
-
-HTML_CMD = ("ssh {remote_user}@{remote_host} \"cd {remote_dir} &&"
-            " cp test.html {name}.html &&"
-            " sed -i 's/test-data/{dest}/g' {name}.html\"")
-
-
-SRC_FILE = "{local_user}@{local_host}:{path}"
 
 
 def recursive_glob(directory, glob):
@@ -58,34 +50,44 @@ def call(cmd):
         print("\n".join(s.decode("utf-8") for s in result))
 
 
+def strip_trailing_slash(directory):
+    if directory[-1] == "/":
+        directory = directory[:-1]
+    return directory
+
+
 if __name__ == "__main__":
     args = docopt(__doc__)
     directory = args["<directory>"]
-    name = args["<name>"]
-    remote_user = args["--username"]
-    remote_host = args["--host"]
+    directory = strip_trailing_slash(directory)
 
     local_user = getpass.getuser()
     local_host = socket.gethostname()
 
-    if remote_user is None:
-        remote_user = local_user
-    
+    target = args["<target>"]
+    if target is None:
+        target = "{}@{}:{}".format(local_user, DEFAULT_HOST, DEFAULT_PATH)
+    if "@" in target:
+        remote_user, target = target.split("@")
+    else:
+        remote_user= local_user
+    if ":" in target:
+        remote_host, target = target.split(":")
+    else:
+        remote_host = DEFAULT_HOST
+
     files = recursive_glob(directory, "*json")
     files.extend(recursive_glob(directory, "*tsv"))
-
     src = " ".join(files)
-    dest = "{name}-data".format(name=name)
-    dest_path = os.path.join(REMOTE_DIR, dest)
+
+    _, dir_name = os.path.split(os.path.abspath(directory))
+    dir_name = strip_trailing_slash(dir_name)
+    dest_path = "{}/".format(os.path.join(target, dir_name))
 
     rsync_cmd = RSYNC_CMD.format(src=src, remote_user=remote_user,
                                  remote_host=remote_host,
                                  dest_path=dest_path)
-    html_cmd = HTML_CMD.format(remote_user=remote_user,
-                               remote_host=remote_host,
-                               remote_dir=REMOTE_DIR,
-                               name=name, dest=dest)
-    r1 = call(rsync_cmd)
-    r2 = call(html_cmd)
 
-    print("view results at http://test.datamonkey.org/veg/FLEA/{}.html".format(name))
+    result = call(rsync_cmd)
+
+    print("view results at http://test.datamonkey.org:5062/{}/".format(dir_name))
