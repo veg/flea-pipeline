@@ -76,13 +76,19 @@ if __name__ == "__main__":
     else:
         remote_host = DEFAULT_HOST
 
+    if target:
+        remote_path = target
+    else:
+        remote_path = DEFAULT_PATH
+
+
     files = recursive_glob(directory, "*json")
     files.extend(recursive_glob(directory, "*tsv"))
     src = " ".join(files)
 
     _, dir_name = os.path.split(os.path.abspath(directory))
     dir_name = strip_trailing_slash(dir_name)
-    dest_path = "{}/".format(os.path.join(target, dir_name))
+    dest_path = "{}/".format(os.path.join(remote_path, dir_name))
 
     rsync_cmd = RSYNC_CMD.format(src=src, remote_user=remote_user,
                                  remote_host=remote_host,
