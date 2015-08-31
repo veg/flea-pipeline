@@ -84,14 +84,6 @@ def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, nam
     maybe_qsub(cmd, outfiles=outfile, name=name)
 
 
-def usearch_global_get_pairs(infile, dbfile, identity, name=None):
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        outfile = os.path.join(tmpdirname, 'pairs.txt')
-        usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True, name=name)
-        with open(outfile) as f:
-            return list(line.strip().split("\t") for line in f.readlines())
-
-
 @must_work()
 def filter_uncontaminated(infiles, outfile):
     uncontam, _ = infiles
