@@ -63,19 +63,13 @@ def filter_contaminants(infile, outfiles):
     maybe_qsub(cmd, outfiles=outfiles, name='filter-contaminants')
 
 
-def usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=False, name=None):
+def usearch_global_pairs(infile, outfile, dbfile, identity, name=None):
     max_accepts = globals_.config.get('Parameters', 'max_accepts')
     max_rejects = globals_.config.get('Parameters', 'max_rejects')
-    # TODO: combine both versions
-    if nums_only:
-        cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
-               " -userout {outfile} -top_hit_only -userfields query+target -strand both"
-               " -maxaccepts {max_accepts} -maxrejects {max_rejects}")
-    else:
-        cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
-               ' -fastapairs {outfile} -alnout {outfile}.human -userout {outfile}.calns'
-               ' -userfields caln -top_hit_only -strand both'
-               ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
+    cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
+           ' -fastapairs {outfile} -alnout {outfile}.human -userout {outfile}.calns'
+           ' -userfields caln -top_hit_only -strand both'
+           ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
     if name is None:
         name = 'usearch-global-pairs'
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
@@ -110,14 +104,16 @@ def cluster(infile, outfiles, pathname):
         os.unlink(f)
     outdir = '{}.clusters'.format(infile[:-len('.fasta')])
     outpattern = os.path.join(outdir, 'cluster_')
+    minsl = globals_.config.get('Parameters', 'min_length_ratio')
     cmd = ('{usearch} -cluster_fast {infile} -id {id}'
            ' -clusters {outpattern} -maxaccepts {max_accepts}'
-           ' -maxrejects {max_rejects}'.format(
-            usearch=globals_.config.get('Paths', 'usearch'),
-            infile=infile, id=globals_.config.get('Parameters', 'cluster_identity'),
-            outpattern=outpattern,
-            max_accepts=globals_.config.get('Parameters', 'max_accepts'),
-            max_rejects=globals_.config.get('Parameters', 'max_rejects')))
+           ' -maxrejects {max_rejects} -minsl {minsl}')
+    cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
+                     infile=infile, id=globals_.config.get('Parameters', 'cluster_identity'),
+                     outpattern=outpattern,
+                     max_accepts=globals_.config.get('Parameters', 'max_accepts'),
+                     max_rejects=globals_.config.get('Parameters', 'max_rejects'),
+                     minsl=minsl)
     maybe_qsub(cmd, name="cluster")
     r = re.compile(r'^cluster_[0-9]+$')
     for f in list(f for f in os.listdir(outdir) if r.match(f)):
@@ -214,6 +210,23 @@ def make_individual_dbs(infile, outfile):
     maybe_qsub(cmd,  outfiles=outfile, name='make-individual-dbs')
 
 
+def usearch_copynumbers(infile, outfile, dbfile, identity, name=None):
+    max_accepts = globals_.config.get('Parameters', 'max_accepts')
+    max_rejects = globals_.config.get('Parameters', 'max_rejects')
+    maxqt = globals_.config.get('Parameters', 'max_query_target_length_ratio')
+    cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
+           " -userout {outfile} -top_hit_only -userfields query+target -strand both"
+           " -maxaccepts {max_accepts} -maxrejects {max_rejects}"
+           " -maxqt {maxqt}")
+    if name is None:
+        name = 'usearch-global-id-pairs'
+    cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
+                     infile=infile, db=dbfile, id=identity, outfile=outfile,
+                     max_accepts=max_accepts, max_rejects=max_rejects,
+                     maxqt=maxqt)
+    maybe_qsub(cmd, outfiles=outfile, name=name)
+
+
 # FIXME: this is run with remote job limiter, but part of its task is run locally
 @must_work()
 def compute_copynumbers(infiles, outfile, basename):
@@ -223,8 +236,8 @@ def compute_copynumbers(infiles, outfile, basename):
     check_suffix(dbfile, '.udb')
     identity = globals_.config.get('Parameters', 'raw_to_consensus_identity')
     pairfile = '{}.copynumber.pairs'.format(basename)
-    usearch_global_pairs(rawfile, pairfile, dbfile, identity,
-                         nums_only=True, name='compute-copynumber')
+    usearch_copynumbers(rawfile, pairfile, dbfile, identity,
+                        name='compute-copynumber')
     with open(pairfile) as f:
             pairs = list(line.strip().split("\t") for line in f.readlines())
     consensus_counts = defaultdict(lambda: 0)

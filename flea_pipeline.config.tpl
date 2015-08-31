@@ -43,6 +43,12 @@ raw_to_consensus_identity: 0.95
 min_cluster_size: 5
 max_cluster_size: 30
 
+# used for clustering
+min_length_ratio: 0.995
+
+# used for copy number
+max_query_target_length_ratio: 1.005
+
 [Tasks]
 pause_after_codon_alignment: False
 align_full: False
