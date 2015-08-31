@@ -33,7 +33,6 @@ from Bio.SeqIO.FastaIO import FastaWriter
 
 from util import grouper
 from util import new_record_seq_str
-from util import partition
 from util import genlen
 from util import write_to_handle
 from util import nth

@@ -15,6 +15,7 @@ from util import must_work, must_produce
 from util import local_job_limiter, remote_job_limiter
 from util import check_suffix, check_basename, n_jobs
 from util import read_single_record
+from util import partition
 
 import pipeline_globals as globals_
 
@@ -181,8 +182,9 @@ def cluster_consensus(infile, outfile):
 @must_work(illegal_chars='X')
 def filter_ambiguous(infile, outfile):
     records = (SeqIO.parse(infile, 'fasta'))
-    processed = (r for r in records if 'X' not in str(r.seq))
-    SeqIO.write(processed, outfile, 'fasta')
+    keep, discard = partition(lambda r: 'X' in str(r.seq), records)
+    SeqIO.write(keep, outfile, 'fasta')
+    SeqIO.write(discard, '{}.discarded'.format(outfile), 'fasta')
 
 
 @must_work()
