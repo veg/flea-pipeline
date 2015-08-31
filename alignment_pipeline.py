@@ -95,9 +95,17 @@ def filter_uncontaminated(infiles, outfile):
                          name="filter-uncontaminated")
 
 
+def shift_correction_helper(infile, outfile, keep):
+    discardfile = "{}.discarded".format(outfile)
+    sumfile = "{}.summary".format(outfile)
+    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, discardfile=discardfile,
+                                           calnfile="{}.calns".format(infile), keep=keep)
+    write_correction_result(n_seqs, n_fixed, sumfile)
+
+
 @must_work(seq_ratio=(2, 1))
 def shift_correction(infile, outfile):
-    correct_shifts_fasta(infile, outfile, calnfile="{}.calns".format(infile), keep=True)
+    shift_correction_helper(infile, outfile, keep=True)
 
 
 @must_work()
@@ -194,9 +202,7 @@ def consensus_db_search(infile, outfile):
 
 @must_work(in_frame=True)
 def consensus_shift_correction(infile, outfile):
-    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, calnfile="{}.calns".format(infile), keep=False)
-    sumfile = '{}.summary'.format(outfile)
-    write_correction_result(n_seqs, n_fixed, sumfile)
+    shift_correction_helper(infile, outfile, keep=False)
 
 
 @must_work(seq_ids=True)

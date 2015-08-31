@@ -171,26 +171,33 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=False):
     return result
 
 
-def correct_shifts_fasta(infile, outfile, calnfile=None, alphabet=None, keep=True):
+def correct_shifts_fasta(infile, outfile, discardfile, calnfile=None,
+                         alphabet=None, keep=True):
     """Correct all the pairs in a fasta file.
 
     Returns (n_seqs, n_fixed)
 
     """
-    ldict = {}
-    pairs = grouper(SeqIO.parse(infile, 'fasta', alphabet), 2)
+    pairs = list(grouper(SeqIO.parse(infile, 'fasta', alphabet), 2))
     if calnfile is None:
         calns = repeat(None)
     else:
         with open(calnfile) as handle:
             calns = handle.read().strip().split()
-    results = (new_record_seq_str(seq, correct_shifts(seq.seq, ref.seq, off, keep=keep))
-               for (seq, ref), off in zip(pairs, calns))
+    results = (new_record_seq_str(seq, correct_shifts(seq.seq, ref.seq, caln, keep=keep))
+               for (seq, ref), caln in zip(pairs, calns))
 
-    results = genlen(results, ldict, 'n_seqs')
-    fixed = genlen(filter(lambda r: r.seq, results), ldict, 'n_fixed')
-    SeqIO.write(fixed, outfile, 'fasta')
-    return ldict['n_seqs'], ldict['n_fixed']
+    results = list(correct_shifts(seq.seq, ref.seq, caln, keep=keep)
+                   for (seq, ref), caln in zip(pairs, calns))
+
+    keep = list(new_record_seq_str(seq, result)
+                for result, (seq, ref) in zip(results, pairs) if result)
+    discard = list(pair for result, pair in zip(results, pairs) if not result)
+    discard = list(s for pair in discard for s in pair)
+
+    SeqIO.write(keep, outfile, 'fasta')
+    SeqIO.write(discard, discardfile, 'fasta')
+    return len(results), len(keep)
 
 
 def write_correction_result(n_seqs, n_fixed, handle):
@@ -198,7 +205,7 @@ def write_correction_result(n_seqs, n_fixed, handle):
     percent = 100 * n_dropped / n_seqs
     do_close = False
     write_to_handle(handle, 'discarded {}/{} ({:.2f}%)'
-                    ' sequences'.format(n_dropped, n_seqs, percent))
+                    ' sequences\n'.format(n_dropped, n_seqs, percent))
 
 
 if __name__ == "__main__":
