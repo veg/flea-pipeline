@@ -49,6 +49,8 @@ min_length_ratio: 0.995
 # used for copy number
 max_query_target_length_ratio: 1.005
 
+polya_n: 2
+
 [Tasks]
 pause_after_codon_alignment: False
 align_full: False

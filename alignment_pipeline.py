@@ -23,7 +23,7 @@ from translate import translate
 from backtranslate import backtranslate
 from DNAcons import consfile
 from correct_shifts import correct_shifts_fasta, write_correction_result
-from perfectORFs import perfect_file
+from trim_tails import trim_tails_file
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "alignment")
@@ -50,6 +50,12 @@ def filter_fastq(infile, outfile):
             infile=infile, outfile=outfile, qmax=qmax, min_len=min_len,
             max_err_rate=max_err_rate, seq_id=globals_.key_to_label[infile]))
     maybe_qsub(cmd, outfiles=outfile, name='filter-fastq')
+
+
+@must_work(seq_ids=True)
+def trim_polya(infile, outfile):
+    n = globals_.config.get('Parameters', 'polya_n')
+    trim_tails_file(infile, outfile, target="A", n=n)
 
 
 def filter_contaminants(infile, outfiles):
@@ -363,8 +369,14 @@ def make_alignment_pipeline(name=None):
                                            output=os.path.join(pipeline_dir, '{basename[0]}{ext[0]}.qfilter.fasta'))
     filter_fastq_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
+    trim_tails_task = pipeline.transform(trim_polya,
+                                         input=filter_fastq_task,
+                                         filter=suffix('.fasta'),
+                                         output='.trimmed.fasta')
+    trim_tails_task.jobs_limit(n_local_jobs, local_job_limiter)
+
     filter_contaminants_task = pipeline.transform(filter_contaminants,
-                                                  input=filter_fastq_task,
+                                                  input=trim_tails_task,
                                                   filter=suffix('.fasta'),
                                                   output=['.uncontam.fasta', '.contam.fasta'],)
     filter_contaminants_task.jobs_limit(n_remote_jobs, remote_job_limiter)
