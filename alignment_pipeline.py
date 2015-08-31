@@ -35,19 +35,22 @@ def mafft(infile, outfile):
     maybe_qsub(cmd, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
 
 
-@must_work()
-def filter_fastq(infile, outfile):
-    qmax = globals_.config.get('Parameters', 'qmax')
+def min_len():
     min_len_fraction = globals_.config.getfloat('Parameters', 'min_sequence_length')
     ref_file = globals_.config.get('Parameters', 'reference_sequence')
     # multiple by 3 because reference sequence is translated.
-    min_len = 3 * int(min_len_fraction * len(read_single_record(ref_file, 'fasta').seq))
+    return 3 * int(min_len_fraction * len(read_single_record(ref_file, 'fasta').seq))
+
+
+@must_work()
+def filter_fastq(infile, outfile):
+    qmax = globals_.config.get('Parameters', 'qmax')
     max_err_rate = globals_.config.get('Parameters', 'max_err_rate')
     cmd = ('{usearch} -fastq_filter {infile} -fastq_maxee_rate {max_err_rate}'
          ' -threads 1 -fastq_qmax {qmax} -fastq_minlen {min_len} -fastaout {outfile}'
          ' -relabel "{seq_id}_"'.format(
             usearch=globals_.config.get('Paths', 'usearch'),
-            infile=infile, outfile=outfile, qmax=qmax, min_len=min_len,
+            infile=infile, outfile=outfile, qmax=qmax, min_len=min_len(),
             max_err_rate=max_err_rate, seq_id=globals_.key_to_label[infile]))
     maybe_qsub(cmd, outfiles=outfile, name='filter-fastq')
 
@@ -97,11 +100,12 @@ def shift_correction(infile, outfile):
     correct_shifts_fasta(infile, outfile, calnfile="{}.calns".format(infile), keep=True)
 
 
-@must_work(seq_ids=True)
-def sort_by_length(infile, outfile):
-    cmd = ('{usearch} -sortbylength {infile} -fastaout {outfile}'.format(
-            usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
-    maybe_qsub(cmd, outfiles=outfile, name="sort-by-length")
+@must_work()
+def filter_length(infile, outfile):
+    cutoff = min_len()
+    records = SeqIO.parse(infile, 'fasta')
+    result = (r for r in records if len(r.seq) >= cutoff)
+    SeqIO.write(result, outfile, 'fasta')
 
 
 @must_produce(n=int(globals_.config.get('Parameters', 'min_n_clusters')))
@@ -112,8 +116,8 @@ def cluster(infile, outfiles, pathname):
     outpattern = os.path.join(outdir, 'cluster_')
     minsl = globals_.config.get('Parameters', 'min_length_ratio')
     cmd = ('{usearch} -cluster_fast {infile} -id {id}'
-           ' -clusters {outpattern} -maxaccepts {max_accepts}'
-           ' -maxrejects {max_rejects} -minsl {minsl}')
+           ' -clusters {outpattern} -sort length'
+           ' -maxaccepts {max_accepts} -maxrejects {max_rejects} -minsl {minsl}')
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
                      infile=infile, id=globals_.config.get('Parameters', 'cluster_identity'),
                      outpattern=outpattern,
@@ -393,19 +397,19 @@ def make_alignment_pipeline(name=None):
                                                output='.shifted.fasta')
     shift_correction_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    sort_by_length_task = pipeline.transform(sort_by_length,
-                                             input=shift_correction_task,
-                                             filter=suffix('.fasta'),
-                                             output='.sorted.fasta')
-    sort_by_length_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+    filter_length_task = pipeline.transform(filter_length,
+                                            input=shift_correction_task,
+                                            filter=suffix('.fasta'),
+                                            output='.sorted.fasta')
+    filter_length_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     cluster_task = pipeline.subdivide(cluster,
-                                      input=sort_by_length_task,
+                                      input=filter_length_task,
                                       filter=formatter(),
                                       output='{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta',
                                       extras=['{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta'])
     cluster_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-    cluster_task.mkdir(sort_by_length_task, suffix('.fasta'), '.clusters')
+    cluster_task.mkdir(filter_length_task, suffix('.fasta'), '.clusters')
 
     select_clusters_task = pipeline.transform(select_clusters,
                                               input=cluster_task,
@@ -452,14 +456,8 @@ def make_alignment_pipeline(name=None):
                                                          output='.shifted.fasta')
     consensus_shift_correction_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    sort_consensus_task = pipeline.transform(sort_consensus,
-                                             input=consensus_shift_correction_task,
-                                             filter=suffix('.fasta'),
-                                             output='.sorted.fasta')
-    sort_consensus_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-
     unique_consensus_task = pipeline.transform(unique_consensus,
-                                               input=sort_consensus_task,
+                                               input=consensus_shift_correction_task,
                                                filter=suffix('.fasta'),
                                                output='.uniques.fasta')
     unique_consensus_task.jobs_limit(n_remote_jobs, remote_job_limiter)
