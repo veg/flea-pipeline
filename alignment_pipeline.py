@@ -5,8 +5,8 @@ import tempfile
 from functools import partial
 from collections import defaultdict
 
+import numpy as np
 from ruffus import Pipeline, suffix, formatter, add_inputs
-
 from Bio import SeqIO
 
 from util import maybe_qsub, cat_files, touch, strlist, traverse
@@ -55,10 +55,25 @@ def filter_fastq(infile, outfile):
     maybe_qsub(cmd, outfiles=outfile, name='filter-fastq')
 
 
+def trim_helper(infile, outfile, target, reverse):
+    tailfile = "{}.tails".format(outfile)
+    head_freq = globals_.config.getfloat('Parameters', 'head_p')
+    tail_freq = globals_.config.getfloat('Parameters', 'tail_p')
+    min_length = globals_.config.getint('Parameters', 'min_tail_length')
+    penalty = np.log(head_freq) * min_length
+    trim_tails_file(infile, outfile, target=target, head_freq=head_freq,
+                    tail_freq=tail_freq, penalty=penalty, reverse=reverse,
+                    tailfile=tailfile)
+
+
 @must_work(seq_ids=True)
 def trim_polya(infile, outfile):
-    n = globals_.config.get('Parameters', 'polya_n')
-    trim_tails_file(infile, outfile, target="A", n=n)
+    trim_helper(infile, outfile, "A", reverse=False)
+
+
+@must_work(seq_ids=True)
+def trim_polyt(infile, outfile):
+    trim_helper(infile, outfile, "T", reverse=True)
 
 
 def filter_contaminants(infile, outfiles):
@@ -379,14 +394,20 @@ def make_alignment_pipeline(name=None):
                                            output=os.path.join(pipeline_dir, '{basename[0]}{ext[0]}.qfilter.fasta'))
     filter_fastq_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    trim_tails_task = pipeline.transform(trim_polya,
+    trim_polya_task = pipeline.transform(trim_polya,
                                          input=filter_fastq_task,
                                          filter=suffix('.fasta'),
-                                         output='.trimmed.fasta')
-    trim_tails_task.jobs_limit(n_local_jobs, local_job_limiter)
+                                         output='.no-poly-a.fasta')
+    trim_polya_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    trim_polyt_task = pipeline.transform(trim_polyt,
+                                         input=trim_polya,
+                                         filter=suffix('.fasta'),
+                                         output='.no-poly-t.fasta')
+    trim_polyt_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     filter_contaminants_task = pipeline.transform(filter_contaminants,
-                                                  input=trim_tails_task,
+                                                  input=trim_polyt_task,
                                                   filter=suffix('.fasta'),
                                                   output=['.uncontam.fasta', '.contam.fasta'],)
     filter_contaminants_task.jobs_limit(n_remote_jobs, remote_job_limiter)

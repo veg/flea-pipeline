@@ -49,7 +49,10 @@ min_length_ratio: 0.995
 # used for copy number
 max_query_target_length_ratio: 1.005
 
-polya_n: 2
+# used for poly-A and poly-T detection
+head_p: 0.25
+tail_p: 0.99
+min_tail_length: 5
 
 [Tasks]
 pause_after_codon_alignment: False
