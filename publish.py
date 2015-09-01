@@ -81,9 +81,12 @@ if __name__ == "__main__":
     else:
         remote_path = DEFAULT_PATH
 
-
+    if not os.path.exists(directory):
+        raise Exception('source directory does not exist: {}'.format(directory))
     files = recursive_glob(directory, "*json")
     files.extend(recursive_glob(directory, "*tsv"))
+    if not files:
+        raise Exception('no files found')
     src = " ".join(files)
 
     _, dir_name = os.path.split(os.path.abspath(directory))
@@ -93,7 +96,6 @@ if __name__ == "__main__":
     rsync_cmd = RSYNC_CMD.format(src=src, remote_user=remote_user,
                                  remote_host=remote_host,
                                  dest_path=dest_path)
-
     result = call(rsync_cmd)
 
     print("view results at http://test.datamonkey.org:5062/{}/".format(dir_name))
