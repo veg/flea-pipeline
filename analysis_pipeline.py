@@ -104,7 +104,7 @@ def mrca(infile, recordfile, copynumber_file, outfile, oldest_id):
     SeqIO.write(oldest_records, recordfile, "fasta")
     consfile(recordfile, outfile, copynumber_file=copynumber_file,
              ambifile="{}.ambi".format(outfile),
-             id_str="mrca", ungap=False)
+             id_str="mrca", ungap=False, codon=True)
 
 
 @must_work(in_frame=True)

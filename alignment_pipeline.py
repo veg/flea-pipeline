@@ -198,7 +198,7 @@ def translate_wrapper(infile, outfile):
 @must_work(maybe=True, illegal_chars='-')
 def cluster_consensus(infile, outfile):
     ambifile = '{}.info'.format(outfile[:-len('.fasta')])
-    consfile(infile, outfile, ambifile, ungap=True)
+    consfile(infile, outfile, ambifile, ungap=True, codon=False)
 
 
 @must_work(illegal_chars='X')

@@ -34,39 +34,48 @@ from Bio import AlignIO
 from Bio.Align import AlignInfo
 from Bio.Alphabet import IUPAC
 
+from util import grouper
 
-def _column_consensus(counter, seed=None):
+
+def _column_consensus(counter, seed=None, codon=False):
     r = random
     if seed is not None:
         r = random.Random(seed)
     max_count = max(counter.values())
-    cands = ''.join(sorted(char for char, count in counter.items()
-                           if count == max_count))
-    char = r.choice(cands)
-    assert(char in cands)
+    cands = list(sorted(elt for elt, count in counter.items()
+                        if count == max_count))
+    elt = r.choice(cands)
+    assert(elt in cands)
     total = sum(counter.values())
-    ambi = (max_count / total, cands)
-    return char, ambi
+    ambi = (max_count / total, sorted(cands))
+    return elt, ambi
 
 
-def consensus(seqs, copies=None, seed=None):
+def consensus(seqs, copies=None, codon=False, seed=None):
+    aln_len = len(seqs[0])
+    if not all(len(s) == aln_len for s in seqs):
+        raise Exception('sequences are not aligned')
+    if codon:
+        if not aln_len % 3 == 0:
+            raise Exception('alignment length is not multiple of 3')
+        seqs = list(list("".join(g) for g in grouper(s, 3)) for s in seqs)
     if copies is None:
         copies = [1] * len(seqs)
     counters = list(defaultdict(lambda: 0) for _ in range(len(seqs[0])))
     for seq, cn in zip(seqs, copies):
-        for column, char in enumerate(seq):
-            counters[column][char] += cn
-    pairs = (_column_consensus(c, seed) for c in counters)
+        for column, elt in enumerate(seq):
+            counters[column][elt] += cn
+    pairs = (_column_consensus(c, seed, codon) for c in counters)
     cons, ambi = zip(*pairs)
-    cons = ''.join(cons)
     assert(len(cons) == len(ambi))
-    for i, char in enumerate(cons):
-        assert(char in ambi[i][1])
+    for i, elt in enumerate(cons):
+        assert(elt in ambi[i][1])
+    cons = ''.join(cons)
     return cons, ambi
 
 
 def consfile(filename, outfile=None, ambifile=None, copynumber_file=None,
-             id_str=None, ungap=True, verbose=False, seed=None):
+             id_str=None, codon=False, ungap=True, verbose=False, seed=None):
     """Computes a consensus sequence and writes it to a file.
 
     Breaks ties independently for each position by choosing randomly
@@ -88,7 +97,7 @@ def consfile(filename, outfile=None, ambifile=None, copynumber_file=None,
             pairs = list(e.split() for e in lines)
             cdict = dict((key, int(val)) for key, val in pairs)
             copies = list(cdict[r.id] for r in alignment)
-    _consensus, ambiguous = consensus(seqs, copies, seed=seed)
+    _consensus, ambiguous = consensus(seqs, copies, codon=codon, seed=seed)
     if ungap:
         # cannot just call _consensus.ungap('-'), because that will
         # mess up ambiguity information
