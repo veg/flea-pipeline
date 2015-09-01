@@ -15,6 +15,7 @@ from translate import translate
 import pipeline_globals as globals_
 from util import must_work, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter, read_single_record, cat_files
 from util import name_to_date
+from util import extend_coordinates
 from DNAcons import consfile
 from alignment_pipeline import mafft, cat_wrapper_ids
 
@@ -158,27 +159,6 @@ def make_trees_json(infile, outfile):
                        {'Maximum Likelihood': newick_string}}}
     with open(outfile, 'w') as handle:
         json.dump(result, handle, separators=(",\n", ":"))
-
-
-def extend_coordinates(coordinates, seq, gap=None):
-    """Extend coordinates to a gappy sequence.
-
-    >>> transfer_coordinates([1, 2, 3, 4], "a-b-cd")
-    [1, 1, 2, 2, 3, 4]
-
-    """
-    if gap is None:
-        gap = "-"
-    if sum(1 for c in seq if c != gap) != len(coordinates):
-        raise Exception('coordinates do not match source')
-    coords_gen = iter(coordinates)
-    cur = -1
-    result = []
-    for char in seq:
-        if char != gap:
-            cur = next(coords_gen)
-        result.append(cur)
-    return result
 
 
 @must_work()

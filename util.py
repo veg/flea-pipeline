@@ -482,3 +482,24 @@ def name_to_label(name):
 
 def name_to_date(name):
     return globals_.label_to_date[name_to_label(name)]
+
+
+def extend_coordinates(coordinates, seq, gap=None):
+    """Extend coordinates to a gappy sequence.
+
+    >>> extend_coordinates([1, 2, 3, 4], "a-b-cd")
+    [1, 1, 2, 2, 3, 4]
+
+    """
+    if gap is None:
+        gap = "-"
+    if sum(1 for c in seq if c != gap) != len(coordinates):
+        raise Exception('coordinates do not match source')
+    coords_gen = iter(coordinates)
+    cur = -1
+    result = []
+    for char in seq:
+        if char != gap:
+            cur = next(coords_gen)
+        result.append(cur)
+    return result
