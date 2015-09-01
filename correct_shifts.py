@@ -153,7 +153,7 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=False):
                 index += len(subseq)
                 continue  # keep codon deletions
             if keep:
-                result.append('X' * (len(subseq) % 3))
+                result.append('N' * (len(subseq) % 3))
             else:
                 return '', index
         else:  # insertion

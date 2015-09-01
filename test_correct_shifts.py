@@ -31,13 +31,13 @@ class TestCorrectShifts(unittest.TestCase):
             ('ACAAAAG', 'AC----G', 'ACAAAAG'),
 
             # deletions
-            ('AC-ACG', 'ACGACG', 'ACXACG'),
-            ('AC--CG', 'ACGACG', 'ACXXCG'),
+            ('AC-ACG', 'ACGACG', 'ACNACG'),
+            ('AC--CG', 'ACGACG', 'ACNNCG'),
             ('AC---T', 'ACGACG', 'ACT'),
-            ('AC----ACG', 'ACGACGACG', 'ACXACG'),
+            ('AC----ACG', 'ACGACGACG', 'ACNACG'),
 
             # both; keep=True
-            ('AC-TTTT', 'ACCTTT-', 'ACXTTT'),
+            ('AC-TTTT', 'ACCTTT-', 'ACNTTT'),
         )
         for seq, ref, expected in cases:
             self._test(seq, ref, expected, keep=True)
