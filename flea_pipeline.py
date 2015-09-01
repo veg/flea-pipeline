@@ -158,6 +158,16 @@ for r in references:
     if "*" in r.seq.translate()[-1]:
         raise Exception('reference sequence {} has stop codon'.format(r.id))
 
+# check reference sequence and coordinates
+ref_seq = next(SeqIO.parse(globals_.config.get('Parameters', 'reference_sequence'), 'fasta'))
+ref_coords = open(globals_.config.get('Parameters', 'reference_coordinates')).read().strip().split()
+if '*' in str(ref_seq.seq):
+    raise Exception('translated reference sequence has stop codon')
+if '-' in str(ref_seq.seq):
+    raise Exception('translated reference sequence has a gap character')
+if len(ref_seq) != len(ref_coords):
+    raise Exception('reference sequence does not match reference coordinates')
+
 # make pipelines
 from alignment_pipeline import make_alignment_pipeline
 from analysis_pipeline import make_analysis_pipeline
