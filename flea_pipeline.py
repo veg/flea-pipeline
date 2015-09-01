@@ -153,6 +153,8 @@ else:
 # check reference database
 references = SeqIO.parse(globals_.config.get('Parameters', 'reference_db'), 'fasta')
 for r in references:
+    if "-" in str(r.seq):
+        raise Exception('reference sequence {} contains gaps')
     if "*" in r.seq.translate()[-1]:
         raise Exception('reference sequence {} has stop codon'.format(r.id))
 
