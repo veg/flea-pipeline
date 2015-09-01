@@ -201,14 +201,6 @@ def cluster_consensus(infile, outfile):
     consfile(infile, outfile, ambifile, ungap=True, codon=False)
 
 
-@must_work(illegal_chars='X')
-def filter_ambiguous(infile, outfile):
-    records = (SeqIO.parse(infile, 'fasta'))
-    keep, discard = partition(lambda r: 'X' in str(r.seq), records)
-    SeqIO.write(keep, outfile, 'fasta')
-    SeqIO.write(discard, '{}.discarded'.format(outfile), 'fasta')
-
-
 @must_work()
 def consensus_db_search(infile, outfile):
     usearch_reference_db(infile, outfile, name='consensus-db-search')
@@ -463,15 +455,8 @@ def make_alignment_pipeline(name=None):
                                          output='{path[0]}.cons.fasta')
     cat_clusters_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    # FIXME: this step should not be necessary
-    filter_ambiguous_task = pipeline.transform(filter_ambiguous,
-                                               input=cat_clusters_task,
-                                               filter=suffix('.fasta'),
-                                               output='.unambiguous.fasta')
-    filter_ambiguous_task.jobs_limit(n_local_jobs, local_job_limiter)
-
     consensus_db_search_task = pipeline.transform(consensus_db_search,
-                                                  input=filter_ambiguous_task,
+                                                  input=cat_clusters_task,
                                                   filter=suffix('.fasta'),
                                                   output='.pairs.fasta')
     consensus_db_search_task.jobs_limit(n_remote_jobs, remote_job_limiter)
