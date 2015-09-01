@@ -87,7 +87,10 @@ def filter_contaminants(infile, outfiles):
     maybe_qsub(cmd, outfiles=outfiles, name='filter-contaminants')
 
 
-def usearch_global_pairs(infile, outfile, dbfile, identity, name=None):
+def usearch_reference_db(infile, outfile, name=None):
+    """run usearch_global against reference database and print fasta hits"""
+    dbfile = globals_.config.get('Parameters', 'reference_db')
+    identity = globals_.config.get('Parameters', 'reference_identity')
     max_accepts = globals_.config.get('Parameters', 'max_accepts')
     max_rejects = globals_.config.get('Parameters', 'max_rejects')
     cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
@@ -95,7 +98,7 @@ def usearch_global_pairs(infile, outfile, dbfile, identity, name=None):
            ' -userfields caln -top_hit_only -strand both'
            ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
     if name is None:
-        name = 'usearch-global-pairs'
+        name = 'usearch-reference-db'
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
                      infile=infile, db=dbfile, id=identity, outfile=outfile,
                      max_accepts=max_accepts, max_rejects=max_rejects)
@@ -105,9 +108,7 @@ def usearch_global_pairs(infile, outfile, dbfile, identity, name=None):
 @must_work()
 def filter_uncontaminated(infiles, outfile):
     uncontam, _ = infiles
-    usearch_global_pairs(uncontam, outfile, globals_.config.get('Parameters', 'reference_db'),
-                         globals_.config.get('Parameters', 'reference_identity'),
-                         name="filter-uncontaminated")
+    usearch_reference_db(uncontam, outfile, name="filter-uncontaminated")
 
 
 def shift_correction_helper(infile, outfile, keep):
@@ -210,9 +211,7 @@ def filter_ambiguous(infile, outfile):
 
 @must_work()
 def consensus_db_search(infile, outfile):
-    usearch_global_pairs(infile, outfile, globals_.config.get('Parameters', 'reference_db'),
-                         globals_.config.get('Parameters', 'reference_identity'),
-                         name='consensus-db-search')
+    usearch_reference_db(infile, outfile, name='consensus-db-search')
 
 
 @must_work(in_frame=True)
@@ -241,7 +240,9 @@ def make_individual_dbs(infile, outfile):
     maybe_qsub(cmd,  outfiles=outfile, name='make-individual-dbs')
 
 
-def usearch_copynumbers(infile, outfile, dbfile, identity, name=None):
+def usearch_consensus_ids(infile, outfile, dbfile, name=None):
+    """run usearch_global against a consensus database and print pairs of ids"""
+    identity = globals_.config.get('Parameters', 'raw_to_consensus_identity')
     max_accepts = globals_.config.get('Parameters', 'max_accepts')
     max_rejects = globals_.config.get('Parameters', 'max_rejects')
     maxqt = globals_.config.get('Parameters', 'max_query_target_length_ratio')
@@ -250,7 +251,7 @@ def usearch_copynumbers(infile, outfile, dbfile, identity, name=None):
            " -maxaccepts {max_accepts} -maxrejects {max_rejects}"
            " -maxqt {maxqt}")
     if name is None:
-        name = 'usearch-global-id-pairs'
+        name = 'usearch-consensus-ids'
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
                      infile=infile, db=dbfile, id=identity, outfile=outfile,
                      max_accepts=max_accepts, max_rejects=max_rejects,
@@ -265,10 +266,8 @@ def compute_copynumbers(infiles, outfile, basename):
     # make sure this suffix changes depending on what task comes before
     check_suffix(perfectfile, '.uniques.fasta')
     check_suffix(dbfile, '.udb')
-    identity = globals_.config.get('Parameters', 'raw_to_consensus_identity')
     pairfile = '{}.copynumber.pairs'.format(basename)
-    usearch_copynumbers(rawfile, pairfile, dbfile, identity,
-                        name='compute-copynumber')
+    usearch_consensus_ids(rawfile, pairfile, dbfile, name='compute-copynumber')
     with open(pairfile) as f:
             pairs = list(line.strip().split("\t") for line in f.readlines())
     consensus_counts = defaultdict(lambda: 0)
@@ -323,10 +322,10 @@ def make_full_db(infile, outfile):
 
 @must_work()
 def full_timestep_pairs(infiles, outfile):
+    # FIXME: this does basically the same thing as the copynumber task,
+    # except it allows CCSs to map to HQCSs in different timepoints
     infile, dbfile = infiles
-    identity = globals_.config.get('Parameters', 'raw_to_consensus_identity')
-    usearch_global_pairs(infile, outfile, dbfile, identity, nums_only=True,
-                         name='full-timestep-pairs')
+    usearch_consensus_ids(infile, outfile, dbfile, name='full-timestep-pairs')
 
 
 @must_work()
