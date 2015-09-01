@@ -5,7 +5,7 @@ from correct_shifts import correct_shifts
 class TestCorrectShifts(unittest.TestCase):
 
     def _test(self, seq, ref, expected, keep=False):
-        self.assertEquals(correct_shifts(seq, ref, keep=keep), expected)
+        self.assertEquals(correct_shifts(seq, ref, keep=keep)[0], expected)
 
     def test_correct_shifts(self):
         cases = (
