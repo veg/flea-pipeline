@@ -150,6 +150,12 @@ else:
         if v < 3:
             raise Exception('timepoint {} has only {} sequences'.format(k, v))
 
+# check reference database
+references = SeqIO.parse(globals_.config.get('Parameters', 'reference_db'), 'fasta')
+for r in references:
+    if "*" in r.seq.translate()[-1]:
+        raise Exception('reference sequence {} has stop codon'.format(r.id))
+
 # make pipelines
 from alignment_pipeline import make_alignment_pipeline
 from analysis_pipeline import make_analysis_pipeline

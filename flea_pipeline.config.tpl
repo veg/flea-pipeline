@@ -24,9 +24,8 @@ walltime: 86400
 reference_dir: /path/to/references
 reference_sequence: ${reference_dir}/reference.translated.fasta
 reference_coordinates: ${reference_dir}/reference.numbers.csv
-# TODO: generate database files on the fly
-reference_db: ${reference_dir}/reference.database.udb
-contaminants_db: ${reference_dir}/contaminants.database.udb
+reference_db: ${reference_dir}/reference.database.fasta
+contaminants_db: ${reference_dir}/contaminants.database.fasta
 min_sequence_length: .8
 max_err_rate: 0.01
 qmax: 55
