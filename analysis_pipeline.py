@@ -189,12 +189,16 @@ def make_coordinates_json(infile, outfile):
 
 @must_work()
 # TODO: modify turnover script to not need json input
-def make_frequencies_json(infile, outfile):
-    records = SeqIO.parse(infile, "fasta")
+def make_frequencies_json(infiles, outfile):
+    seqfile, copyjson = infiles
+    records = SeqIO.parse(seqfile, "fasta")
+    with open(copyjson) as handle:
+        copynumbers = json.load(handle)
     result = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     for r in records:
+        cn = int(copynumbers[r.id])
         for i, residue in enumerate(str(r.seq)):
-            result[i + 1][name_to_date(r.id)][residue] += 1
+            result[i + 1][name_to_date(r.id)][residue] += cn
     with open(outfile, 'w') as handle:
         json.dump(result, handle, separators=(",\n", ":"))
 
@@ -313,10 +317,9 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                          output=os.path.join(pipeline_dir, 'sequences.json'))
     sequences_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    frequencies_task = pipeline.transform(make_frequencies_json,
-                                               input=translate_task,
-                                               filter=formatter(),
-                                               output=os.path.join(pipeline_dir, 'frequencies.json'))
+    frequencies_task = pipeline.merge(make_frequencies_json,
+                                      input=[translate_task, copynumber_json_task],
+                                      output=os.path.join(pipeline_dir, 'frequencies.json'))
     frequencies_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     turnover_task = pipeline.transform(turnover,
