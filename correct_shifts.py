@@ -13,10 +13,11 @@ Usage:
   correct_shifts.py -h
 
 Options:
-  --keep                 Do not discard sequences, even with bad inserts [default: False]
-  --calns=<FILE>         File with run-length encoded alignment summaries.
-  -v --verbose           Print summary [default: False]
-  -h --help              Show this screen
+  --keep            Do not discard sequences, even with bad inserts [default: False]
+  --calns=<FILE>    File with run-length encoded alignment summaries.
+  --discard=<FILE>  File to print discarded alignments.
+  -v --verbose      Print summary [default: False]
+  -h --help         Show this screen
 
 """
 
@@ -130,6 +131,7 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=False):
     # FIXME: make this codon-aware
     if gap_char is None:
         gap_char = '-'
+    start = 0
     if caln is not None:
         start, stop = alignment_slice(caln)
         seq = seq[start:stop]
@@ -137,6 +139,7 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=False):
     if sum(1 for i in ref if i != gap_char) % 3 != 0:
         raise ValueError('len(reference) is not a multiple of 3')
     result = []
+    index = start
     for k, g in groupby(zip_longest(seq, ref), key=partial(first_index, gap_char)):
         # k tells us where the gap is
         group = list(g)
@@ -147,31 +150,35 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=False):
             result.extend(subseq)
         elif k == 0:  # deletion
             if len(subseq) % 3 == 0:
+                index += len(subseq)
                 continue  # keep codon deletions
             if keep:
                 result.append('X' * (len(subseq) % 3))
             else:
-                return ''
+                return '', index
         else:  # insertion
             if len(subseq) % 3 == 0:
                 result.append(subseq)  # keep codon insertions
             elif len(subseq) < 3:
+                index += len(subseq)
                 continue  # discard short insertions
             else:
                 if keep:
                     # keep out-of-frame long insertions.
                     result.append(subseq)
                 else:  # give up
-                    return ''
+                    return '', index
+        index += len(subseq)
     if gap_char in result:
         raise Exception('gap character appeared in corrected result')
     result = ''.join(result)
     if not keep and len(result) % 3 != 0:
         raise Exception('shift correction failed')
-    return result
+    return result, -1
 
 
-def correct_shifts_fasta(infile, outfile, discardfile, calnfile=None,
+def correct_shifts_fasta(infile, outfile, calnfile=None,
+                         discardfile=None,
                          alphabet=None, keep=True):
     """Correct all the pairs in a fasta file.
 
@@ -184,19 +191,22 @@ def correct_shifts_fasta(infile, outfile, discardfile, calnfile=None,
     else:
         with open(calnfile) as handle:
             calns = handle.read().strip().split()
-    results = (new_record_seq_str(seq, correct_shifts(seq.seq, ref.seq, caln, keep=keep))
-               for (seq, ref), caln in zip(pairs, calns))
-
     results = list(correct_shifts(seq.seq, ref.seq, caln, keep=keep)
                    for (seq, ref), caln in zip(pairs, calns))
 
     keep = list(new_record_seq_str(seq, result)
-                for result, (seq, ref) in zip(results, pairs) if result)
-    discard = list(pair for result, pair in zip(results, pairs) if not result)
-    discard = list(s for pair in discard for s in pair)
-
+                for (result, _), (seq, ref) in zip(results, pairs) if result)
     SeqIO.write(keep, outfile, 'fasta')
-    SeqIO.write(discard, discardfile, 'fasta')
+
+    if discardfile is not None:
+        discard = list(pair for (result, _), pair in zip(results, pairs)
+                       if not result)
+        for (result, index), (seq, ref) in zip(results, pairs):
+            seq.description = "bad index: {}".format(index + 1)
+            ref.description = "bad index: {}".format(index + 1)
+        discard = list(s for pair in discard for s in pair)
+        SeqIO.write(discard, discardfile, 'fasta')
+
     return len(results), len(keep)
 
 
@@ -214,6 +224,8 @@ if __name__ == "__main__":
     outfile = args["<outfile>"]
     keep = args['--keep']
     calnfile = args['--calns']
-    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, calnfile=calnfile, keep=keep)
+    discardfile = args['--discard']
+    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, discardfile=discardfile,
+                                           calnfile=calnfile, keep=keep)
     if args['--verbose']:
         write_correction_result(n_seqs, n_fixed, sys.stdout)
