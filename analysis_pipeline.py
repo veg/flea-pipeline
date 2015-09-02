@@ -8,14 +8,17 @@ from collections import defaultdict
 
 from ruffus import Pipeline, formatter, suffix
 
+from Bio.Seq import translate
 from Bio import SeqIO
 from Bio import Phylo
 
-from translate import translate
+from translate import translate as translate_file
 import pipeline_globals as globals_
 from util import must_work, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter, read_single_record, cat_files
 from util import name_to_date
 from util import extend_coordinates
+from util import new_record_seq_str
+from util import grouper
 from DNAcons import consfile
 from alignment_pipeline import mafft, cat_wrapper_ids
 
@@ -82,7 +85,7 @@ def copynumber_json(infiles, outfile):
 
 @must_work()
 def gapped_translate_wrapper(infile, outfile):
-    translate(infile, outfile, gapped=True)
+    translate_file(infile, outfile, gapped=True)
 
 
 @must_work()
@@ -224,6 +227,33 @@ def write_dates(infile, outfile):
         json.dump(outdict, handle, separators=(",\n", ":"))
 
 
+def handle_codon(codon):
+    codon = ''.join(codon)
+    if codon == "---":
+        return codon
+    if translate(codon) == "*":
+        return "NNN"
+    return codon
+
+
+def replace_stop_codons(record):
+    if len(record.seq) % 3 != 0:
+        raise Exception('record {} is not in frame'.format(record.id))
+    new_str = "".join(handle_codon(codon) for codon in grouper(record.seq, 3))
+    result = new_record_seq_str(record, new_str)
+    # HyPhy does not like anything but the sequence id
+    result.name = ""
+    result.description = ""
+    return result
+
+
+@must_work()
+def replace_stop_codons_file(infile, outfile):
+    records = list(SeqIO.parse(infile, 'fasta'))
+    result = (replace_stop_codons(record) for record in records)
+    SeqIO.write(result, outfile, 'fasta')
+
+
 @must_work()
 def compute_hxb2_regions(infile, outfile):
     hxb2_script = hyphy_script('HXB2partsSplitter.bf')
@@ -341,6 +371,12 @@ def make_analysis_pipeline(do_hyphy, name=None):
     dates_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     if do_hyphy:
+        replace_stop_codons_task = pipeline.transform(replace_stop_codons_file,
+                                                      input=add_copynumbers_task,
+                                                      filter=suffix('.fasta'),
+                                                      output='.no-stops.fasta')
+        replace_stop_codons_task.jobs_limit(n_local_jobs, local_job_limiter)
+
         region_coords_task = pipeline.transform(compute_hxb2_regions,
                                                 input=mrca_task,
                                                 filter=formatter(),
@@ -348,12 +384,12 @@ def make_analysis_pipeline(do_hyphy, name=None):
         region_coords_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
         evo_history_task = pipeline.merge(evo_history,
-                                          input=[add_copynumbers_task, dates_task, region_coords_task, mrca_task],
+                                          input=[replace_stop_codons_task, dates_task, region_coords_task, mrca_task],
                                           output=os.path.join(pipeline_dir, 'rates_pheno.tsv'))
         evo_history_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
         fubar_task = pipeline.merge(run_fubar,
-                                    input=[add_copynumbers_task, dates_task, mrca_task],
+                                    input=[replace_stop_codons_task, dates_task, mrca_task],
                                     output=os.path.join(pipeline_dir, 'rates.json'))
         fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
