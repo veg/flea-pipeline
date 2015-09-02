@@ -41,9 +41,11 @@ def hyphy_call(script_file, name, args):
 
 
 def replace_id(record, id_):
-    # FIXME: do not modify in-place
-    record.id = id_
-    record.name = id_
+    result = record[:]
+    result.id = id_
+    # HyPhy fails if a name or description are present
+    result.name = ""
+    result.description = ""
     return record
 
 

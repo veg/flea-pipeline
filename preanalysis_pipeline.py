@@ -19,6 +19,8 @@ def rename_record(record):
     new_name = "{}_{}".format(label, rest.strip("_"))
     record = record[:]
     record.id = new_name
+    record.name = ""
+    record.description = ""
     return record
 
 
