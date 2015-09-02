@@ -17,7 +17,7 @@ def rename_record(record):
     key, rest = split_name(record.id)
     label = globals_.key_to_label[key]
     new_name = "{}_{}".format(label, rest.strip("_"))
-    record.name = new_name
+    record = record[:]
     record.id = new_name
     return record
 
