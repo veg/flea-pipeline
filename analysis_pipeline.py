@@ -297,8 +297,8 @@ def make_analysis_pipeline(do_hyphy, name=None):
     translate_task = pipeline.transform(gapped_translate_wrapper,
                                         name='translate_gapped',
                                         input=add_copynumbers_task,
-                                        filter=formatter(),
-                                        output=os.path.join(pipeline_dir, 'translated.fasta'))
+                                        filter=suffix('.fasta'),
+                                        output='.translated.fasta')
     translate_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     translate_mrca_task = pipeline.transform(gapped_translate_wrapper,
