@@ -55,12 +55,16 @@ def parse_copynumbers(infile):
     return list(line.split() for line in lines)
 
 
+def id_with_cn(id_, cn):
+    return "{}_cn_{}".format(id_, cn)
+
+
 @must_work()
 def add_copynumbers(infiles, outfile):
     msafile, copyfile = infiles
     id_to_cn = dict(parse_copynumbers(copyfile))
     records = SeqIO.parse(msafile, 'fasta')
-    result = (replace_id(r, "{}_{}".format(r.id, id_to_cn[r.id]))
+    result = (replace_id(r, id_with_cn(r.id, id_to_cn[r.id]))
               for r in records)
     SeqIO.write(result, outfile, "fasta")
 
@@ -70,7 +74,7 @@ def copynumber_json(infiles, outfile):
     _, infile = infiles
     pairs = parse_copynumbers(infile)
     # add copynumber to name, to match rest of this pipeline
-    result = dict(("{}_{}".format(key, value), value)
+    result = dict((id_with_cn(key, value), value)
                   for key, value in pairs)
     with open(outfile, 'w') as handle:
         json.dump(result, handle, separators=(",\n", ":"))

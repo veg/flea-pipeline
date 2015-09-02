@@ -198,7 +198,11 @@ def translate_wrapper(infile, outfile):
 @must_work(maybe=True, illegal_chars='-')
 def cluster_consensus(infile, outfile):
     ambifile = '{}.info'.format(outfile[:-len('.fasta')])
-    consfile(infile, outfile, ambifile, ungap=True, codon=False)
+    n = re.search("cluster_([0-9]+)", infile).group(1)
+    seq_id = next(SeqIO.parse(infile, 'fasta')).id
+    label = re.split("_[0-9]+$", seq_id)[0]
+    new_id = "{label}_hqcs_{n}".format(label=label, n=n)
+    consfile(infile, outfile, ambifile, ungap=True, codon=False, id_str=new_id)
 
 
 @must_work()
@@ -261,7 +265,7 @@ def compute_copynumbers(infiles, outfile, basename):
     pairfile = '{}.copynumber.pairs'.format(basename)
     usearch_consensus_ids(rawfile, pairfile, dbfile, name='compute-copynumber')
     with open(pairfile) as f:
-            pairs = list(line.strip().split("\t") for line in f.readlines())
+        pairs = list(line.strip().split("\t") for line in f.readlines())
     consensus_counts = defaultdict(lambda: 0)
     for raw_id, ref_id in pairs:
         consensus_counts[ref_id] += 1
