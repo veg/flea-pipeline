@@ -46,7 +46,7 @@ def replace_id(record, id_):
     # HyPhy fails if a name or description are present
     result.name = ""
     result.description = ""
-    return record
+    return result
 
 
 def parse_copynumbers(infile):
