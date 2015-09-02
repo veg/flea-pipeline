@@ -157,10 +157,11 @@ def qsub(cmd, outfiles=None, control_dir=None, queue=None, nodes=1, ppn=1, sleep
 
 
 def maybe_qsub(cmd, **kwargs):
+    if 'walltime' not in kwargs:
+        kwargs['walltime'] = globals_.config.getint('Jobs', 'walltime')
     if globals_.config.getboolean('Jobs', 'use_cluster'):
         qsub(cmd,
              control_dir=globals_.qsub_dir,
-             walltime=globals_.config.getint('Jobs', 'walltime'),
              queue=globals_.config.get('Jobs', 'queue'),
              nodes=globals_.config.get('Jobs', 'nodes'),
              ppn=globals_.config.get('Jobs', 'ppn'), **kwargs)

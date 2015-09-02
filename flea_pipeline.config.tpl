@@ -18,7 +18,8 @@ use_cluster: True
 queue: fast
 nodes: 1
 ppn: 16
-walltime: 86400
+walltime: 3600
+hyphy_walltime: 86400
 
 [Parameters]
 reference_dir: /path/to/references
