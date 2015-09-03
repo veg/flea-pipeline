@@ -1,14 +1,19 @@
 Python dependencies
 -------------------
-- BioPython
-- docopt
-- ruffus
+Listed in `requirements.txt`.
+
+Install with `pip install -r requirements.txt`.
 
 
 3rd party dependencies
 ----------------------
-- usearch (version >= 8.0.1570)
+- usearch (version >= 8.0.1623)
 - mafft
+- Julia, with:
+  - ArgParse
+  - Dates
+  - JSON
+  - DataStructures
 - BioExt's bealign
 
 
@@ -29,7 +34,7 @@ For now, we assume this is running on silverback. All the Python
 dependencies are already installed in a virtual environment. Just
 activate it like so:
 
-`source /opt/talign/env/bin/activate`
+`source /opt/flea-env/bin/activate`
 
 Run the whole pipeline with `flea_pipeline.py <control file>`.
 
