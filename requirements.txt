@@ -1,0 +1,5 @@
+biopython==1.65
+docopt==0.6.2
+numpy==1.9.2
+ruffus==2.6.3
+wheel==0.24.0
