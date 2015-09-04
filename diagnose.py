@@ -8,7 +8,8 @@ Usage:
   diagnose.py -h | --help
 
 Options:
-  -h --help               Show this screen
+  -c <FLOAT>  Cutoff for JS distance [default: 0.01]
+  -h --help   Show this screen
 
 """
 
@@ -37,6 +38,9 @@ def kl_divergence(p, q):
 
 
 def js_divergence(p, q):
+    # ensure there are no zeros
+    p = to_freqs(p + 0.001)
+    q = to_freqs(q + 0.001)
     m = 0.5 * (p + q)
     return 0.5 * (kl_divergence(p, m) + kl_divergence(q, m))
 
@@ -52,7 +56,7 @@ def column_count(a, keys, weights=None):
     return result.sum(axis=1)
 
 
-def diagnose(filename, filename_ccs, copynumbers_file, result_path):
+def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
     def out(f):
         return os.path.join(result_path, f)
 
@@ -61,7 +65,8 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path):
     #Getting and sorting copynumbers
     with open(copynumbers_file, 'r') as handle:
         parsed = csv.reader(handle, delimiter='\t')
-        copynumber_array = np.array(list(int(n) for elem, n in sorted(parsed)))
+        cns = list(sorted(parsed))
+        copynumber_array = np.array(list(int(n) for elem, n in cns))
 
     #Getting and sorting HQCS seqs
     hqcs = list(sorted(SeqIO.parse(filename, format), key=lambda r: r.id))
@@ -86,42 +91,21 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path):
     # Relying on "_" to separate timepoint ID
     labels = sorted(set(hqcs_labels))
 
-    # TODO: get a general threshold region for bad pairs, and use this instead.
-    thresh = 3
-    epsil = 0.02
-
     for label in labels:
         bools = hqcs_labels == label
         hqcs_counts = column_count(hqcs_array[bools], keys, weights=copynumber_array[bools])
-        hqcs_freqs = to_freqs(hqcs_counts)
 
         ccs_counts = column_count(ccs_array[ccs_labels == label], keys)
-        ccs_freqs = to_freqs(ccs_counts)
 
         np.savetxt(out("hqcs_counts_{}.csv".format(label)), hqcs_counts.T,
                    fmt="%1.1u", delimiter=",", header=",".join(aas))
         np.savetxt(out("ccs_counts_{}.csv".format(label)), ccs_counts.T,
                    fmt="%u", delimiter=",", header=",".join(aas))
 
-        # compute bad locations, which have extreme HQCS counts, but less
-        # extreme CCS counts.
-
-        # Don't ask about this parameterization. It separated out the ones I needed to see.
-        bad_inds = np.greater(ccs_freqs, -epsil + epsil * thresh + thresh * hqcs_freqs)
-        bad_inds_rev = np.greater(1 - ccs_freqs, -epsil + epsil * thresh + thresh * (1 - hqcs_freqs))
-        combined = np.logical_or(bad_inds, bad_inds_rev)
-
-        bad_keys, bad_columns = np.where(combined)
-        rows = zip(*[bad_columns, keys[bad_keys],
-                     hqcs_freqs[bad_keys, bad_columns],
-                     ccs_freqs[bad_keys, bad_columns]])
-        with open(out("bad_sites_{}.csv".format(label)), "w") as f:
-            writer = csv.writer(f)
-            writer.writerow(['column', 'aa', 'hqcs_freq', 'ccs_freq'])
-            writer.writerows(rows)
-
         # plot all freqs
-        plt.scatter(np.ravel(hqcs_freqs), np.ravel(ccs_freqs), alpha=0.5)
+        plt.scatter(np.ravel(to_freqs(hqcs_counts)),
+                    np.ravel(to_freqs(ccs_counts)),
+                    alpha=0.5)
         plt.xlabel('HQCS frequency')
         plt.ylabel('CCS frequency')
         plt.title(label)
@@ -131,26 +115,47 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path):
         # strip X and normalize
         x_index = aas.index('X')
         hqcs_no_x = np.delete(hqcs_counts, x_index, 0)
+        hqcs_no_x_freqs = to_freqs(hqcs_no_x)
         ccs_no_x = np.delete(ccs_counts, x_index, 0)
+        ccs_no_x_freqs = to_freqs(ccs_no_x)
 
         # plot without X
-        plt.scatter(np.ravel(to_freqs(hqcs_no_x)), np.ravel(to_freqs(ccs_no_x)), alpha=0.5)
+        plt.scatter(np.ravel(hqcs_no_x_freqs), np.ravel(ccs_no_x_freqs), alpha=0.5)
         plt.xlabel('HQCS frequency')
         plt.ylabel('CCS frequency')
         plt.title("{} no X".format(label))
         plt.savefig(out("freq_agreement_no_x_{}.png".format(label)))
         plt.close()
 
-        divs = list(js_divergence((a + 1) / (a.sum() + 1), (b + 1) / (b.sum() + 1))
-                    for a, b in zip(hqcs_no_x.T, ccs_no_x.T))
+        divs = np.array(list(js_divergence(a, b)
+                             for a, b in zip(hqcs_no_x_freqs.T, ccs_no_x_freqs.T)))
+
+        bad_columns = np.where(divs > cutoff)[0]
 
         # plot column-wise JS divergence
         plt.plot(divs)
+        if len(bad_columns) > 0:
+            plt.axhline(y=cutoff, color='r')
         plt.xlabel('column')
         plt.ylabel('JS divergence')
         plt.title("{} no X".format(label))
         plt.savefig(out("js_div_no_x_{}.png".format(label)))
         plt.close()
+
+        # compute bad locations which have extreme JS divergence
+
+        if len(bad_columns) > 0:
+            cols = [bad_columns,
+                    divs[bad_columns],
+                    keys[hqcs_no_x_freqs[:, bad_columns].argmax(axis=0)],
+                    hqcs_no_x_freqs[:, bad_columns].max(axis=0),
+                    keys[ccs_no_x_freqs[:, bad_columns].argmax(axis=0)],
+                    ccs_no_x_freqs[:, bad_columns].max(axis=0)]
+            rows = list(zip(*cols))
+            with open(out("bad_sites_{}.csv".format(label)), "w") as f:
+                writer = csv.writer(f)
+                writer.writerow(['column', 'js_divergence', 'hqcs_aa', 'hqcs_freq', 'ccs_aa', 'ccs_freq'])
+                writer.writerows(rows)
 
 
 if __name__ == "__main__":
@@ -159,4 +164,5 @@ if __name__ == "__main__":
     ccs_file = args["<ccs_file>"]
     copy_file = args["<copynumber_file>"]
     result_path = args["<result_path>"]
-    diagnose(hqcs_file, ccs_file, copy_file, result_path)
+    cutoff = float(args["-c"])
+    diagnose(hqcs_file, ccs_file, copy_file, result_path, cutoff)
