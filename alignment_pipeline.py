@@ -355,7 +355,7 @@ def combine_pairs(infiles, outfiles, basename):
 
 @must_work()
 def codon_align(infile, outfile):
-    cmd = "{} --no-sort --keep-reference {} {}".format(
+    cmd = "{} {} {}".format(
         globals_.config.get('Paths', 'bealign'), infile, outfile)
     stdout = os.path.join(globals_.qsub_dir, '{}.stdout'.format(outfile))
     stderr = os.path.join(globals_.qsub_dir, '{}.stderr'.format(outfile))

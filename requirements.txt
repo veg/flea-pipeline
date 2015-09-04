@@ -1,4 +1,6 @@
+bioext==0.17.0
 biopython==1.65
+Cython==0.23.1
 decorator==4.0.2
 docopt==0.6.2
 ipython==4.0.0
@@ -10,6 +12,7 @@ path.py==8.1
 pexpect==3.3
 pickleshare==0.5
 pyparsing==2.0.3
+pysam==0.8.3
 python-dateutil==2.4.2
 pytz==2015.4
 ruffus==2.6.3
