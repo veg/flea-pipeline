@@ -16,6 +16,7 @@ Options:
 
 import csv
 import os
+import warnings
 
 from docopt import docopt
 import numpy as np
@@ -34,15 +35,27 @@ def to_freqs(a):
 
 
 def kl_divergence(p, q):
-    return (p * (np.log(p) - np.log(q))).sum()
+    if np.any(q == 0):
+        raise Exception('cannot compute KL divergence because q == 0')
+    with warnings.catch_warnings():
+        # can safely ignore warnings here; we will filter out invalid values
+        warnings.simplefilter("ignore")
+        elts = (p * (np.log(p) - np.log(q)))
+    elts[p == 0] = 0
+    result = elts.sum()
+    if np.isnan(result):
+        raise Exception('KL divergence failed')
+    return result
 
 
 def js_divergence(p, q):
     # ensure there are no zeros
-    p = to_freqs(p + 0.001)
-    q = to_freqs(q + 0.001)
-    m = 0.5 * (p + q)
-    return 0.5 * (kl_divergence(p, m) + kl_divergence(q, m))
+    m = (p + q) / 2
+    bools = (m > 0)
+    p = p[bools]
+    q = q[bools]
+    m = m[bools]
+    return (kl_divergence(p, m) + kl_divergence(q, m)) / 2
 
 
 def column_count(a, keys, weights=None):
