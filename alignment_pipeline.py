@@ -16,10 +16,11 @@ from util import local_job_limiter, remote_job_limiter
 from util import check_suffix, check_basename, n_jobs
 from util import read_single_record
 from util import partition
+from util import grouper
 
 import pipeline_globals as globals_
 
-from translate import translate
+from translate import translate as translate_file
 from backtranslate import backtranslate
 from DNAcons import consfile
 from correct_shifts import correct_shifts_fasta, write_correction_result
@@ -192,7 +193,12 @@ def cat_wrapper(infiles, outfile):
 
 @must_work()
 def translate_wrapper(infile, outfile):
-    translate(infile, outfile)
+    translate_file(infile, outfile)
+
+
+@must_work()
+def gapped_translate_wrapper(infile, outfile):
+    translate_file(infile, outfile, gapped=True)
 
 
 @must_work(maybe=True, illegal_chars='-')
@@ -349,7 +355,8 @@ def combine_pairs(infiles, outfiles, basename):
 
 @must_work()
 def codon_align(infile, outfile):
-    cmd = "{} -R {} {}".format(globals_.config.get('Paths', 'bealign'), infile, outfile)
+    cmd = "{} --no-sort --keep-reference {} {}".format(
+        globals_.config.get('Paths', 'bealign'), infile, outfile)
     stdout = os.path.join(globals_.qsub_dir, '{}.stdout'.format(outfile))
     stderr = os.path.join(globals_.qsub_dir, '{}.stderr'.format(outfile))
     maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
@@ -363,17 +370,58 @@ def convert_bam_to_fasta(infile, outfile):
     maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
+def handle_gap_codon(codon):
+    codon = ''.join(codon)
+    if '-' in codon and codon != '---':
+        return 'NNN'
+    return codon
+
+
+def replace_gapped_codons(record):
+    if len(record.seq) % 3 != 0:
+        raise Exception('record {} is not in frame'.format(record.id))
+    new_str = "".join(handle_gap_codon(codon) for codon in grouper(record.seq, 3))
+    result = new_record_seq_str(record, new_str)
+    # HyPhy does not like anything but the sequence id
+    result.name = ""
+    result.description = ""
+    return result
+
+
+@must_work()
+def replace_gapped_codons_file(infile, outfile):
+    records = list(SeqIO.parse(infile, 'fasta'))
+    result = (replace_gapped_codons(record) for record in records)
+    SeqIO.write(result, outfile, 'fasta')
+
+
 @must_work()
 def insert_gaps_wrapper(infiles, outfile):
     infile, backtranslated = infiles
     ref, *seqs = list(SeqIO.parse(infile, 'fasta'))
-    ref_gapped = list(r for r in SeqIO.parse(backtranslated, 'fasta')
-                      if r.id == ref.id)[0]
+    ref_gapped = next(r for r in SeqIO.parse(backtranslated, 'fasta')
+                      if r.id == ref.id)
     seqs_gapped = (new_record_seq_str(r, insert_gaps(str(ref_gapped.seq),
                                                      str(r.seq),
                                                      '-', '-'))
                    for r in seqs)
     SeqIO.write(seqs_gapped, outfile, "fasta")
+
+
+@must_work()
+def diagnose_alignment(infiles, outfiles):
+    hqcs, ccs, cn = infiles
+    kwargs = {
+        'script': os.path.join(globals_.script_dir, "diagnose.py"),
+        'hqcs': hqcs,
+        'ccs': ccs,
+        'cn': cn,
+        'd': os.path.join(pipeline_dir, 'diagnosis')
+        }
+    cmd = "{script} {hqcs} {ccs} {cn} {d}".format(**kwargs)
+    stdout = os.path.join(globals_.qsub_dir, 'diagnose.stdout')
+    stderr = os.path.join(globals_.qsub_dir, 'diagnose.stderr')
+    maybe_qsub(cmd, outfiles=outfiles, stdout=stdout, stderr=stderr)
 
 
 def make_alignment_pipeline(name=None):
@@ -578,6 +626,32 @@ def make_alignment_pipeline(name=None):
                                                    input=insert_gaps_task,
                                                    output=os.path.join(pipeline_dir, 'all_timepoints.aligned.fasta'))
         merge_all_timepoints_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+        replace_gapped_codons_task = pipeline.transform(replace_gapped_codons_file,
+                                                        name='replace_gapped_codons',
+                                                        input=merge_all_timepoints_task,
+                                                        filter=suffix('.fasta'),
+                                                        output='.no-partial-gaps.fasta')
+        replace_gapped_codons_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+        translate_all_task = pipeline.transform(gapped_translate_wrapper,
+                                                name='translate_all',
+                                                input=replace_gapped_codons_task,
+                                                filter=suffix('.fasta'),
+                                                output='.translated.fasta')
+
+        diagnosis_output = list(os.path.join(pipeline_dir,
+                                             'diagnosis',
+                                             "freq_agreement_no_x_{}.png".format(t.label))
+                                for t in globals_.timepoints)
+        diagnose_alignment_task = pipeline.merge(diagnose_alignment,
+                                                 name='diagnose_alignment',
+                                                 input=[codon_align_perfect_task,
+                                                        translate_all_task,
+                                                        merge_copynumbers_task],
+                                                 output=diagnosis_output)
+        diagnose_alignment_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+        diagnose_alignment_task.mkdir(os.path.join(pipeline_dir, 'diagnosis'))
 
     for task in pipeline.head_tasks:
         task.mkdir(pipeline_dir)
