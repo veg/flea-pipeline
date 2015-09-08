@@ -30,11 +30,16 @@ import matplotlib.pyplot as plt
 np.set_printoptions(suppress=True)
 
 
-def to_freqs(a):
-    return a / a.sum(axis=0)
+def prob(p, axis=None):
+    result = np.array(p)
+    if result.sum() != 1:
+        result = result / result.sum(axis=axis)
+    return result
 
 
 def kl_divergence(p, q):
+    p = prob(p)
+    q = prob(q)
     if np.any(q == 0):
         raise Exception('cannot compute KL divergence because q == 0')
     with warnings.catch_warnings():
@@ -59,8 +64,8 @@ def js_divergence(p, q):
 
     """
     # ensure there are no zeros
-    p = np.array(p)
-    q = np.array(q)
+    p = prob(p)
+    q = prob(q)
     m = (p + q) / 2
     bools = (m > 0)
     p = p[bools]
@@ -137,8 +142,8 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
                    fmt="%u", delimiter=",", header=",".join(aas))
 
         # plot all freqs
-        plt.scatter(np.ravel(to_freqs(hqcs_counts)),
-                    np.ravel(to_freqs(ccs_counts)),
+        plt.scatter(np.ravel(prob(hqcs_counts, axis=0)),
+                    np.ravel(prob(ccs_counts, axis=0)),
                     alpha=0.5)
         plt.xlabel('HQCS frequency')
         plt.ylabel('CCS frequency')
@@ -149,9 +154,9 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
         # strip X and normalize
         x_index = aas.index('X')
         hqcs_no_x = np.delete(hqcs_counts, x_index, 0)
-        hqcs_no_x_freqs = to_freqs(hqcs_no_x)
+        hqcs_no_x_freqs = prob(hqcs_no_x, axis=0)
         ccs_no_x = np.delete(ccs_counts, x_index, 0)
-        ccs_no_x_freqs = to_freqs(ccs_no_x)
+        ccs_no_x_freqs = prob(ccs_no_x, axis=0)
 
         # plot without X
         plt.scatter(np.ravel(hqcs_no_x_freqs), np.ravel(ccs_no_x_freqs), alpha=0.5)
