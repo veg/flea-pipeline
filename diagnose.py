@@ -59,10 +59,20 @@ def js_divergence(p, q):
 
 
 def column_count(a, keys, weights=None):
+    """
+    >>> column_count(np.array([['A', 'A'], ['A', 'B']]), ['A', 'B'])
+    array([[2, 1],
+           [0, 1]])
+
+    >>> column_count(np.array([['A', 'A'], ['A', 'B']]), keys=['A', 'B'], weights=[3, 2])
+    array([[5, 3],
+           [0, 2]])
+
+    """
     keys = np.array(keys).ravel()
     result = (a == keys[:, np.newaxis, np.newaxis])
     if weights is not None:
-        weights = weights.ravel()
+        weights = np.array(weights).ravel()
         assert len(weights) == len(a)
         result = result * weights.reshape(-1, 1)
         assert np.all(result.sum(axis=1).sum(axis=0) == weights.sum())
