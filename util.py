@@ -537,27 +537,30 @@ def prob(p, axis=None):
     return result
 
 
-def kl_divergence(p, q):
-    """Kullback–Leibler divergence"""
+def entropy(p):
+    """
+    >>> np.abs(entropy([0, 1]))
+    0.0
+
+    >>> entropy([0.5, 0.5])
+    1.0
+
+    >>> entropy([0.25, 0.25, 0.25, 0.25])
+    2.0
+
+    """
     p = prob(p)
-    q = prob(q)
-    if np.any(q == 0):
-        raise Exception('cannot compute KL divergence because q == 0')
-    with warnings.catch_warnings():
-        # can safely ignore warnings here; we will filter out invalid values
-        warnings.simplefilter("ignore")
-        elts = (p * (np.log2(p) - np.log2(q)))
-    elts[p == 0] = 0
-    result = elts.sum()
-    if np.isnan(result):
-        raise Exception('KL divergence failed')
+    p = p[p > 0]
+    result = -(p * np.log2(p)).sum()
+    if np.any(np.isnan(result)):
+        raise Exception('entropy failed')
     return result
 
 
-def js_divergence(p, q):
+def js_divergence(*args, weights=None):
     """Jensen-Shannon divergence
 
-    >>> js_divergence([0.5, 0.5], [0.5, 0.5])
+    >>> js_divergence([0.25, 0.25, 0.5], [0.25, 0.25, 0.5])
     0.0
 
     >>> js_divergence([1.0, 0.0], [0.0, 1.0])
@@ -566,11 +569,14 @@ def js_divergence(p, q):
 
     """
     # ensure there are no zeros
-    p = prob(p)
-    q = prob(q)
-    m = (p + q) / 2
+    if weights is None:
+        weights = prob(np.repeat(1, len(args)))
+    ps = np.vstack(list(prob(p) for p in args))
+    m = (weights.reshape(-1, 1) * ps).sum(axis=0)
     bools = (m > 0)
-    p = p[bools]
-    q = q[bools]
+    ps = ps[:, bools]
     m = m[bools]
-    return (kl_divergence(p, m) + kl_divergence(q, m)) / 2
+    result = entropy(m) - (weights * np.apply_along_axis(entropy, axis=1, arr=ps)).sum()
+    if result < 0:
+        raise Exception('JS divergence cannot be 0')
+    return np.abs(result)  # to avoid -0
