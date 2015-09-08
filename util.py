@@ -11,9 +11,12 @@ import time
 import os
 from functools import wraps
 from glob import glob
+import warnings
 
 from Bio.Seq import Seq
 from Bio import SeqIO
+
+import numpy as np
 
 import pipeline_globals as globals_
 
@@ -504,3 +507,70 @@ def extend_coordinates(coordinates, seq, gap=None):
             cur = next(coords_gen)
         result.append(cur)
     return result
+
+
+def column_count(a, keys, weights=None):
+    """
+    >>> column_count(np.array([['A', 'A'], ['A', 'B']]), ['A', 'B'])
+    array([[2, 1],
+           [0, 1]])
+
+    >>> column_count(np.array([['A', 'A'], ['A', 'B']]), keys=['A', 'B'], weights=[3, 2])
+    array([[5, 3],
+           [0, 2]])
+
+    """
+    keys = np.array(keys).ravel()
+    result = (a == keys[:, np.newaxis, np.newaxis])
+    if weights is not None:
+        weights = np.array(weights).ravel()
+        assert len(weights) == len(a)
+        result = result * weights.reshape(-1, 1)
+        assert np.all(result.sum(axis=1).sum(axis=0) == weights.sum())
+    return result.sum(axis=1)
+
+
+def prob(p, axis=None):
+    result = np.array(p)
+    if result.sum() != 1:
+        result = result / result.sum(axis=axis)
+    return result
+
+
+def kl_divergence(p, q):
+    """Kullback–Leibler divergence"""
+    p = prob(p)
+    q = prob(q)
+    if np.any(q == 0):
+        raise Exception('cannot compute KL divergence because q == 0')
+    with warnings.catch_warnings():
+        # can safely ignore warnings here; we will filter out invalid values
+        warnings.simplefilter("ignore")
+        elts = (p * (np.log2(p) - np.log2(q)))
+    elts[p == 0] = 0
+    result = elts.sum()
+    if np.isnan(result):
+        raise Exception('KL divergence failed')
+    return result
+
+
+def js_divergence(p, q):
+    """Jensen-Shannon divergence
+
+    >>> js_divergence([0.5, 0.5], [0.5, 0.5])
+    0.0
+
+    >>> js_divergence([1.0, 0.0], [0.0, 1.0])
+    1.0
+
+
+    """
+    # ensure there are no zeros
+    p = prob(p)
+    q = prob(q)
+    m = (p + q) / 2
+    bools = (m > 0)
+    p = p[bools]
+    q = q[bools]
+    m = m[bools]
+    return (kl_divergence(p, m) + kl_divergence(q, m)) / 2

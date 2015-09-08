@@ -5,8 +5,12 @@ import json
 from itertools import islice
 from datetime import datetime
 from collections import defaultdict
+import shutil
+import csv
 
 from ruffus import Pipeline, formatter, suffix
+
+import numpy as np
 
 from Bio.Seq import translate
 from Bio import SeqIO
@@ -14,11 +18,14 @@ from Bio import Phylo
 
 from translate import translate as translate_file
 import pipeline_globals as globals_
-from util import must_work, maybe_qsub, call, n_jobs, local_job_limiter, remote_job_limiter, read_single_record, cat_files
+from util import must_work, maybe_qsub, call, n_jobs
+from util import local_job_limiter, remote_job_limiter
+from util import read_single_record, cat_files
 from util import name_to_date
 from util import extend_coordinates
 from util import new_record_seq_str
 from util import grouper
+from util import column_count, prob, kl_divergence, js_divergence
 from DNAcons import consfile
 from alignment_pipeline import mafft, cat_wrapper_ids
 
@@ -52,10 +59,16 @@ def replace_id(record, id_):
     return result
 
 
+@must_work()
+def copy_copynumber_file(infiles, outfile):
+    _, infile = infiles
+    shutil.copyfile(infile, outfile)
+
+
 def parse_copynumbers(infile):
     with open(infile) as handle:
-        lines = handle.read().strip().split('\n')
-    return list(line.split() for line in lines)
+        parsed = csv.reader(handle, delimiter='\t')
+        return dict((i, int(n)) for i, n in parsed)
 
 
 def id_with_cn(id_, cn):
@@ -65,7 +78,7 @@ def id_with_cn(id_, cn):
 @must_work()
 def add_copynumbers(infiles, outfile):
     msafile, copyfile = infiles
-    id_to_cn = dict(parse_copynumbers(copyfile))
+    id_to_cn = parse_copynumbers(copyfile)
     records = SeqIO.parse(msafile, 'fasta')
     result = (replace_id(r, id_with_cn(r.id, id_to_cn[r.id]))
               for r in records)
@@ -73,12 +86,11 @@ def add_copynumbers(infiles, outfile):
 
 
 @must_work()
-def copynumber_json(infiles, outfile):
-    _, infile = infiles
-    pairs = parse_copynumbers(infile)
+def copynumber_json(infile, outfile):
+    d = parse_copynumbers(infile)
     # add copynumber to name, to match rest of this pipeline
     result = dict((id_with_cn(key, value), value)
-                  for key, value in pairs)
+                  for key, value in d.items())
     with open(outfile, 'w') as handle:
         json.dump(result, handle, separators=(",\n", ":"))
 
@@ -197,26 +209,32 @@ def make_coordinates_json(infile, outfile):
 
 
 @must_work()
-# TODO: modify turnover script to not need json input
-def make_frequencies_json(infiles, outfile):
-    seqfile, copyjson = infiles
-    records = SeqIO.parse(seqfile, "fasta")
-    with open(copyjson) as handle:
-        copynumbers = json.load(handle)
-    result = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    for r in records:
-        cn = int(copynumbers[r.id])
-        for i, residue in enumerate(str(r.seq)):
-            result[i + 1][name_to_date(r.id)][residue] += cn
+def js_divergence_json(infile, outfile):
+    records = list(SeqIO.parse(infile, 'fasta'))
+    seq_array = np.array(list(list(str(r.seq)) for r in records))
+    # assume id has "_cn_<copynumber>" prefix
+    copynumber_array = np.array(list(int(r.id.split("_cn_")[1])
+                                     for r in records))
+    date_array = np.array(list(name_to_date(r.id) for r in records))
+    dates = list(sorted(set(date_array)))
+
+    aas = list(sorted(set(seq_array.ravel())))
+    keys = np.array(aas)
+
+    result = {}
+    for i in range(1, len(dates)):
+        prev_bools = (date_array == dates[i - 1])
+        cur_bools = (date_array == dates[i])
+        prev_counts = column_count(seq_array[prev_bools], keys,
+                                   weights=copynumber_array[prev_bools])
+        cur_counts = column_count(seq_array[cur_bools], keys,
+                                   weights=copynumber_array[cur_bools])
+        prev_p = prob(prev_counts, axis=0)
+        cur_p = prob(cur_counts, axis=0)
+        result[dates[i]] = list(js_divergence(a, b)
+                                for a, b in zip(prev_p.T, cur_p.T))
     with open(outfile, 'w') as handle:
-        json.dump(result, handle, separators=(",\n", ":"))
-
-
-@must_work()
-def turnover(infile, outfile):
-    script_path = os.path.join(globals_.script_dir, 'AAturn.jl')
-    call("julia {script} {infile} {outfile} 0.01".format(script=script_path,
-                                                         infile=infile, outfile=outfile))
+        json.dump(result, handle, separators=(",", ":"))
 
 
 @must_work()
@@ -294,8 +312,14 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                           output=os.path.join(pipeline_dir, "msa_with_copynumbers.fasta"))
     add_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    copynumber_json_task = pipeline.merge(copynumber_json,
+    copy_copynumber_task = pipeline.merge(copy_copynumber_file,
+                                          name="copy_copynumber_task",
                                           input=None,
+                                          output=os.path.join(pipeline_dir, 'copynumbers.tsv'))
+    copy_copynumber_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    copynumber_json_task = pipeline.merge(copynumber_json,
+                                          input=copy_copynumber_task,
                                           output=os.path.join(pipeline_dir, 'copynumbers.json'))
     copynumber_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
@@ -353,16 +377,11 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                          output=os.path.join(pipeline_dir, 'sequences.json'))
     sequences_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    frequencies_task = pipeline.merge(make_frequencies_json,
-                                      input=[translate_task, copynumber_json_task],
-                                      output=os.path.join(pipeline_dir, 'frequencies.json'))
-    frequencies_task.jobs_limit(n_local_jobs, local_job_limiter)
-
-    turnover_task = pipeline.transform(turnover,
-                                       input=frequencies_task,
-                                       filter=formatter(),
-                                       output=os.path.join(pipeline_dir, 'turnover.json'))
-    turnover_task.jobs_limit(n_local_jobs, local_job_limiter)
+    js_divergence_task = pipeline.transform(js_divergence_json,
+                                            input=[translate_task],
+                                            filter=formatter(),
+                                            output=os.path.join(pipeline_dir, 'js_divergence.json'))
+    js_divergence_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     dates_task = pipeline.transform(write_dates,
                                     input=add_copynumbers_task,
@@ -393,7 +412,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                     output=os.path.join(pipeline_dir, 'rates.json'))
         fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    pipeline.set_head_tasks([add_copynumbers_task, copynumber_json_task, mrca_task])
+    pipeline.set_head_tasks([add_copynumbers_task, copy_copynumber_task, mrca_task])
     for task in pipeline.head_tasks:
         task.mkdir(pipeline_dir)
 
