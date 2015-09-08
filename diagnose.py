@@ -40,7 +40,7 @@ def kl_divergence(p, q):
     with warnings.catch_warnings():
         # can safely ignore warnings here; we will filter out invalid values
         warnings.simplefilter("ignore")
-        elts = (p * (np.log(p) - np.log(q)))
+        elts = (p * (np.log2(p) - np.log2(q)))
     elts[p == 0] = 0
     result = elts.sum()
     if np.isnan(result):
@@ -49,7 +49,18 @@ def kl_divergence(p, q):
 
 
 def js_divergence(p, q):
+    """
+    >>> js_divergence([0.5, 0.5], [0.5, 0.5])
+    0.0
+
+    >>> js_divergence([1.0, 0.0], [0.0, 1.0])
+    1.0
+
+
+    """
     # ensure there are no zeros
+    p = np.array(p)
+    q = np.array(q)
     m = (p + q) / 2
     bools = (m > 0)
     p = p[bools]
