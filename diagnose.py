@@ -26,7 +26,7 @@ matplotlib.use('Agg')
 
 import matplotlib.pyplot as plt
 
-from util import column_count, prob, kl_divergence, js_divergence
+from util import column_count, prob, js_divergence
 
 
 np.set_printoptions(suppress=True)
