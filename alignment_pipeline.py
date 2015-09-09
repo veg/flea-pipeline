@@ -456,14 +456,18 @@ def make_alignment_pipeline(name=None):
                                                     output='.uncontam.rfilter.fasta')
     filter_uncontaminated_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    shift_correction_task = pipeline.transform(shift_correction,
-                                               input=filter_uncontaminated_task,
-                                               filter=suffix('.fasta'),
-                                               output='.shifted.fasta')
-    shift_correction_task.jobs_limit(n_local_jobs, local_job_limiter)
+    if globals_.config.getboolean('Tasks', 'shift_correct_ccs'):
+        shift_correction_task = pipeline.transform(shift_correction,
+                                                   input=filter_uncontaminated_task,
+                                                   filter=suffix('.fasta'),
+                                                   output='.shifted.fasta')
+        shift_correction_task.jobs_limit(n_local_jobs, local_job_limiter)
+        filter_length_input_task = shift_correction_task
+    else:
+        filter_length_input_task = filter_uncontaminated_task
 
     filter_length_task = pipeline.transform(filter_length,
-                                            input=shift_correction_task,
+                                            input=filter_length_input_task,
                                             filter=suffix('.fasta'),
                                             output='.sorted.fasta')
     filter_length_task.jobs_limit(n_local_jobs, local_job_limiter)
@@ -527,7 +531,7 @@ def make_alignment_pipeline(name=None):
     make_individual_dbs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     compute_copynumbers_task = pipeline.collate(compute_copynumbers,
-                                                input=[unique_hqcs_task, make_individual_dbs_task, shift_correction_task],
+                                                input=[unique_hqcs_task, make_individual_dbs_task, filter_length_task],
                                                 filter=formatter(r'(?P<NAME>.+).qfilter'),
                                                 output='{NAME[0]}.copynumbers.tsv',
                                                 extras=['{NAME[0]}'])
@@ -582,7 +586,7 @@ def make_alignment_pipeline(name=None):
         make_hqcs_db_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
         hqcs_ccs_pairs_task = pipeline.transform(hqcs_ccs_pairs,
-                                                 input=shift_correction_task,
+                                                 input=filter_length_task,
                                                  filter=suffix('.fasta'),
                                                  add_inputs=add_inputs(make_hqcs_db),
                                                  output='.pairs.txt')

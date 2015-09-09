@@ -56,6 +56,7 @@ tail_p: 0.99
 min_tail_length: 5
 
 [Tasks]
+shift_correct_ccs: False
 pause_after_codon_alignment: False
 align_ccs: False
 # if False, stop after generating alignment
