@@ -25,7 +25,7 @@ from util import name_to_date
 from util import extend_coordinates
 from util import new_record_seq_str
 from util import grouper
-from util import column_count, prob, kl_divergence, js_divergence
+from util import column_count, prob, js_divergence
 from DNAcons import consfile
 from alignment_pipeline import mafft, cat_wrapper_ids
 
@@ -221,18 +221,21 @@ def js_divergence_json(infile, outfile):
     aas = list(sorted(set(seq_array.ravel())))
     keys = np.array(aas)
 
+    ps = {}
+    for date in dates:
+        bools = (date_array == date)
+        counts = column_count(seq_array[bools], keys,
+                              weights=copynumber_array[bools])
+        ps[date] = prob(counts, axis=0).T
+
     result = {}
     for i in range(1, len(dates)):
-        prev_bools = (date_array == dates[i - 1])
-        cur_bools = (date_array == dates[i])
-        prev_counts = column_count(seq_array[prev_bools], keys,
-                                   weights=copynumber_array[prev_bools])
-        cur_counts = column_count(seq_array[cur_bools], keys,
-                                   weights=copynumber_array[cur_bools])
-        prev_p = prob(prev_counts, axis=0)
-        cur_p = prob(cur_counts, axis=0)
+        prev_date = dates[i - 1]
+        cur_date = dates[i]
+        prev_ps = ps[prev_date]
+        cur_ps = ps[cur_date]
         result[dates[i]] = list(js_divergence(a, b)
-                                for a, b in zip(prev_p.T, cur_p.T))
+                                for a, b in zip(prev_ps, cur_ps))
     with open(outfile, 'w') as handle:
         json.dump(result, handle, separators=(",", ":"))
 
