@@ -207,7 +207,9 @@ if __name__ == '__main__':
 
     checksum_level = config.getint('Misc', 'checksum_level')
     try:
+        logger.info("pipeline start")
         cmdline.run(options, checksum_level=checksum_level)
+        logger.info("pipeline stop")
     except Exception as e:
         with logger_mutex:
             logger.error(str(e))
