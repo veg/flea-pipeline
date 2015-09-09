@@ -206,4 +206,9 @@ if __name__ == '__main__':
         json.dump(run_info, handle, separators=(",\n", ":"))
 
     checksum_level = config.getint('Misc', 'checksum_level')
-    cmdline.run(options, checksum_level=checksum_level)
+    try:
+        cmdline.run(options, checksum_level=checksum_level)
+    except Exception as e:
+        with logger_mutex:
+            logger.error(str(e))
+        raise
