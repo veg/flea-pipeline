@@ -6,6 +6,7 @@ bealign: /opt/flea-env/bin/bealign.py
 bam2msa: /opt/python-3.4.3/env/bin/bam2msa.py
 hyphy: HYPHYMP
 FastTree: FastTree
+python: /opt/flea-env/bin/python
 
 [Jobs]
 # maximum number of concurrent jobs

@@ -405,13 +405,14 @@ def insert_gaps_wrapper(infiles, outfile):
 def diagnose_alignment(infiles, outfiles):
     hqcs, ccs, cn = infiles
     kwargs = {
+        'python': globals_.config.get('Paths', 'python'),
         'script': os.path.join(globals_.script_dir, "diagnose.py"),
         'hqcs': hqcs,
         'ccs': ccs,
         'cn': cn,
         'd': os.path.join(pipeline_dir, 'diagnosis')
         }
-    cmd = "{script} {hqcs} {ccs} {cn} {d}".format(**kwargs)
+    cmd = "{python} {script} {hqcs} {ccs} {cn} {d}".format(**kwargs)
     stdout = os.path.join(globals_.qsub_dir, 'diagnose.stdout')
     stderr = os.path.join(globals_.qsub_dir, 'diagnose.stderr')
     maybe_qsub(cmd, outfiles=outfiles, stdout=stdout, stderr=stderr)
