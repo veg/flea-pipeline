@@ -9,11 +9,6 @@ Install with `pip install -r requirements.txt`.
 ----------------------
 - usearch (version >= 8.0.1623)
 - mafft
-- Julia, with:
-  - ArgParse
-  - Dates
-  - JSON
-  - DataStructures
 - BioExt's bealign
 
 
