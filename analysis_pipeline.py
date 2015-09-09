@@ -38,7 +38,7 @@ def hyphy_script(name):
     return os.path.join(hyphy_script_dir, name)
 
 
-def hyphy_call(script_file, name, args):
+def hyphy_call(script_file, infiles, outfiles,  name, args):
     if args:
         in_str = "".join("{}\n".format(i) for i in args)
     else:
@@ -47,7 +47,8 @@ def hyphy_call(script_file, name, args):
     with open(infile, 'w') as handle:
         handle.write(in_str)
     cmd = '{} {} < {}'.format(globals_.config.get('Paths', 'hyphy'), script_file, infile)
-    maybe_qsub(cmd, name=name, walltime=globals_.config.getint('Jobs', 'hyphy_walltime'))
+    return maybe_qsub(cmd, infiles, outfiles, name=name,
+                      walltime=globals_.config.getint('Jobs', 'hyphy_walltime'))
 
 
 def replace_id(record, id_):
@@ -105,7 +106,7 @@ def run_fasttree(infile, outfile):
     binary = globals_.config.get('Paths', 'FastTree')
     stderr = '{}.stderr'.format(outfile)
     cmd = '{} -gtr -nt {} > {} 2>{}'.format(binary, infile, outfile, stderr)
-    maybe_qsub(cmd, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
+    return maybe_qsub(cmd, infile, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
 
 
 @must_work()
@@ -278,7 +279,7 @@ def replace_stop_codons_file(infile, outfile):
 @must_work()
 def compute_hxb2_regions(infile, outfile):
     hxb2_script = hyphy_script('HXB2partsSplitter.bf')
-    hyphy_call(hxb2_script, 'hxb2_regions', [infile, outfile])
+    return hyphy_call(hxb2_script, infile, outfile, 'hxb2_regions', [infile, outfile])
 
 
 @must_work()
@@ -291,13 +292,14 @@ def evo_history(infiles, outfile):
         os.path.join(pipeline_dir, 'unused_evo_history_sequences'),
         ]
     params = infiles + outfiles
-    hyphy_call(hyphy_script("obtainEvolutionaryHistory.bf"), 'evo_history', params)
+    return hyphy_call(hyphy_script("obtainEvolutionaryHistory.bf"),
+                      infiles, outfile, 'evo_history', params)
 
 
 @must_work()
 def run_fubar(infiles, outfile):
     params = infiles + ["{}/".format(pipeline_dir), outfile]
-    hyphy_call(hyphy_script('runFUBAR.bf'), 'fubar', params)
+    return hyphy_call(hyphy_script('runFUBAR.bf'), infiles, outfile, 'fubar', params)
 
 
 def make_analysis_pipeline(do_hyphy, name=None):

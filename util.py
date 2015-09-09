@@ -8,10 +8,13 @@ from itertools import filterfalse
 from itertools import islice
 from uuid import uuid4
 import time
+import datetime
 import os
 from functools import wraps
 from glob import glob
 import warnings
+import sys
+import uuid
 
 from Bio.Seq import Seq
 from Bio import SeqIO
@@ -119,13 +122,13 @@ def format_walltime(seconds):
     return "{:02}:{:02}:{:02}".format(h, m, s)
 
 
-def qsub(cmd, outfiles=None, control_dir=None, queue=None, nodes=1, ppn=1, sleep=5,
-         walltime=3600, waittime=10, name=None, stdout=None, stderr=None):
+def qsub(cmd, stdout, stderr, outfiles=None, control_dir=None, queue=None,
+         nodes=1, ppn=1, sleep=5, walltime=3600, waittime=10, name=None):
     """A blocking qsub."""
     if control_dir is None:
         control_dir = '.'
     if walltime < 1:
-        raise Exception('walltime={} < 1'.format(walltime))
+        return False, 'walltime={} < 1'.format(walltime)
     if name is None:
         name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
     sentinel = os.path.join(control_dir, '{}-{}.complete'.format(name, uuid4()))
@@ -136,11 +139,7 @@ def qsub(cmd, outfiles=None, control_dir=None, queue=None, nodes=1, ppn=1, sleep
                 ' -d `pwd` -w `pwd`'.format(fwalltime, nodes, ppn, name=name))
     if queue is not None:
         qsub_cmd = "{} -q {}".format(qsub_cmd, queue)
-    if stdout is None:
-        stdout = control_dir
     qsub_cmd = '{} -o {}'.format(qsub_cmd, stdout)
-    if stderr is None:
-        stderr = control_dir
     qsub_cmd = '{} -e {}'.format(qsub_cmd, stderr)
     full_cmd = 'echo "{}" | {}'.format(mycmd, qsub_cmd)
     try:
@@ -152,25 +151,48 @@ def qsub(cmd, outfiles=None, control_dir=None, queue=None, nodes=1, ppn=1, sleep
     if outfiles is not None:
         wait_for_files(outfiles, sleep, waittime)
     if not os.path.exists(sentinel):
-        raise Exception('qsub sentinel not found: "{}"'.format(sentinel))
+        return False, 'qsub sentinel not found: "{}"'.format(sentinel)
     with open(sentinel) as handle:
         code = handle.read().strip()
         if code != '0':
-            raise Exception('qsub job "{}" exited with code "{}"'.format(full_cmd, code))
+            return False, 'qsub job "{}" exited with code "{}"'.format(full_cmd, code)
+    return True, 'success'
 
 
-def maybe_qsub(cmd, **kwargs):
+def get_key(k, d, default=None):
+    if k in d:
+        return d[k]
+    return default
+
+
+def maybe_qsub(cmd, infiles, outfiles, stdout=None, stderr=None, **kwargs):
     if 'walltime' not in kwargs:
         kwargs['walltime'] = globals_.config.getint('Jobs', 'walltime')
+    if 'name' in kwargs:
+        name = kwargs['name']
+    else:
+        name = ""
+    name = "{}{}".format(name, uuid.uuid4())
+    if stdout is None:
+        stdout = "{}.stdout".format(os.path.join(globals_.qsub_dir, name))
+    if stderr is None:
+        stderr = "{}.stderr".format(os.path.join(globals_.qsub_dir, name))
     if globals_.config.getboolean('Jobs', 'use_cluster'):
-        qsub(cmd,
-             control_dir=globals_.qsub_dir,
-             queue=globals_.config.get('Jobs', 'queue'),
-             nodes=globals_.config.get('Jobs', 'nodes'),
-             ppn=globals_.config.get('Jobs', 'ppn'), **kwargs)
+        success, msg = qsub(cmd, stdout, stderr,
+                            control_dir=globals_.qsub_dir,
+                            queue=globals_.config.get('Jobs', 'queue'),
+                            nodes=globals_.config.get('Jobs', 'nodes'),
+                            ppn=globals_.config.get('Jobs', 'ppn'), **kwargs)
     else:
         # TODO: handle stdout and stderr kwargs
-        call(cmd)
+        success, msg = call(cmd)
+    with open(stdout) as handle:
+        stdout_msg = handle.read()
+    with open(stderr) as handle:
+        stderr_msg = handle.read()
+    return Result(infiles, outfiles, stdout=stdout_msg, stderr=stderr_msg,
+                  desc=get_key('name', kwargs), failed=(not success),
+                  msg=msg, cmds=cmd)
 
 
 def insert_gaps(source, target, src_gap, target_gap, gap_char=None):
@@ -374,6 +396,91 @@ def check_in_frame(f):
                             ' of 3'.format(r.id, f, len_))
 
 
+class Result(object):
+    # borrowed from https://github.com/daler/pipeline-example
+    def __init__(self, infiles, outfiles, log=None, stdout=None, stderr=None,
+                 desc=None, failed=False, msg=None, cmds=None):
+        """
+        A Result object encapsulates the information going to and from a task.
+        Each task is responsible for determining the following arguments, based
+        on the idiosyncracies of that particular task:
+            `infiles`: Required list of input files to the task
+            `outfiles`: Required list of output files to the task
+            `failed`: Optional (but recommended) boolean indicating whether the
+                      task failed or not.  Default is False, implying that the
+                      task will always work
+            `log`: Optional log file from running the task's commands
+            `stdout`: Optional stdout that will be printed in the report if the
+                      task failed
+            `stderr`: Optional stderr that will be printed in the report if the
+                      task failed
+            `desc`: Optional description of the task
+            `cmds`: Optional string of commands used by the task. Can be very
+                    useful for debugging.
+        """
+        if isinstance(infiles, str):
+            infiles = [infiles]
+        if isinstance(outfiles, str):
+            outfiles = [outfiles]
+        self.infiles = infiles
+        self.outfiles = outfiles
+        self.log = log
+        self.stdout = stdout
+        self.stderr = stderr
+        self.elapsed = None
+        self.failed = failed
+        self.msg = msg
+        self.desc = desc
+        self.cmds = cmds
+
+    def report(self, logger_proxy, logging_mutex):
+        """Prints a nice report."""
+        with logging_mutex:
+            if not self.desc:
+                self.desc = ""
+            logger_proxy.info(' Task: %s' % self.desc)
+            logger_proxy.info('     Time: %s' % datetime.datetime.now())
+            if self.elapsed is not None:
+                logger_proxy.info('     Elapsed: %s' % nicetime(self.elapsed))
+            if self.cmds is not None:
+                logger_proxy.info('     Commands: %s' % str(self.cmds))
+            for input_fn in self.infiles:
+                input_fn = os.path.normpath(os.path.relpath(input_fn))
+                logger_proxy.info('     Input:   %s' % input_fn)
+            for output_fn in self.outfiles:
+                output_fn = os.path.normpath(os.path.relpath(output_fn))
+                logger_proxy.info('     Output:   %s' % output_fn)
+            if self.log is not None:
+                logger_proxy.info('     Log:      %s' % self.log)
+            if self.failed:
+                logger_proxy.error('=' * 80)
+                logger_proxy.error('Error in %s' % self.desc)
+                if self.msg:
+                    logger_proxy.error('message: {}'.format(self.msg))
+                if self.log is not None:
+                    logger_proxy.error('   Log: %s' % self.log)
+                if self.stderr:
+                    logger_proxy.error('====STDERR====')
+                    logger_proxy.error(self.stderr)
+                if self.stdout:
+                    logger_proxy.error('====STDOUT====')
+                    logger_proxy.error(self.stdout)
+                logger_proxy.error('=' * 80)
+            logger_proxy.info('')
+            if self.failed:
+                sys.exit(1)
+
+
+
+def nicetime(seconds):
+    """Convert seconds to hours-minutes-seconds"""
+    # borrowed from https://github.com/daler/pipeline-example
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    elapsed = "%dh%02dm%02.2fs" % (h, m, s)
+    return elapsed
+
+
 def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
               illegal_chars=None, pattern=None, in_frame=False):
     """Fail if any output is empty.
@@ -399,7 +506,15 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
                     for f in traverse(strlist(outfiles)):
                         touch(f)
                     return
-            function(infiles, outfiles, *args, **kwargs)
+            t0 = time.time()
+            result = function(infiles, outfiles, *args, **kwargs)
+            t1 = time.time()
+            if result is None:
+                result = Result(infiles=infiles, outfiles=outfiles)
+            result.elapsed = (t1 - t0)
+            if not result.desc:
+                result.desc = function.__name__
+            result.report(globals_.logger, globals_.logger_mutex)
             if seq_ids or seq_ratio:
                 infiles = list(traverse(strlist(infiles)))
                 infiles = list(f for f in infiles if fnmatch(f, pattern))

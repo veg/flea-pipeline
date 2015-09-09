@@ -33,7 +33,7 @@ pipeline_dir = os.path.join(globals_.data_dir, "alignment")
 def mafft(infile, outfile):
     stderr = '{}.stderr'.format(outfile)
     cmd = 'mafft-fftns --ep 0.5 --quiet --preservecase {} > {} 2>{}'.format(infile, outfile, stderr)
-    maybe_qsub(cmd, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
+    return maybe_qsub(cmd, infile, outfiles=outfile)
 
 
 def min_len():
@@ -53,7 +53,7 @@ def filter_fastq(infile, outfile):
             usearch=globals_.config.get('Paths', 'usearch'),
             infile=infile, outfile=outfile, qmax=qmax, min_len=min_len(),
             max_err_rate=max_err_rate, seq_id=globals_.key_to_label[infile]))
-    maybe_qsub(cmd, outfiles=outfile, name='filter-fastq')
+    return maybe_qsub(cmd, infile, outfiles=outfile, name='filter-fastq')
 
 
 def trim_helper(infile, outfile, target, reverse):
@@ -85,7 +85,7 @@ def filter_contaminants(infile, outfiles):
                                   infile=infile, db=globals_.config.get('Parameters', 'contaminants_db'),
                                   id=globals_.config.get('Parameters', 'contaminant_identity'),
                                   uncontam=uncontam, contam=contam))
-    maybe_qsub(cmd, outfiles=outfiles, name='filter-contaminants')
+    return maybe_qsub(cmd, infile, outfiles=outfiles, name='filter-contaminants')
 
 
 def usearch_reference_db(infile, outfile, name=None):
@@ -103,7 +103,7 @@ def usearch_reference_db(infile, outfile, name=None):
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
                      infile=infile, db=dbfile, id=identity, outfile=outfile,
                      max_accepts=max_accepts, max_rejects=max_rejects)
-    maybe_qsub(cmd, outfiles=outfile, name=name)
+    return maybe_qsub(cmd, infile, outfiles=outfile, name=name)
 
 
 @must_work()
@@ -149,12 +149,13 @@ def cluster(infile, outfiles, pathname):
                      max_accepts=globals_.config.get('Parameters', 'max_accepts'),
                      max_rejects=globals_.config.get('Parameters', 'max_rejects'),
                      minsl=minsl)
-    maybe_qsub(cmd, name="cluster")
+    result = maybe_qsub(cmd, infile, outfiles, name="cluster")
     r = re.compile(r'^cluster_[0-9]+$')
     for f in list(f for f in os.listdir(outdir) if r.match(f)):
         oldfile = os.path.join(outdir, f)
         newfile = ''.join([oldfile, '.raw.fasta'])
         os.rename(oldfile, newfile)
+    return result
 
 
 def select_clusters(infile, outfile):
@@ -225,14 +226,14 @@ def hqcs_shift_correction(infile, outfile):
 def unique_hqcs(infile, outfile):
     cmd = ('{usearch} -derep_fulllength {infile} -fastaout {outfile}'.format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
-    maybe_qsub(cmd, outfiles=outfile, name='unique_hqcs')
+    return maybe_qsub(cmd, infile, outfiles=outfile, name='unique_hqcs')
 
 
 @must_work()
 def make_individual_dbs(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
-    maybe_qsub(cmd,  outfiles=outfile, name='make-individual-dbs')
+    return maybe_qsub(cmd, infile, outfiles=outfile, name='make-individual-dbs')
 
 
 def usearch_hqcs_ids(infile, outfile, dbfile, name=None):
@@ -251,7 +252,7 @@ def usearch_hqcs_ids(infile, outfile, dbfile, name=None):
                      infile=infile, db=dbfile, id=identity, outfile=outfile,
                      max_accepts=max_accepts, max_rejects=max_rejects,
                      maxqt=maxqt)
-    maybe_qsub(cmd, outfiles=outfile, name=name)
+    return maybe_qsub(cmd, infile, outfiles=outfile, name=name)
 
 
 # FIXME: this is run with remote job limiter, but part of its task is run locally
@@ -313,7 +314,7 @@ def degap_backtranslated_alignment(infile, outfile):
 def make_hqcs_db(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
-    maybe_qsub(cmd, outfiles=outfile, name='make_hqcs_db')
+    return maybe_qsub(cmd, infile, outfiles=outfile, name='make_hqcs_db')
 
 
 @must_work()
@@ -353,7 +354,7 @@ def codon_align(infile, outfile):
         globals_.config.get('Paths', 'bealign'), infile, outfile)
     stdout = os.path.join(globals_.qsub_dir, '{}.stdout'.format(outfile))
     stderr = os.path.join(globals_.qsub_dir, '{}.stderr'.format(outfile))
-    maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
+    return maybe_qsub(cmd, infile, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
 @must_work()
@@ -361,7 +362,7 @@ def convert_bam_to_fasta(infile, outfile):
     cmd = "{} {} {}".format(globals_.config.get('Paths', 'bam2msa'), infile, outfile)
     stdout = os.path.join(globals_.qsub_dir, '{}.stdout'.format(outfile))
     stderr = os.path.join(globals_.qsub_dir, '{}.stderr'.format(outfile))
-    maybe_qsub(cmd, outfiles=outfile, stdout=stdout, stderr=stderr)
+    return maybe_qsub(cmd, infile, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
 def handle_gap_codon(codon):
@@ -416,8 +417,9 @@ def diagnose_alignment(infiles, outfiles):
     cmd = "{python} {script} {hqcs} {ccs} {cn} {d}".format(**kwargs)
     stdout = os.path.join(globals_.qsub_dir, 'diagnose.stdout')
     stderr = os.path.join(globals_.qsub_dir, 'diagnose.stderr')
-    maybe_qsub(cmd, outfiles=outfiles, stdout=stdout, stderr=stderr,
-               name="diagnose-alignment")
+    return maybe_qsub(cmd, infiles, outfiles=outfiles,
+                      stdout=stdout, stderr=stderr,
+                      name="diagnose-alignment")
 
 
 def make_alignment_pipeline(name=None):

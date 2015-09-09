@@ -57,20 +57,19 @@ parser.add_argument('--copynumbers', type=str,
 
 options = parser.parse_args()
 
-if not options.verbose:
-    options.verbose = 1
+# useful directories
+data_dir = os.path.dirname(os.path.abspath(options.file))
+script_dir = os.path.abspath(os.path.split(__file__)[0])
 
 # standard python logger which can be synchronised across concurrent
 # Ruffus tasks
+if options.log_file is None:
+    options.log_file = os.path.join(data_dir, 'flea.log')
 logger, logger_mutex = cmdline.setup_logging(__name__,
                                              options.log_file,
                                              options.verbose)
 
 do_alignment = options.alignment is None
-
-# useful directories
-data_dir = os.path.dirname(os.path.abspath(options.file))
-script_dir = os.path.abspath(os.path.split(__file__)[0])
 
 # read configuration
 if options.config is None:
