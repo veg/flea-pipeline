@@ -57,7 +57,7 @@ min_tail_length: 5
 
 [Tasks]
 pause_after_codon_alignment: False
-align_full: False
+align_ccs: False
 # if False, stop after generating alignment
 analysis: True
 # if True, run evolutionary history and FUBAR scripts

@@ -309,10 +309,10 @@ def degap_backtranslated_alignment(infile, outfile):
 
 
 @must_work()
-def make_full_db(infile, outfile):
+def make_hqcs_db(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
-    maybe_qsub(cmd, outfiles=outfile, name='make_full_db')
+    maybe_qsub(cmd, outfiles=outfile, name='make_hqcs_db')
 
 
 @must_work()
@@ -568,23 +568,23 @@ def make_alignment_pipeline(name=None):
     pipeline.set_head_tasks([filter_fastq_task])
     pipeline.set_tail_tasks([backtranslate_alignment_task, merge_copynumbers_task])
 
-    if globals_.config.getboolean('Tasks', 'align_full'):
+    if globals_.config.getboolean('Tasks', 'align_ccs'):
         degap_backtranslated_alignment_task = pipeline.transform(degap_backtranslated_alignment,
                                                                  input=backtranslate_alignment_task,
                                                                  filter=formatter('.suffix'),
                                                                  output='.degapped.fasta')
         degap_backtranslated_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-        make_full_db_task = pipeline.transform(make_full_db,
+        make_hqcs_db_task = pipeline.transform(make_hqcs_db,
                                                input=degap_backtranslated_alignment_task,
                                                filter=suffix('.fasta'),
                                                output='.udb')
-        make_full_db_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+        make_hqcs_db_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
         hqcs_ccs_pairs_task = pipeline.transform(hqcs_ccs_pairs,
                                                  input=shift_correction_task,
                                                  filter=suffix('.fasta'),
-                                                 add_inputs=add_inputs(make_full_db),
+                                                 add_inputs=add_inputs(make_hqcs_db),
                                                  output='.pairs.txt')
         hqcs_ccs_pairs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
@@ -629,8 +629,8 @@ def make_alignment_pipeline(name=None):
                                                         output='.no-partial-gaps.fasta')
         replace_gapped_codons_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-        translate_all_task = pipeline.transform(gapped_translate_wrapper,
-                                                name='translate_all',
+        translate_ccs_task = pipeline.transform(gapped_translate_wrapper,
+                                                name='translate_ccs',
                                                 input=replace_gapped_codons_task,
                                                 filter=suffix('.fasta'),
                                                 output='.translated.fasta')
@@ -642,7 +642,7 @@ def make_alignment_pipeline(name=None):
         diagnose_alignment_task = pipeline.merge(diagnose_alignment,
                                                  name='diagnose_alignment',
                                                  input=[codon_align_hqcs_task,
-                                                        translate_all_task,
+                                                        translate_ccs_task,
                                                         merge_copynumbers_task],
                                                  output=diagnosis_output)
         diagnose_alignment_task.jobs_limit(n_remote_jobs, remote_job_limiter)
