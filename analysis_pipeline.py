@@ -18,7 +18,7 @@ from Bio import Phylo
 
 from translate import translate as translate_file
 import pipeline_globals as globals_
-from util import must_work, maybe_qsub, call, n_jobs
+from util import must_work, report_wrapper, maybe_qsub, call, n_jobs
 from util import local_job_limiter, remote_job_limiter
 from util import read_single_record, cat_files
 from util import name_to_date
@@ -61,6 +61,7 @@ def replace_id(record, id_):
 
 
 @must_work()
+@report_wrapper
 def copy_copynumber_file(infiles, outfile):
     _, infile = infiles
     shutil.copyfile(infile, outfile)
@@ -77,6 +78,7 @@ def id_with_cn(id_, cn):
 
 
 @must_work()
+@report_wrapper
 def add_copynumbers(infiles, outfile):
     msafile, copyfile = infiles
     id_to_cn = parse_copynumbers(copyfile)
@@ -87,6 +89,7 @@ def add_copynumbers(infiles, outfile):
 
 
 @must_work()
+@report_wrapper
 def copynumber_json(infile, outfile):
     d = parse_copynumbers(infile)
     # add copynumber to name, to match rest of this pipeline
@@ -97,11 +100,13 @@ def copynumber_json(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def gapped_translate_wrapper(infile, outfile):
     translate_file(infile, outfile, gapped=True)
 
 
 @must_work()
+@report_wrapper
 def run_fasttree(infile, outfile):
     binary = globals_.config.get('Paths', 'FastTree')
     stderr = '{}.stderr'.format(outfile)
@@ -110,6 +115,7 @@ def run_fasttree(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def reroot_at_mrca(infile, outfile):
     tree = next(Phylo.parse(infile, 'newick'))
     clade = next(tree.find_clades('mrca'))
@@ -133,6 +139,7 @@ def mrca(infile, recordfile, copynumber_file, outfile, oldest_id):
 
 
 @must_work(in_frame=True)
+@report_wrapper
 def compute_mrca(infiles, outfile):
     alignment_file, copynumber_file = infiles
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
@@ -143,6 +150,7 @@ def compute_mrca(infiles, outfile):
 
 
 @must_work()
+@report_wrapper
 def make_sequences_json(infiles, outfile):
     alignment_file, mrca_file, coords_file = infiles
     result = {}
@@ -173,6 +181,7 @@ def make_sequences_json(infiles, outfile):
 
 
 @must_work()
+@report_wrapper
 def make_trees_json(infile, outfile):
     with open(infile) as handle:
         newick_string = handle.read()
@@ -184,6 +193,7 @@ def make_trees_json(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def make_coordinates_json(infile, outfile):
     # FIXME: degap MRCA before running?
     # FIXME: split up so mafft can run remotely
@@ -210,6 +220,7 @@ def make_coordinates_json(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def js_divergence_json(infile, outfile):
     records = list(SeqIO.parse(infile, 'fasta'))
     seq_array = np.array(list(list(str(r.seq)) for r in records))
@@ -242,6 +253,7 @@ def js_divergence_json(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def write_dates(infile, outfile):
     records = list(SeqIO.parse(infile, "fasta"))
     with open(outfile, "w") as handle:
@@ -270,6 +282,7 @@ def replace_stop_codons(record):
 
 
 @must_work()
+@report_wrapper
 def replace_stop_codons_file(infile, outfile):
     records = list(SeqIO.parse(infile, 'fasta'))
     result = (replace_stop_codons(record) for record in records)
@@ -277,12 +290,14 @@ def replace_stop_codons_file(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def compute_hxb2_regions(infile, outfile):
     hxb2_script = hyphy_script('HXB2partsSplitter.bf')
     return hyphy_call(hxb2_script, infile, outfile, 'hxb2_regions', [infile, outfile])
 
 
 @must_work()
+@report_wrapper
 def evo_history(infiles, outfile):
     outfiles = [
         os.path.join(pipeline_dir, 'unused_evo_history_mrca'),
@@ -297,6 +312,7 @@ def evo_history(infiles, outfile):
 
 
 @must_work()
+@report_wrapper
 def run_fubar(infiles, outfile):
     params = infiles + ["{}/".format(pipeline_dir), outfile]
     return hyphy_call(hyphy_script('runFUBAR.bf'), infiles, outfile, 'fubar', params)

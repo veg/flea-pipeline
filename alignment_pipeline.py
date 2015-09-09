@@ -11,7 +11,7 @@ from Bio import SeqIO
 
 from util import maybe_qsub, cat_files, touch, strlist, traverse
 from util import new_record_seq_str, insert_gaps, update_record_seq
-from util import must_work, must_produce
+from util import must_work, must_produce, report_wrapper
 from util import local_job_limiter, remote_job_limiter
 from util import check_suffix, check_basename, n_jobs
 from util import read_single_record
@@ -44,6 +44,7 @@ def min_len():
 
 
 @must_work()
+@report_wrapper
 def filter_fastq(infile, outfile):
     qmax = globals_.config.get('Parameters', 'qmax')
     max_err_rate = globals_.config.get('Parameters', 'max_err_rate')
@@ -68,17 +69,23 @@ def trim_helper(infile, outfile, target, reverse):
 
 
 @must_work(seq_ids=True)
+@report_wrapper
 def trim_polya(infile, outfile):
     trim_helper(infile, outfile, "A", reverse=False)
 
 
 @must_work(seq_ids=True)
+@report_wrapper
 def trim_polyt(infile, outfile):
     trim_helper(infile, outfile, "T", reverse=True)
 
 
-def filter_contaminants(infile, outfiles):
-    uncontam, contam = outfiles
+@must_work()
+@report_wrapper
+def filter_contaminants(infile, outfile):
+    uncontam = outfile
+    contam = outfile.replace('uncontam', 'contam')
+    outfiles = [uncontam, contam]
     cmd = ('{usearch} -usearch_global {infile} -db {db}'
            ' -id {id} -notmatched {uncontam} -matched {contam}'
            ' -strand both'.format(usearch=globals_.config.get('Paths', 'usearch'),
@@ -107,9 +114,9 @@ def usearch_reference_db(infile, outfile, name=None):
 
 
 @must_work()
-def filter_uncontaminated(infiles, outfile):
-    uncontam, _ = infiles
-    usearch_reference_db(uncontam, outfile, name="filter-uncontaminated")
+@report_wrapper
+def filter_uncontaminated(infile, outfile):
+    usearch_reference_db(infile, outfile, name="filter-uncontaminated")
 
 
 def shift_correction_helper(infile, outfile, keep):
@@ -121,11 +128,13 @@ def shift_correction_helper(infile, outfile, keep):
 
 
 @must_work(seq_ratio=(2, 1))
+@report_wrapper
 def shift_correction(infile, outfile):
     shift_correction_helper(infile, outfile, keep=True)
 
 
 @must_work()
+@report_wrapper
 def filter_length(infile, outfile):
     cutoff = min_len()
     records = SeqIO.parse(infile, 'fasta')
@@ -134,6 +143,7 @@ def filter_length(infile, outfile):
 
 
 @must_produce(n=int(globals_.config.get('Parameters', 'min_n_clusters')))
+@report_wrapper
 def cluster(infile, outfiles, pathname):
     for f in outfiles:
         os.unlink(f)
@@ -158,6 +168,7 @@ def cluster(infile, outfiles, pathname):
     return result
 
 
+@report_wrapper
 def select_clusters(infile, outfile):
     records = list(SeqIO.parse(infile, 'fasta'))
     minsize = int(globals_.config.get('Parameters', 'min_cluster_size'))
@@ -174,35 +185,42 @@ def select_clusters(infile, outfile):
 # definitions are not picklable.
 
 @must_work(maybe=True)
+@report_wrapper
 def mafft_wrapper_maybe(infile, outfile):
     mafft(infile, outfile)
 
 
 @must_work(seq_ids=True)
+@report_wrapper
 def mafft_wrapper_seq_ids(infile, outfile):
     mafft(infile, outfile)
 
 
 @must_work(seq_ids=True)
+@report_wrapper
 def cat_wrapper_ids(infiles, outfile):
     cat_files(infiles, outfile)
 
 
+@report_wrapper
 def cat_wrapper(infiles, outfile):
     cat_files(infiles, outfile)
 
 
 @must_work()
+@report_wrapper
 def translate_wrapper(infile, outfile):
     translate_file(infile, outfile)
 
 
 @must_work()
+@report_wrapper
 def gapped_translate_wrapper(infile, outfile):
     translate_file(infile, outfile, gapped=True)
 
 
 @must_work(maybe=True, illegal_chars='-')
+@report_wrapper
 def cluster_consensus(infile, outfile):
     ambifile = '{}.info'.format(outfile[:-len('.fasta')])
     n = re.search("cluster_([0-9]+)", infile).group(1)
@@ -213,16 +231,19 @@ def cluster_consensus(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def hqcs_db_search(infile, outfile):
     usearch_reference_db(infile, outfile, name='hqcs-db-search')
 
 
 @must_work(in_frame=True)
+@report_wrapper
 def hqcs_shift_correction(infile, outfile):
     shift_correction_helper(infile, outfile, keep=False)
 
 
 @must_work(min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
+@report_wrapper
 def unique_hqcs(infile, outfile):
     cmd = ('{usearch} -derep_fulllength {infile} -fastaout {outfile}'.format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
@@ -230,6 +251,7 @@ def unique_hqcs(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def make_individual_dbs(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
@@ -257,6 +279,7 @@ def usearch_hqcs_ids(infile, outfile, dbfile, name=None):
 
 # FIXME: this is run with remote job limiter, but part of its task is run locally
 @must_work()
+@report_wrapper
 def compute_copynumbers(infiles, outfile, basename):
     hqcsfile, dbfile, ccsfile = infiles
     # make sure this suffix changes depending on what task comes before
@@ -281,6 +304,7 @@ def compute_copynumbers(infiles, outfile, basename):
 
 
 @must_work(seq_ids=True)
+@report_wrapper
 def cat_all_hqcs(infiles, outfile):
     if len(infiles) != len(globals_.timepoints):
         raise Exception('Number of input files does not match number'
@@ -295,6 +319,7 @@ def pause(filename):
 
 
 @must_work()
+@report_wrapper
 def backtranslate_alignment(infiles, outfile):
     hqcs, aligned = infiles
     check_basename(hqcs, 'hqcs.fasta')
@@ -302,6 +327,7 @@ def backtranslate_alignment(infiles, outfile):
 
 
 @must_work()
+@report_wrapper
 def degap_backtranslated_alignment(infile, outfile):
     # we need this in case sequences were removed during hand-editing
     # of the alignment
@@ -311,6 +337,7 @@ def degap_backtranslated_alignment(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def make_hqcs_db(infile, outfile):
     cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
@@ -318,6 +345,7 @@ def make_hqcs_db(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def hqcs_ccs_pairs(infiles, outfile):
     # FIXME: this does basically the same thing as the copynumber task,
     # except it allows CCSs to map to HQCSs in different timepoints
@@ -326,6 +354,7 @@ def hqcs_ccs_pairs(infiles, outfile):
 
 
 @must_work()
+@report_wrapper
 def combine_pairs(infiles, outfiles, basename):
     for f in outfiles:
         os.unlink(f)
@@ -349,6 +378,7 @@ def combine_pairs(infiles, outfiles, basename):
 
 
 @must_work()
+@report_wrapper
 def codon_align(infile, outfile):
     cmd = "{} {} {}".format(
         globals_.config.get('Paths', 'bealign'), infile, outfile)
@@ -358,6 +388,7 @@ def codon_align(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def convert_bam_to_fasta(infile, outfile):
     cmd = "{} {} {}".format(globals_.config.get('Paths', 'bam2msa'), infile, outfile)
     stdout = os.path.join(globals_.qsub_dir, '{}.stdout'.format(outfile))
@@ -384,6 +415,7 @@ def replace_gapped_codons(record):
 
 
 @must_work()
+@report_wrapper
 def replace_gapped_codons_file(infile, outfile):
     records = list(SeqIO.parse(infile, 'fasta'))
     result = (replace_gapped_codons(record) for record in records)
@@ -391,6 +423,7 @@ def replace_gapped_codons_file(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def insert_gaps_wrapper(infiles, outfile):
     infile, backtranslated = infiles
     ref, *seqs = list(SeqIO.parse(infile, 'fasta'))
@@ -404,6 +437,7 @@ def insert_gaps_wrapper(infiles, outfile):
 
 
 @must_work()
+@report_wrapper
 def diagnose_alignment(infiles, outfiles):
     hqcs, ccs, cn = infiles
     kwargs = {
@@ -450,7 +484,7 @@ def make_alignment_pipeline(name=None):
     filter_contaminants_task = pipeline.transform(filter_contaminants,
                                                   input=trim_polyt_task,
                                                   filter=suffix('.fasta'),
-                                                  output=['.uncontam.fasta', '.contam.fasta'],)
+                                                  output='.uncontam.fasta')
     filter_contaminants_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     filter_uncontaminated_task = pipeline.transform(filter_uncontaminated,

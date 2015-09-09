@@ -155,7 +155,7 @@ def qsub(cmd, stdout, stderr, outfiles=None, control_dir=None, queue=None,
     with open(sentinel) as handle:
         code = handle.read().strip()
         if code != '0':
-            return False, 'qsub job "{}" exited with code "{}"'.format(full_cmd, code)
+            return False, 'qsub job exited with code "{}"'.format(code)
     return True, 'success'
 
 
@@ -481,6 +481,21 @@ def nicetime(seconds):
     return elapsed
 
 
+def report_wrapper(function):
+    @wraps(function)  # necessary because ruffus uses function name internally
+    def wrapped(infiles, outfiles, *args, **kwargs):
+        t0 = time.time()
+        result = function(infiles, outfiles, *args, **kwargs)
+        t1 = time.time()
+        if result is None:
+            result = Result(infiles=infiles, outfiles=outfiles)
+        result.elapsed = (t1 - t0)
+        if not result.desc:
+            result.desc = function.__name__
+        result.report(globals_.logger, globals_.logger_mutex)
+    return wrapped
+
+
 def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
               illegal_chars=None, pattern=None, in_frame=False):
     """Fail if any output is empty.
@@ -506,15 +521,7 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
                     for f in traverse(strlist(outfiles)):
                         touch(f)
                     return
-            t0 = time.time()
-            result = function(infiles, outfiles, *args, **kwargs)
-            t1 = time.time()
-            if result is None:
-                result = Result(infiles=infiles, outfiles=outfiles)
-            result.elapsed = (t1 - t0)
-            if not result.desc:
-                result.desc = function.__name__
-            result.report(globals_.logger, globals_.logger_mutex)
+            function(infiles, outfiles, *args, **kwargs)
             if seq_ids or seq_ratio:
                 infiles = list(traverse(strlist(infiles)))
                 infiles = list(f for f in infiles if fnmatch(f, pattern))

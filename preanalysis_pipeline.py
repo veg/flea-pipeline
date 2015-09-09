@@ -7,6 +7,7 @@ from Bio import SeqIO
 
 import pipeline_globals as globals_
 from util import must_work, n_jobs, local_job_limiter, remote_job_limiter
+from util import report_wrapper
 from util import split_name
 
 
@@ -25,6 +26,7 @@ def rename_record(record):
 
 
 @must_work()
+@report_wrapper
 def rename_records(infile, outfile):
     records = SeqIO.parse(infile, 'fasta')
     result = (rename_record(r) for r in records)
@@ -32,6 +34,7 @@ def rename_records(infile, outfile):
 
 
 @must_work()
+@report_wrapper
 def make_copynumbers(infiles, outfile):
     alignfile, cnfile = infiles
     if cnfile is None:
