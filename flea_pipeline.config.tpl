@@ -39,7 +39,7 @@ min_n_clusters: 3
 contaminant_identity: 0.98
 reference_identity: 0.8
 cluster_identity: 0.99
-raw_to_consensus_identity: 0.95
+ccs_to_hqcs_identity: 0.95
 min_cluster_size: 5
 max_cluster_size: 30
 

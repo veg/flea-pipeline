@@ -212,27 +212,20 @@ def cluster_consensus(infile, outfile):
 
 
 @must_work()
-def consensus_db_search(infile, outfile):
-    usearch_reference_db(infile, outfile, name='consensus-db-search')
+def hqcs_db_search(infile, outfile):
+    usearch_reference_db(infile, outfile, name='hqcs-db-search')
 
 
 @must_work(in_frame=True)
-def consensus_shift_correction(infile, outfile):
+def hqcs_shift_correction(infile, outfile):
     shift_correction_helper(infile, outfile, keep=False)
 
 
-@must_work(seq_ids=True)
-def sort_consensus(infile, outfile):
-    cmd = ('{usearch} -sortbylength {infile} -fastaout {outfile}'.format(
-            usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
-    maybe_qsub(cmd, outfiles=outfile, name='sort-consensus')
-
-
 @must_work(min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
-def unique_consensus(infile, outfile):
+def unique_hqcs(infile, outfile):
     cmd = ('{usearch} -derep_fulllength {infile} -fastaout {outfile}'.format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
-    maybe_qsub(cmd, outfiles=outfile, name='unique_consensus')
+    maybe_qsub(cmd, outfiles=outfile, name='unique_hqcs')
 
 
 @must_work()
@@ -242,9 +235,9 @@ def make_individual_dbs(infile, outfile):
     maybe_qsub(cmd,  outfiles=outfile, name='make-individual-dbs')
 
 
-def usearch_consensus_ids(infile, outfile, dbfile, name=None):
-    """run usearch_global against a consensus database and print pairs of ids"""
-    identity = globals_.config.get('Parameters', 'raw_to_consensus_identity')
+def usearch_hqcs_ids(infile, outfile, dbfile, name=None):
+    """run usearch_global against a hqcs database and print pairs of ids"""
+    identity = globals_.config.get('Parameters', 'ccs_to_hqcs_identity')
     max_accepts = globals_.config.get('Parameters', 'max_accepts')
     max_rejects = globals_.config.get('Parameters', 'max_rejects')
     maxqt = globals_.config.get('Parameters', 'max_query_target_length_ratio')
@@ -253,7 +246,7 @@ def usearch_consensus_ids(infile, outfile, dbfile, name=None):
            " -maxaccepts {max_accepts} -maxrejects {max_rejects}"
            " -maxqt {maxqt}")
     if name is None:
-        name = 'usearch-consensus-ids'
+        name = 'usearch-hqcs-ids'
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
                      infile=infile, db=dbfile, id=identity, outfile=outfile,
                      max_accepts=max_accepts, max_rejects=max_rejects,
@@ -264,29 +257,29 @@ def usearch_consensus_ids(infile, outfile, dbfile, name=None):
 # FIXME: this is run with remote job limiter, but part of its task is run locally
 @must_work()
 def compute_copynumbers(infiles, outfile, basename):
-    rawfile, perfectfile, dbfile = infiles
+    rawfile, hqcsfile, dbfile = infiles
     # make sure this suffix changes depending on what task comes before
-    check_suffix(perfectfile, '.uniques.fasta')
+    check_suffix(hqcsfile, '.uniques.fasta')
     check_suffix(dbfile, '.udb')
     pairfile = '{}.copynumber.pairs'.format(basename)
-    usearch_consensus_ids(rawfile, pairfile, dbfile, name='compute-copynumber')
+    usearch_hqcs_ids(rawfile, pairfile, dbfile, name='compute-copynumber')
     with open(pairfile) as f:
         pairs = list(line.strip().split("\t") for line in f.readlines())
-    consensus_counts = defaultdict(lambda: 0)
+    hqcs_counts = defaultdict(lambda: 0)
     for raw_id, ref_id in pairs:
-        consensus_counts[ref_id] += 1
-    # deal with consensus sequences with no copynumber by giving them 0
-    ids = list(r.id for r in SeqIO.parse(perfectfile, 'fasta'))
+        hqcs_counts[ref_id] += 1
+    # deal with hqcs sequences with no copynumber by giving them 0
+    ids = list(r.id for r in SeqIO.parse(hqcsfile, 'fasta'))
     for i in ids:
-        if i not in consensus_counts:
-            consensus_counts[i] = 0
+        if i not in hqcs_counts:
+            hqcs_counts[i] = 0
     with open(outfile, 'w') as handle:
-        for id_, count in consensus_counts.items():
+        for id_, count in hqcs_counts.items():
             handle.write('{}\t{}\n'.format(id_, count))
 
 
 @must_work(seq_ids=True)
-def cat_all_perfect(infiles, outfile):
+def cat_all_hqcs(infiles, outfile):
     if len(infiles) != len(globals_.timepoints):
         raise Exception('Number of input files does not match number'
                         ' of timepoints')
@@ -301,15 +294,15 @@ def pause(filename):
 
 @must_work()
 def backtranslate_alignment(infiles, outfile):
-    perfect, aligned = infiles
-    check_basename(perfect, 'all_uniques.fasta')
-    backtranslate(aligned, perfect, outfile)
+    hqcs, aligned = infiles
+    check_basename(hqcs, 'hqcs.fasta')
+    backtranslate(aligned, hqcs, outfile)
 
 
 @must_work()
 def degap_backtranslated_alignment(infile, outfile):
     # we need this in case sequences were removed during hand-editing
-    # of the output of `codon_align_perfect()`.
+    # of the alignment
     records = (SeqIO.parse(infile, 'fasta'))
     processed = (update_record_seq(r, r.seq.ungap('-')) for r in records)
     SeqIO.write(processed, outfile, 'fasta')
@@ -323,25 +316,25 @@ def make_full_db(infile, outfile):
 
 
 @must_work()
-def full_timestep_pairs(infiles, outfile):
+def hqcs_ccs_pairs(infiles, outfile):
     # FIXME: this does basically the same thing as the copynumber task,
     # except it allows CCSs to map to HQCSs in different timepoints
     infile, dbfile = infiles
-    usearch_consensus_ids(infile, outfile, dbfile, name='full-timestep-pairs')
+    usearch_hqcs_ids(infile, outfile, dbfile, name='hqcs_ccs_ids')
 
 
 @must_work()
 def combine_pairs(infiles, outfiles, basename):
     for f in outfiles:
         os.unlink(f)
-    infile, perfectfile = infiles
+    infile, hqcsfile = infiles
     seqsfile = '{}.fasta'.format(basename)
     with open(infile) as handle:
         pairs = list(line.strip().split("\t") for line in handle.readlines())
     match_dict = defaultdict(list)
     for seq, ref in pairs:
         match_dict[ref].append(seq)
-    references_records = list(SeqIO.parse(perfectfile, "fasta"))
+    references_records = list(SeqIO.parse(hqcsfile, "fasta"))
     seq_records = list(SeqIO.parse(seqsfile, "fasta"))
     references_dict = {r.id : r for r in references_records}
     seq_dict = {r.id : r for r in seq_records}
@@ -507,35 +500,35 @@ def make_alignment_pipeline(name=None):
                                          output='{path[0]}.cons.fasta')
     cat_clusters_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    consensus_db_search_task = pipeline.transform(consensus_db_search,
-                                                  input=cat_clusters_task,
-                                                  filter=suffix('.fasta'),
-                                                  output='.pairs.fasta')
-    consensus_db_search_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+    hqcs_db_search_task = pipeline.transform(hqcs_db_search,
+                                             input=cat_clusters_task,
+                                             filter=suffix('.fasta'),
+                                             output='.pairs.fasta')
+    hqcs_db_search_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    consensus_shift_correction_task = pipeline.transform(consensus_shift_correction,
-                                                         input=consensus_db_search_task,
-                                                         filter=suffix('.fasta'),
-                                                         output='.shifted.fasta')
-    consensus_shift_correction_task.jobs_limit(n_local_jobs, local_job_limiter)
+    hqcs_shift_correction_task = pipeline.transform(hqcs_shift_correction,
+                                                    input=hqcs_db_search_task,
+                                                    filter=suffix('.fasta'),
+                                                    output='.shifted.fasta')
+    hqcs_shift_correction_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    unique_consensus_task = pipeline.transform(unique_consensus,
-                                               input=consensus_shift_correction_task,
-                                               filter=suffix('.fasta'),
-                                               output='.uniques.fasta')
-    unique_consensus_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+    unique_hqcs_task = pipeline.transform(unique_hqcs,
+                                          input=hqcs_shift_correction_task,
+                                          filter=suffix('.fasta'),
+                                          output='.uniques.fasta')
+    unique_hqcs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     make_individual_dbs_task = pipeline.transform(make_individual_dbs,
-                                                  input=unique_consensus_task,
+                                                  input=unique_hqcs_task,
                                                   filter=suffix('.fasta'),
                                                   output='.udb')
     make_individual_dbs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     compute_copynumbers_task = pipeline.collate(compute_copynumbers,
-                                               input=[unique_consensus_task, make_individual_dbs_task, shift_correction_task],
-                                               filter=formatter(r'(?P<NAME>.+).qfilter'),
-                                               output='{NAME[0]}.copynumbers.tsv',
-                                               extras=['{NAME[0]}'])
+                                                input=[unique_hqcs_task, make_individual_dbs_task, shift_correction_task],
+                                                filter=formatter(r'(?P<NAME>.+).qfilter'),
+                                                output='{NAME[0]}.copynumbers.tsv',
+                                                extras=['{NAME[0]}'])
     compute_copynumbers_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     merge_copynumbers_task = pipeline.merge(cat_wrapper,
@@ -544,30 +537,30 @@ def make_alignment_pipeline(name=None):
                                             output=os.path.join(pipeline_dir, 'copynumbers.tsv'))
     merge_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    cat_all_perfect_task = pipeline.merge(cat_all_perfect,
-                                          input=unique_consensus_task,
-                                          output=os.path.join(pipeline_dir, "all_uniques.fasta"))
-    cat_all_perfect_task.jobs_limit(n_local_jobs, local_job_limiter)
+    cat_all_hqcs_task = pipeline.merge(cat_all_hqcs,
+                                       input=unique_hqcs_task,
+                                       output=os.path.join(pipeline_dir, "hqcs.fasta"))
+    cat_all_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    translate_perfect_task = pipeline.transform(translate_wrapper,
-                                                name='translate_perfect',
-                                                input=cat_all_perfect_task,
-                                                filter=suffix('.fasta'),
-                                                output='.translated.fasta')
-    translate_perfect_task.jobs_limit(n_local_jobs, local_job_limiter)
+    translate_hqcs_task = pipeline.transform(translate_wrapper,
+                                             name='translate_hqcs',
+                                             input=cat_all_hqcs_task,
+                                             filter=suffix('.fasta'),
+                                             output='.translated.fasta')
+    translate_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    codon_align_perfect_task = pipeline.transform(mafft_wrapper_seq_ids,
-                                                  name='codon_align_perfect',
-                                                  input=translate_perfect_task,
-                                                  filter=suffix('.fasta'),
-                                                  output='.aligned.fasta')
-    codon_align_perfect_task.jobs_limit(n_local_jobs, local_job_limiter)
-    codon_align_perfect_task.posttask(partial(pause, 'protein alignment'))
+    codon_align_hqcs_task = pipeline.transform(mafft_wrapper_seq_ids,
+                                               name='codon_align_hqcs',
+                                               input=translate_hqcs_task,
+                                               filter=suffix('.fasta'),
+                                               output='.aligned.fasta')
+    codon_align_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
+    codon_align_hqcs_task.posttask(partial(pause, 'protein alignment'))
 
     backtranslate_alignment_task = pipeline.merge(backtranslate_alignment,
-                                              input=[cat_all_perfect_task,
-                                                     codon_align_perfect_task],
-                                              output=os.path.join(pipeline_dir, 'all_backtranslated.fasta'))
+                                                  input=[cat_all_hqcs_task,
+                                                         codon_align_hqcs_task],
+                                                  output=os.path.join(pipeline_dir, 'hqcs.translated.aligned.backtranslated.fasta'))
     backtranslate_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     pipeline.set_head_tasks([filter_fastq_task])
@@ -576,8 +569,8 @@ def make_alignment_pipeline(name=None):
     if globals_.config.getboolean('Tasks', 'align_full'):
         degap_backtranslated_alignment_task = pipeline.transform(degap_backtranslated_alignment,
                                                                  input=backtranslate_alignment_task,
-                                                                 filter=formatter(),
-                                                                 output='{path[0]}/all_uniques_degapped.fasta')
+                                                                 filter=formatter('.suffix'),
+                                                                 output='.degapped.fasta')
         degap_backtranslated_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
 
         make_full_db_task = pipeline.transform(make_full_db,
@@ -586,21 +579,21 @@ def make_alignment_pipeline(name=None):
                                                output='.udb')
         make_full_db_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-        full_timestep_pairs_task = pipeline.transform(full_timestep_pairs,
-                                                      input=shift_correction_task,
-                                                      filter=suffix('.fasta'),
-                                                      add_inputs=add_inputs(make_full_db),
-                                                      output='.pairs.txt')
-        full_timestep_pairs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+        hqcs_ccs_pairs_task = pipeline.transform(hqcs_ccs_pairs,
+                                                 input=shift_correction_task,
+                                                 filter=suffix('.fasta'),
+                                                 add_inputs=add_inputs(make_full_db),
+                                                 output='.pairs.txt')
+        hqcs_ccs_pairs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
         combine_pairs_task = pipeline.subdivide(combine_pairs,
-                                                input=full_timestep_pairs_task,
+                                                input=hqcs_ccs_pairs_task,
                                                 filter=formatter('.*/(?P<NAME>.+).pairs.txt'),
                                                 add_inputs=add_inputs(degap_backtranslated_alignment),
                                                 output='{path[0]}/{NAME[0]}.alignments/combined.*.unaligned.fasta',
                                                 extras=['{path[0]}/{NAME[0]}'])
         combine_pairs_task.jobs_limit(n_local_jobs, local_job_limiter)
-        combine_pairs_task.mkdir(full_timestep_pairs_task, suffix('.pairs.txt'), '.alignments')
+        combine_pairs_task.mkdir(hqcs_ccs_pairs_task, suffix('.pairs.txt'), '.alignments')
 
         codon_align_task = pipeline.transform(codon_align,
                                               input=combine_pairs_task,
@@ -624,7 +617,7 @@ def make_alignment_pipeline(name=None):
         merge_all_timepoints_task = pipeline.merge(cat_wrapper_ids,
                                                    name='merge_all_timepoints',
                                                    input=insert_gaps_task,
-                                                   output=os.path.join(pipeline_dir, 'all_timepoints.aligned.fasta'))
+                                                   output=os.path.join(pipeline_dir, 'ccs.aligned.fasta'))
         merge_all_timepoints_task.jobs_limit(n_local_jobs, local_job_limiter)
 
         replace_gapped_codons_task = pipeline.transform(replace_gapped_codons_file,
@@ -646,7 +639,7 @@ def make_alignment_pipeline(name=None):
                                 for t in globals_.timepoints)
         diagnose_alignment_task = pipeline.merge(diagnose_alignment,
                                                  name='diagnose_alignment',
-                                                 input=[codon_align_perfect_task,
+                                                 input=[codon_align_hqcs_task,
                                                         translate_all_task,
                                                         merge_copynumbers_task],
                                                  output=diagnosis_output)

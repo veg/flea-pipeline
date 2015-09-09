@@ -312,7 +312,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
     add_copynumbers_task = pipeline.merge(add_copynumbers,
                                           name="add_copynumbers",
                                           input=None,
-                                          output=os.path.join(pipeline_dir, "msa_with_copynumbers.fasta"))
+                                          output=os.path.join(pipeline_dir, "msa.copynumber-ids.fasta"))
     add_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     copy_copynumber_task = pipeline.merge(copy_copynumber_file,
@@ -335,7 +335,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
     add_mrca_task = pipeline.merge(cat_wrapper_ids,
                                    name='add_mrca',
                                    input=[mrca_task, add_copynumbers_task],
-                                   output=os.path.join(pipeline_dir, 'msa_with_mrca.fasta'))
+                                   output=os.path.join(pipeline_dir, 'msa.with-mrca.fasta'))
     add_mrca_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     fasttree_task = pipeline.transform(run_fasttree,
