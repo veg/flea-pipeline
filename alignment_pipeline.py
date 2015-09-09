@@ -257,17 +257,18 @@ def usearch_hqcs_ids(infile, outfile, dbfile, name=None):
 # FIXME: this is run with remote job limiter, but part of its task is run locally
 @must_work()
 def compute_copynumbers(infiles, outfile, basename):
-    rawfile, hqcsfile, dbfile = infiles
+    hqcsfile, dbfile, ccsfile = infiles
     # make sure this suffix changes depending on what task comes before
     check_suffix(hqcsfile, '.uniques.fasta')
     check_suffix(dbfile, '.udb')
+    check_suffix(ccsfile, '.length-filtered.fasta')
     pairfile = '{}.copynumber.pairs'.format(basename)
-    usearch_hqcs_ids(rawfile, pairfile, dbfile, name='compute-copynumber')
+    usearch_hqcs_ids(ccsfile, pairfile, dbfile, name='compute-copynumber')
     with open(pairfile) as f:
         pairs = list(line.strip().split("\t") for line in f.readlines())
     hqcs_counts = defaultdict(lambda: 0)
-    for raw_id, ref_id in pairs:
-        hqcs_counts[ref_id] += 1
+    for ccs_id, ccs_id in pairs:
+        hqcs_counts[ccs_id] += 1
     # deal with hqcs sequences with no copynumber by giving them 0
     ids = list(r.id for r in SeqIO.parse(hqcsfile, 'fasta'))
     for i in ids:
@@ -469,7 +470,7 @@ def make_alignment_pipeline(name=None):
     filter_length_task = pipeline.transform(filter_length,
                                             input=filter_length_input_task,
                                             filter=suffix('.fasta'),
-                                            output='.sorted.fasta')
+                                            output='.length-filtered.fasta')
     filter_length_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     cluster_task = pipeline.subdivide(cluster,
