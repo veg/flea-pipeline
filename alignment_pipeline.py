@@ -415,7 +415,8 @@ def diagnose_alignment(infiles, outfiles):
     cmd = "{python} {script} {hqcs} {ccs} {cn} {d}".format(**kwargs)
     stdout = os.path.join(globals_.qsub_dir, 'diagnose.stdout')
     stderr = os.path.join(globals_.qsub_dir, 'diagnose.stderr')
-    maybe_qsub(cmd, outfiles=outfiles, stdout=stdout, stderr=stderr)
+    maybe_qsub(cmd, outfiles=outfiles, stdout=stdout, stderr=stderr,
+               name="diagnose-alignment")
 
 
 def make_alignment_pipeline(name=None):
