@@ -446,27 +446,27 @@ class Result(object):
         with logging_mutex:
             if not self.desc:
                 self.desc = ""
-            logger_proxy.info(' Task: %s' % self.desc)
-            logger_proxy.info('     Time: %s' % datetime.datetime.now())
+            logger_proxy.info('Finish task: {}'.format(self.desc))
+            logger_proxy.info('    Time: {}'.format(datetime.datetime.now()))
             if self.elapsed is not None:
-                logger_proxy.info('     Elapsed: %s' % nicetime(self.elapsed))
+                logger_proxy.info('    Elapsed: {}'.format(nicetime(self.elapsed)))
             if self.cmds is not None:
-                logger_proxy.info('     Commands: %s' % str(self.cmds))
+                logger_proxy.info('    Commands: {}'.format(str(self.cmds)))
             for input_fn in self.infiles:
                 input_fn = os.path.normpath(os.path.relpath(input_fn))
-                logger_proxy.info('     Input:   %s' % input_fn)
+                logger_proxy.info('    Input: {}'.format(input_fn))
             for output_fn in self.outfiles:
                 output_fn = os.path.normpath(os.path.relpath(output_fn))
-                logger_proxy.info('     Output:   %s' % output_fn)
+                logger_proxy.info('    Output: {}'.format(output_fn))
             if self.log is not None:
-                logger_proxy.info('     Log:      %s' % self.log)
+                logger_proxy.info('    Log: {}'.format(self.log))
             if self.failed:
                 logger_proxy.error('=' * 80)
-                logger_proxy.error('Error in %s' % self.desc)
+                logger_proxy.error('Error in {}'.format(self.desc))
                 if self.msg:
                     logger_proxy.error('message: {}'.format(self.msg))
                 if self.log is not None:
-                    logger_proxy.error('   Log: %s' % self.log)
+                    logger_proxy.error('log: {}'.format(self.log))
                 if self.stderr:
                     logger_proxy.error('====STDERR====')
                     logger_proxy.error(self.stderr)
@@ -492,6 +492,7 @@ def nicetime(seconds):
 def report_wrapper(function):
     @wraps(function)  # necessary because ruffus uses function name internally
     def wrapped(infiles, outfiles, *args, **kwargs):
+        # TODO: log start, infiles, outfiles, cmd
         t0 = time.time()
         result = function(infiles, outfiles, *args, **kwargs)
         t1 = time.time()
