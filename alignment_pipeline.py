@@ -4,6 +4,7 @@ from random import sample
 import tempfile
 from functools import partial
 from collections import defaultdict
+import itertools
 
 import numpy as np
 from ruffus import Pipeline, suffix, formatter, add_inputs
@@ -131,6 +132,14 @@ def shift_correction_helper(infile, outfile, keep):
 @report_wrapper
 def shift_correction(infile, outfile):
     shift_correction_helper(infile, outfile, keep=True)
+
+
+@must_work(seq_ratio=(2, 1))
+@report_wrapper
+def every_other(infile, outfile):
+    records = SeqIO.parse(infile, 'fasta')
+    result = itertools.islice(records, 0, None, 2)
+    SeqIO.write(result, outfile, 'fasta')
 
 
 @must_work()
@@ -510,7 +519,12 @@ def make_alignment_pipeline(name=None):
         shift_correction_task.jobs_limit(n_local_jobs, local_job_limiter)
         filter_length_input_task = shift_correction_task
     else:
-        filter_length_input_task = filter_uncontaminated_task
+        every_other_task = pipeline.transform(every_other,
+                                              input=filter_uncontaminated_task,
+                                              filter=suffix('.fasta'),
+                                              output='.ccs-only.fasta')
+        every_other_task.jobs_limit(n_local_jobs, local_job_limiter)
+        filter_length_input_task = every_other_task
 
     filter_length_task = pipeline.transform(filter_length,
                                             input=filter_length_input_task,
