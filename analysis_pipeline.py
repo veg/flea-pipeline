@@ -399,7 +399,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
     sequences_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     js_divergence_task = pipeline.transform(js_divergence_json,
-                                            input=[translate_task],
+                                            input=translate_task,
                                             filter=formatter(),
                                             output=os.path.join(pipeline_dir, 'js_divergence.json'))
     js_divergence_task.jobs_limit(n_local_jobs, local_job_limiter)
