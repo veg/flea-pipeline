@@ -1,5 +1,3 @@
-"""HyPhy-free analysis. Currently only generates trees and sequences."""
-
 import os
 import json
 from itertools import islice

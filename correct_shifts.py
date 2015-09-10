@@ -6,7 +6,7 @@ aligned in-frame reference.
 The input file should contain pairs of aligned sequences and references.
 
 Discards sequences that cannot be corrected, because they contain
-insertions of length >3 that is not a multiples of three.
+insertions of length >3 that is not a multiple of three.
 
 Usage:
   correct_shifts.py [options] <infile> <outfile>
