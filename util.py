@@ -14,7 +14,6 @@ from functools import wraps
 from glob import glob
 import warnings
 import sys
-import uuid
 
 from Bio.Seq import Seq
 from Bio import SeqIO
@@ -123,7 +122,8 @@ def format_walltime(seconds):
 
 
 def qsub(cmd, stdout, stderr, outfiles=None, control_dir=None, queue=None,
-         nodes=1, ppn=1, sleep=5, walltime=3600, waittime=10, name=None):
+         nodes=1, ppn=1, sleep=5, walltime=3600, waittime=10, name=None,
+         sentinel=None):
     """A blocking qsub."""
     if control_dir is None:
         control_dir = '.'
@@ -131,7 +131,10 @@ def qsub(cmd, stdout, stderr, outfiles=None, control_dir=None, queue=None,
         return False, 'walltime={} < 1'.format(walltime)
     if name is None:
         name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
-    sentinel = os.path.join(control_dir, '{}-{}.complete'.format(name, uuid4()))
+    if sentinel is None:
+        sentinel = os.path.join(control_dir, '{}-{}.complete'.format(name, uuid4()))
+    if os.path.exists(sentinel):
+        return False, 'sentinel file already exists: {}'.format(sentinel)
     mycmd = '{}; echo \$? > {}'.format(cmd, sentinel)
     fwalltime = format_walltime(walltime)
     qsub_cmd = ('qsub -V -W umask=077 -l'
@@ -171,14 +174,17 @@ def maybe_qsub(cmd, infiles, outfiles, stdout=None, stderr=None, **kwargs):
     if 'name' in kwargs:
         name = kwargs['name']
     else:
-        name = ""
-    name = "{}{}".format(name, uuid.uuid4())
+        name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
+    name = "{}-{}".format(name, uuid4())
+    base = os.path.join(globals_.qsub_dir, name)
     if stdout is None:
-        stdout = "{}.stdout".format(os.path.join(globals_.qsub_dir, name))
+        stdout = "{}.stdout".format(base)
     if stderr is None:
-        stderr = "{}.stderr".format(os.path.join(globals_.qsub_dir, name))
+        stderr = "{}.stderr".format(base)
+    sentinel = "{}.complete".format(base)
     if globals_.config.getboolean('Jobs', 'use_cluster'):
         success, msg = qsub(cmd, stdout, stderr,
+                            sentinel=sentinel,
                             control_dir=globals_.qsub_dir,
                             queue=globals_.config.get('Jobs', 'queue'),
                             nodes=globals_.config.get('Jobs', 'nodes'),
