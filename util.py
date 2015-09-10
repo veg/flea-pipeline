@@ -6,7 +6,7 @@ from itertools import zip_longest
 from itertools import tee
 from itertools import filterfalse
 from itertools import islice
-from uuid import uuid4
+
 import time
 import datetime
 import os
@@ -132,6 +132,7 @@ def qsub(cmd, stdout, stderr, outfiles=None, control_dir=None, queue=None,
     if name is None:
         name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
     if sentinel is None:
+        from uuid import uuid4  # because this hangs on silverback compute nodes
         sentinel = os.path.join(control_dir, '{}-{}.complete'.format(name, uuid4()))
     if os.path.exists(sentinel):
         return False, 'sentinel file already exists: {}'.format(sentinel)
@@ -169,6 +170,7 @@ def get_key(k, d, default=None):
 
 
 def maybe_qsub(cmd, infiles, outfiles, stdout=None, stderr=None, **kwargs):
+    from uuid import uuid4  # because this hangs on silverback compute nodes
     if 'walltime' not in kwargs:
         kwargs['walltime'] = globals_.config.getint('Jobs', 'walltime')
     if 'name' in kwargs:
@@ -402,7 +404,6 @@ def check_in_frame(f):
         if len_ % 3 != 0:
             raise Exception('Sequence "{}" in file "{}" has length={} not multiple'
                             ' of 3'.format(r.id, f, len_))
-
 
 class Result(object):
     # borrowed from https://github.com/daler/pipeline-example
