@@ -18,6 +18,7 @@ from util import check_suffix, check_basename, n_jobs
 from util import read_single_record
 from util import partition
 from util import grouper
+from util import run_regexp
 
 import pipeline_globals as globals_
 
@@ -60,25 +61,47 @@ def filter_fastq(infile, outfile):
 
 def trim_helper(infile, outfile, target, reverse):
     tailfile = "{}.tails".format(outfile)
-    head_freq = globals_.config.getfloat('Parameters', 'head_p')
-    tail_freq = globals_.config.getfloat('Parameters', 'tail_p')
+    head_p = globals_.config.getfloat('Parameters', 'head_p')
+    tail_p = globals_.config.getfloat('Parameters', 'tail_p')
     min_length = globals_.config.getint('Parameters', 'min_tail_length')
-    penalty = np.log(head_freq) * min_length
-    trim_tails_file(infile, outfile, target=target, head_freq=head_freq,
-                    tail_freq=tail_freq, penalty=penalty, reverse=reverse,
+    penalty = np.log(head_p) * min_length
+    trim_tails_file(infile, outfile, target=target, head_p=head_p,
+                    tail_p=tail_p, penalty=penalty, reverse=reverse,
                     tailfile=tailfile)
 
 
 @must_work(seq_ids=True)
 @report_wrapper
-def trim_polya(infile, outfile):
+def trim_polya_tail(infile, outfile):
     trim_helper(infile, outfile, "A", reverse=False)
 
 
 @must_work(seq_ids=True)
 @report_wrapper
-def trim_polyt(infile, outfile):
+def trim_polya_head(infile, outfile):
+    trim_helper(infile, outfile, "A", reverse=True)
+
+
+@must_work(seq_ids=True)
+@report_wrapper
+def trim_polyt_tail(infile, outfile):
+    trim_helper(infile, outfile, "T", reverse=False)
+
+
+@must_work(seq_ids=True)
+@report_wrapper
+def trim_polyt_head(infile, outfile):
     trim_helper(infile, outfile, "T", reverse=True)
+
+
+@must_work()
+@report_wrapper
+def filter_runs(infile, outfile):
+    runlen = globals_.config.getint('Parameters', 'run_length')
+    cregexp = run_regexp(runlen)
+    records = SeqIO.parse(infile, 'fasta')
+    result = (r for r in records if cregexp.search(str(r.seq)) is None)
+    SeqIO.write(result, outfile, 'fasta')
 
 
 @must_work()
@@ -487,20 +510,38 @@ def make_alignment_pipeline(name=None):
                                            output=os.path.join(pipeline_dir, '{basename[0]}{ext[0]}.qfilter.fasta'))
     filter_fastq_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    trim_polya_task = pipeline.transform(trim_polya,
-                                         input=filter_fastq_task,
-                                         filter=suffix('.fasta'),
-                                         output='.no-poly-a.fasta')
-    trim_polya_task.jobs_limit(n_local_jobs, local_job_limiter)
+    trim_polya_head_task = pipeline.transform(trim_polya_head,
+                                              input=filter_fastq_task,
+                                              filter=suffix('.fasta'),
+                                              output='.poly-a-head.fasta')
+    trim_polya_head_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    trim_polyt_task = pipeline.transform(trim_polyt,
-                                         input=trim_polya,
-                                         filter=suffix('.fasta'),
-                                         output='.no-poly-t.fasta')
-    trim_polyt_task.jobs_limit(n_local_jobs, local_job_limiter)
+    trim_polya_tail_task = pipeline.transform(trim_polya_tail,
+                                              input=trim_polya_head_task,
+                                              filter=suffix('.fasta'),
+                                              output='.poly-a-tail.fasta')
+    trim_polya_tail_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    trim_polyt_head_task = pipeline.transform(trim_polyt_head,
+                                              input=trim_polya_tail_task,
+                                              filter=suffix('.fasta'),
+                                              output='.poly-t-head.fasta')
+    trim_polyt_head_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    trim_polyt_tail_task = pipeline.transform(trim_polyt_tail,
+                                              input=trim_polyt_head_task,
+                                              filter=suffix('.fasta'),
+                                              output='.poly-t-tail.fasta')
+    trim_polyt_tail_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    filter_runs_task = pipeline.transform(filter_runs,
+                                          input=trim_polyt_tail_task,
+                                          filter=suffix('.fasta'),
+                                          output='.noruns.fasta')
+    filter_runs_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     filter_contaminants_task = pipeline.transform(filter_contaminants,
-                                                  input=trim_polyt_task,
+                                                  input=filter_runs_task,
                                                   filter=suffix('.fasta'),
                                                   output='.uncontam.fasta')
     filter_contaminants_task.jobs_limit(n_remote_jobs, remote_job_limiter)

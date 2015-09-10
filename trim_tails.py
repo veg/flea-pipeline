@@ -3,8 +3,10 @@
 """
 Trim poly-A tails from the start or end of sequences.
 
+Uses a simple HMM with unweighted transitions.
+
 Usage:
-  trim_tails.py [options] <head_freq> <tail_freq> <infile>
+  trim_tails.py [options] <head_p> <tail_p> <infile>
   trim_tails -h | --help
 
 Options:
@@ -16,8 +18,6 @@ Options:
 
 """
 
-from math import log
-
 import numpy as np
 from Bio import SeqIO
 
@@ -28,11 +28,11 @@ def _rev(s):
     return "".join(reversed(s))
 
 
-def _likelihoods(seq, target, head_freq, tail_freq):
-    head_p = log(head_freq)
-    head_not_p = log(1 - head_freq)
-    tail_p = log(tail_freq)
-    tail_not_p = log(1 - tail_freq)
+def _likelihoods(seq, target, head_p, tail_p):
+    head_lp = np.log(head_p)
+    head_not_lp = np.log(1 - head_p)
+    tail_lp = np.log(tail_p)
+    tail_not_lp = np.log(1 - tail_p)
 
     bools = np.array(list(c == target for c in seq))
     head_counts = np.cumsum(bools)
@@ -42,19 +42,19 @@ def _likelihoods(seq, target, head_freq, tail_freq):
 
     head_length = np.arange(len(seq))
     tail_length = head_length[::-1] + 1
-    likelihoods = (head_counts * head_p) + (head_length - head_counts) * head_not_p \
-        + (tail_counts * tail_p) + (tail_length - tail_counts) * tail_not_p
+    likelihoods = (head_counts * head_lp) + (head_length - head_counts) * head_not_lp \
+        + (tail_counts * tail_lp) + (tail_length - tail_counts) * tail_not_lp
 
     n_target = bools.sum()
-    null_log_likelihood = n_target * head_p + (len(seq) - n_target) * head_not_p
+    null_log_likelihood = n_target * head_lp + (len(seq) - n_target) * head_not_lp
 
     return likelihoods, null_log_likelihood
 
 
-def trim_tail(seq, target, head_freq, tail_freq, penalty=0, reverse=False):
+def trim_tail(seq, target, head_p, tail_p, penalty=0, reverse=False):
     if reverse:
         seq = _rev(seq)
-    likelihoods, null = _likelihoods(seq, target, head_freq, tail_freq)
+    likelihoods, null = _likelihoods(seq, target, head_p, tail_p)
     idx = np.argmax(likelihoods)
     max_log_likelihood = likelihoods[idx]
     result = seq
@@ -67,16 +67,20 @@ def trim_tail(seq, target, head_freq, tail_freq, penalty=0, reverse=False):
     return result, tail
 
 
-def trim_tails_file(infile, outfile, target, head_freq, tail_freq,
+def trim_tails_file(infile, outfile, target, head_p, tail_p,
                     penalty=0, reverse=False, tailfile=None):
     records = list(SeqIO.parse(infile, 'fasta'))
-    results = list(trim_tail(str(r.seq), target, head_freq, tail_freq,
+    results = list(trim_tail(str(r.seq), target, head_p, tail_p,
                              penalty, reverse)
                    for r in records)
 
     keep, discard = zip(*results)
     keep_records = list(new_record_seq_str(r, s) for r, s in zip(records, keep))
     discard_records = list(new_record_seq_str(r, s) for r, s in zip(records, discard))
+
+    # filter empty
+    keep_records = list(r for r in keep_records if len(r))
+    discard_records = list(r for r in discard_records if len(r))
     SeqIO.write(keep_records, outfile, 'fasta')
     if tailfile is not None:
         SeqIO.write(discard_records, tailfile, 'fasta')
@@ -88,8 +92,8 @@ if __name__ == "__main__":
     outfile = args["--outfile"]
     target = args["--target"]
     penalty = float(args["--penalty"])
-    head_freq = args["<head_freq>"]
-    tail_freq = args["<tail_freq>"]
+    head_p = args["<head_p>"]
+    tail_p = args["<tail_p>"]
     reverse = args["--reverse"]
-    trim_tail_file(filename, outfile, target, head_freq, tail_freq,
+    trim_tail_file(filename, outfile, target, head_p, tail_p,
                    penalty=penalty, reverse=reverse)

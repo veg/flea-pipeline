@@ -54,6 +54,7 @@ max_query_target_length_ratio: 1.005
 head_p: 0.25
 tail_p: 0.99
 min_tail_length: 5
+run_length: 16
 
 [Tasks]
 shift_correct_ccs: False

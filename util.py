@@ -6,6 +6,7 @@ from itertools import zip_longest
 from itertools import tee
 from itertools import filterfalse
 from itertools import islice
+import re
 
 import time
 import datetime
@@ -759,3 +760,23 @@ def str_to_type(x):
     if x.lower() == "false":
         return False
     return x
+
+
+def run_regexp(runlen, targets=None):
+    """Get compiled regexp for `runlen` runs of characters.
+
+    >>> bool(run_regexp(3).search("AAA"))
+    True
+
+    >>> bool(run_regexp(3).search("AATT"))
+    False
+
+    >>> bool(run_regexp(3, "T").search("AAATT"))
+    False
+
+    """
+    if targets is None:
+        targets = "ACGT"
+    pattern = "|".join("({target}){{{runlen}}}".format(target=t, runlen=runlen)
+                       for t in targets)
+    return re.compile(pattern)
