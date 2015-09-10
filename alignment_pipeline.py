@@ -393,7 +393,7 @@ def combine_pairs(infiles, outfiles, basename):
 @must_work()
 @report_wrapper
 def codon_align(infile, outfile):
-    cmd = "{} {} {}".format(
+    cmd = "{} -R -a codon {} {}".format(
         globals_.config.get('Paths', 'bealign'), infile, outfile)
     stdout = os.path.join(globals_.qsub_dir, '{}.stdout'.format(outfile))
     stderr = os.path.join(globals_.qsub_dir, '{}.stderr'.format(outfile))
