@@ -615,17 +615,17 @@ def make_alignment_pipeline(name=None):
                                              output='.translated.fasta')
     translate_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    codon_align_hqcs_task = pipeline.transform(mafft_wrapper_seq_ids,
-                                               name='codon_align_hqcs',
-                                               input=translate_hqcs_task,
-                                               filter=suffix('.fasta'),
-                                               output='.aligned.fasta')
-    codon_align_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
-    codon_align_hqcs_task.posttask(partial(pause, 'protein alignment'))
+    align_hqcs_protein_task = pipeline.transform(mafft_wrapper_seq_ids,
+                                                 name='align_hqcs_protein',
+                                                 input=translate_hqcs_task,
+                                                 filter=suffix('.fasta'),
+                                                 output='.aligned.fasta')
+    align_hqcs_protein_task.jobs_limit(n_local_jobs, local_job_limiter)
+    align_hqcs_protein_task.posttask(partial(pause, 'protein alignment'))
 
     backtranslate_alignment_task = pipeline.merge(backtranslate_alignment,
                                                   input=[cat_all_hqcs_task,
-                                                         codon_align_hqcs_task],
+                                                         align_hqcs_protein_task],
                                                   output=os.path.join(pipeline_dir, 'hqcs.translated.aligned.backtranslated.fasta'))
     backtranslate_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
 
@@ -705,7 +705,7 @@ def make_alignment_pipeline(name=None):
                                 for t in globals_.timepoints)
         diagnose_alignment_task = pipeline.merge(diagnose_alignment,
                                                  name='diagnose_alignment',
-                                                 input=[codon_align_hqcs_task,
+                                                 input=[align_hqcs_protein_task,
                                                         translate_ccs_task,
                                                         merge_copynumbers_task],
                                                  output=diagnosis_output)
