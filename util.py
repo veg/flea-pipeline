@@ -375,8 +375,10 @@ def check_seq_ids(inputs, output):
 
 def check_seq_ratio(inputs, output, expected):
     a_exp, b_exp = expected
-    assert a_exp == int(a_exp)
-    assert b_exp == int(b_exp)
+    if a_exp != int(a_exp):
+        raise Exception('expected an int, but got {}'.format(a_exp))
+    if b_exp != int(b_exp):
+        raise Exception('expected an int, but got {}'.format(b_exp))
     a_n = sum(1 for a in inputs for r in SeqIO.parse(a, 'fasta'))
     b_n = sum(1 for r in SeqIO.parse(output, 'fasta'))
     if a_n * b_exp != b_n * a_exp:
@@ -536,10 +538,14 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
             if min_seqs is not None:
                 check_seq_number(outfiles[0], min_seqs)
             if seq_ids:
-                assert len(outfiles) == 1
+                if len(outfiles) != 1:
+                    raise Exception('cannot check seq_ids for'
+                                    ' more than one outfile')
                 check_seq_ids(infiles, outfiles[0])
             if seq_ratio is not None:
-                assert len(outfiles) == 1
+                if len(outfiles) != 1:
+                    raise Exception('cannot check seq_ratio for'
+                                    ' more than one outfile')
                 check_seq_ratio(infiles, outfiles[0], seq_ratio)
             if illegal_chars:
                 for f in outfiles:
@@ -566,7 +572,9 @@ def must_produce(n):
 
 
 def check_suffix(name, suffix):
-    assert(name.endswith(suffix))
+    if not name.endswith(suffix):
+        raise Exception("filename '{}' does not "
+                        " end with '{}'".format(name, suffix))
 
 
 def remove_suffix(name, suffix):
@@ -575,7 +583,10 @@ def remove_suffix(name, suffix):
 
 
 def check_basename(name, bn):
-    assert(os.path.basename(name) == bn)
+    exp_bn = os.path.basename(name)
+    if exp_bn != bn:
+        raise Exception("filename '{}' does not"
+                        " match expected name '{}'".format(bn, exp_bn))
 
 
 def split_name(name):
