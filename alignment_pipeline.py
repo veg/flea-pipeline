@@ -323,6 +323,7 @@ def pause(filename):
 def backtranslate_alignment(infiles, outfile):
     hqcs, aligned = infiles
     check_basename(hqcs, 'hqcs.fasta')
+    check_suffix(aligned, '.aligned.fasta')
     backtranslate(aligned, hqcs, outfile)
 
 
@@ -350,6 +351,8 @@ def hqcs_ccs_pairs(infiles, outfile):
     # FIXME: this does basically the same thing as the copynumber task,
     # except it allows CCSs to map to HQCSs in different timepoints
     infile, dbfile = infiles
+    check_suffix(infile, '.length-filtered.fasta')
+    check_suffix(dbfile, '.degapped.udb')
     usearch_hqcs_ids(infile, outfile, dbfile, name='hqcs_ccs_ids')
 
 
@@ -359,6 +362,7 @@ def combine_pairs(infiles, outfiles, basename):
     for f in outfiles:
         os.unlink(f)
     infile, hqcsfile = infiles
+    check_suffix(infile, '.pairs.txt')
     seqsfile = '{}.fasta'.format(basename)
     with open(infile) as handle:
         pairs = list(line.strip().split("\t") for line in handle.readlines())
@@ -426,6 +430,8 @@ def replace_gapped_codons_file(infile, outfile):
 @report_wrapper
 def insert_gaps_wrapper(infiles, outfile):
     infile, backtranslated = infiles
+    check_suffix(infile, '.aligned.fasta')
+    check_suffix(backtranslated, '.backtranslated.fasta')
     ref, *seqs = list(SeqIO.parse(infile, 'fasta'))
     ref_gapped = next(r for r in SeqIO.parse(backtranslated, 'fasta')
                       if r.id == ref.id)
@@ -440,6 +446,9 @@ def insert_gaps_wrapper(infiles, outfile):
 @report_wrapper
 def diagnose_alignment(infiles, outfiles):
     hqcs, ccs, cn = infiles
+    check_suffix(hqcs, 'translated.aligned.fasta')
+    check_suffix(ccs, '.no-partial-gaps.translated.fasta')
+    check_suffix(cn, '.tsv')
     kwargs = {
         'python': globals_.config.get('Paths', 'python'),
         'script': os.path.join(globals_.script_dir, "diagnose.py"),
