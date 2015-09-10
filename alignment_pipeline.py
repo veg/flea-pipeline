@@ -116,7 +116,7 @@ def usearch_reference_db(infile, outfile, name=None):
 @must_work()
 @report_wrapper
 def filter_uncontaminated(infile, outfile):
-    usearch_reference_db(infile, outfile, name="filter-uncontaminated")
+    return usearch_reference_db(infile, outfile, name="filter-uncontaminated")
 
 
 def shift_correction_helper(infile, outfile, keep):
@@ -233,7 +233,7 @@ def cluster_consensus(infile, outfile):
 @must_work()
 @report_wrapper
 def hqcs_db_search(infile, outfile):
-    usearch_reference_db(infile, outfile, name='hqcs-db-search')
+    return usearch_reference_db(infile, outfile, name='hqcs-db-search')
 
 
 @must_work(in_frame=True)
