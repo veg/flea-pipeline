@@ -1,25 +1,24 @@
 #!/usr/bin/env python
 
 """
-Trim poly-A tails from the start or end of sequences.
-
-Uses a simple HMM with unweighted transitions.
+Trim poly-A tails from the start or end of sequences. Uses a simple
+HMM with unweighted transitions.
 
 Usage:
-  trim_tails.py [options] <head_p> <tail_p> <infile>
-  trim_tails -h | --help
+  trim_tails.py [options] <head_p> <tail_p> <infile> <outfile>
+  trim_tails.py -h | --help
 
 Options:
-  -o --outfile=<STRING>  Name of output file
-  -r --reverse           Trim beginning of sequence
-  --penalty              Penalty against null  [default: 0]
-  -t --target=<CHAR>     Target letter  [default: A]
-  -h --help              Show this screen
+  -r --reverse         Trim beginning of sequence
+  --penalty=<FLOAT>    Penalty against null  [default: 0]
+  -t --target=<CHAR>   Target letter  [default: A]
+  -h --help            Show this screen
 
 """
 
 import numpy as np
 from Bio import SeqIO
+from docopt import docopt
 
 from util import new_record_seq_str
 
@@ -89,11 +88,20 @@ def trim_tails_file(infile, outfile, target, head_p, tail_p,
 if __name__ == "__main__":
     args = docopt(__doc__)
     filename = args["<infile>"]
-    outfile = args["--outfile"]
+    outfile = args["<outfile>"]
+    head_p = float(args["<head_p>"])
+    tail_p = float(args["<tail_p>"])
     target = args["--target"]
     penalty = float(args["--penalty"])
-    head_p = args["<head_p>"]
-    tail_p = args["<tail_p>"]
     reverse = args["--reverse"]
-    trim_tail_file(filename, outfile, target, head_p, tail_p,
-                   penalty=penalty, reverse=reverse)
+
+    if len(target) != 1:
+        raise Exception('target must be a single character, not "{}"'.format(target))
+
+    if not 0 <= head_p <= 1:
+        raise Exception('head_p must be between 0 and 1')
+    if not 0 <= tail_p <= 1:
+        raise Exception('tail_p must be between 0 and 1')
+
+    trim_tails_file(filename, outfile, target, head_p, tail_p,
+                    penalty=penalty, reverse=reverse)

@@ -59,39 +59,46 @@ def filter_fastq(infile, outfile):
     return maybe_qsub(cmd, infile, outfiles=outfile, name='filter-fastq')
 
 
-def trim_helper(infile, outfile, target, reverse):
+def trim_helper(infile, outfile, target, reverse, name=None):
     tailfile = "{}.tails".format(outfile)
     head_p = globals_.config.getfloat('Parameters', 'head_p')
     tail_p = globals_.config.getfloat('Parameters', 'tail_p')
     min_length = globals_.config.getint('Parameters', 'min_tail_length')
     penalty = np.log(head_p) * min_length
-    trim_tails_file(infile, outfile, target=target, head_p=head_p,
-                    tail_p=tail_p, penalty=penalty, reverse=reverse,
-                    tailfile=tailfile)
+    reverse_option = "-r" if reverse else ""
+    python = globals_.config.get('Paths', 'python')
+    script = os.path.join(globals_.script_dir, 'trim_tails.py')
+    cmd = ("{python} {script} {reverse_option} --penalty \"{penalty}\" -t {target}"
+           " {head_p} {tail_p} {infile} {outfile}")
+    cmd = cmd.format(python=python, script=script, reverse_option=reverse_option,
+                     penalty=penalty,
+                     target=target, outfile=outfile, head_p=head_p, tail_p=tail_p,
+                     infile=infile)
+    return maybe_qsub(cmd, infile, outfile, name=name)
 
 
 @must_work(seq_ids=True)
 @report_wrapper
 def trim_polya_tail(infile, outfile):
-    trim_helper(infile, outfile, "A", reverse=False)
+    return trim_helper(infile, outfile, "A", reverse=False, name='trim-polya-tail')
 
 
 @must_work(seq_ids=True)
 @report_wrapper
 def trim_polya_head(infile, outfile):
-    trim_helper(infile, outfile, "A", reverse=True)
+    return trim_helper(infile, outfile, "A", reverse=True, name='trim-polya-head')
 
 
 @must_work(seq_ids=True)
 @report_wrapper
 def trim_polyt_tail(infile, outfile):
-    trim_helper(infile, outfile, "T", reverse=False)
+    return trim_helper(infile, outfile, "T", reverse=False, name='trim-polyt-tail')
 
 
 @must_work(seq_ids=True)
 @report_wrapper
 def trim_polyt_head(infile, outfile):
-    trim_helper(infile, outfile, "T", reverse=True)
+    return trim_helper(infile, outfile, "T", reverse=True, name='trim-polyt-head')
 
 
 @must_work()
@@ -514,25 +521,25 @@ def make_alignment_pipeline(name=None):
                                               input=filter_fastq_task,
                                               filter=suffix('.fasta'),
                                               output='.poly-a-head.fasta')
-    trim_polya_head_task.jobs_limit(n_local_jobs, local_job_limiter)
+    trim_polya_head_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     trim_polya_tail_task = pipeline.transform(trim_polya_tail,
                                               input=trim_polya_head_task,
                                               filter=suffix('.fasta'),
                                               output='.poly-a-tail.fasta')
-    trim_polya_tail_task.jobs_limit(n_local_jobs, local_job_limiter)
+    trim_polya_tail_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     trim_polyt_head_task = pipeline.transform(trim_polyt_head,
                                               input=trim_polya_tail_task,
                                               filter=suffix('.fasta'),
                                               output='.poly-t-head.fasta')
-    trim_polyt_head_task.jobs_limit(n_local_jobs, local_job_limiter)
+    trim_polyt_head_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     trim_polyt_tail_task = pipeline.transform(trim_polyt_tail,
                                               input=trim_polyt_head_task,
                                               filter=suffix('.fasta'),
                                               output='.poly-t-tail.fasta')
-    trim_polyt_tail_task.jobs_limit(n_local_jobs, local_job_limiter)
+    trim_polyt_tail_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     filter_runs_task = pipeline.transform(filter_runs,
                                           input=trim_polyt_tail_task,
