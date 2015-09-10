@@ -65,7 +65,7 @@ script_dir = os.path.abspath(os.path.split(__file__)[0])
 # Ruffus tasks
 if options.log_file is None:
     options.log_file = os.path.join(data_dir, 'flea.log')
-if options.verbose is None:
+if not options.verbose:
     options.verbose = 1
 logger, logger_mutex = cmdline.setup_logging(__name__,
                                              options.log_file,
