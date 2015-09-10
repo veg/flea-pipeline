@@ -41,6 +41,7 @@ from ruffus import cmdline, Pipeline
 from Bio import SeqIO
 
 from util import n_jobs, name_key_to_label
+from util import str_to_type
 import pipeline_globals as globals_
 
 
@@ -196,14 +197,20 @@ else:
             task.set_input(input=p1.tail_tasks)
 
 
+def config_to_dict(config):
+    config_dict = {}
+    for section in config:
+        d = dict(config[section])
+        config_dict[section] = dict((k, str_to_type(v))
+                                    for k, v in d.items())
+    return config_dict
+
+
 if __name__ == '__main__':
     # write run info file
     run_info = {}
     run_info['version'] = __version__
-    config_dict = {}
-    for section in config:
-        config_dict[section] = dict(config[section])
-    run_info['configuration'] = config_dict
+    run_info['configuration'] = config_to_dict(config)
     with open(os.path.join(data_dir, 'run_info.json'), 'w') as handle:
         json.dump(run_info, handle, separators=(",\n", ":"))
 

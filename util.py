@@ -721,3 +721,41 @@ def js_divergence(*args, weights=None):
     if result < 0:
         raise Exception('JS divergence cannot be 0')
     return np.abs(result)  # to avoid -0
+
+
+def str_to_type(x):
+    """Try to convert string to Python types.
+
+    There are probably more general ways to do this, but ints, floats,
+    and bools are good enough for our purposes.
+
+    >>> str_to_type("3.0")
+    3.0
+
+    >> str_to_type("3")
+    3
+
+    >> str_to_type("True")
+    True
+
+    >> str_to_type("false")
+    False
+
+    >> str_to_type("a_string")
+    "a_string"
+
+    """
+    try:
+        if str(int(x)) == x:
+            return int(x)
+    except ValueError:
+        pass
+    try:
+        return float(x)
+    except ValueError:
+        pass
+    if x.lower() == "true":
+        return True
+    if x.lower() == "false":
+        return False
+    return x
