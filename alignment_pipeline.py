@@ -195,7 +195,7 @@ def filter_length(infile, outfile):
 def cluster(infile, outfiles, pathname):
     for f in outfiles:
         os.unlink(f)
-    outdir = '{}.clusters'.format(infile[:-len('.fasta')])
+    outdir = os.path.dirname(pathname)
     outpattern = os.path.join(outdir, 'cluster_')
     minsl = globals_.config.get('Parameters', 'min_length_ratio')
     cmd = ('{usearch} -cluster_fast {infile} -id {id}'
@@ -334,7 +334,7 @@ def compute_copynumbers(infiles, outfile, basename):
     # make sure this suffix changes depending on what task comes before
     check_suffix(hqcsfile, '.uniques.fasta')
     check_suffix(dbfile, '.udb')
-    check_suffix(ccsfile, '.length-filtered.fasta')
+    check_suffix(ccsfile, '.lenfilter.fasta')
     pairfile = '{}.copynumber.pairs'.format(basename)
     usearch_hqcs_ids(ccsfile, pairfile, dbfile, name='compute-copynumber')
     with open(pairfile) as f:
@@ -400,7 +400,7 @@ def hqcs_ccs_pairs(infiles, outfile):
     # FIXME: this does basically the same thing as the copynumber task,
     # except it allows CCSs to map to HQCSs in different timepoints
     infile, dbfile = infiles
-    check_suffix(infile, '.length-filtered.fasta')
+    check_suffix(infile, '.lenfilter.fasta')
     check_suffix(dbfile, '.degapped.udb')
     usearch_hqcs_ids(infile, outfile, dbfile, name='hqcs_ccs_ids')
 
@@ -592,11 +592,11 @@ def make_alignment_pipeline(name=None):
 
     cluster_task = pipeline.subdivide(cluster,
                                       input=filter_length_task,
-                                      filter=formatter(),
-                                      output='{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta',
-                                      extras=['{path[0]}/{basename[0]}.clusters/cluster_*.raw.fasta'])
+                                      filter=formatter('.*/(?P<LABEL>.+).qfilter'),
+                                      output='{path[0]}/{LABEL[0]}.clusters/cluster_*.raw.fasta',
+                                      extras=['{path[0]}/{LABEL[0]}.clusters/cluster_*.raw.fasta'])
     cluster_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-    cluster_task.mkdir(filter_length_task, suffix('.fasta'), '.clusters')
+    cluster_task.mkdir(filter_length_task, formatter('.*/(?P<LABEL>.+).qfilter'), '{path[0]}/{LABEL[0]}.clusters')
 
     select_clusters_task = pipeline.transform(select_clusters,
                                               input=cluster_task,
@@ -614,20 +614,20 @@ def make_alignment_pipeline(name=None):
     cluster_consensus_task = pipeline.transform(cluster_consensus,
                                                 input=align_clusters_task,
                                                 filter=suffix('.fasta'),
-                                                output='.cons.fasta')
+                                                output='.hqcs.fasta')
     cluster_consensus_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     cat_clusters_task = pipeline.collate(cat_wrapper_ids,
                                          name="cat_clusters",
                                          input=cluster_consensus_task,
                                          filter=formatter(),
-                                         output='{path[0]}.cons.fasta')
+                                         output='{path[0]}.hqcs.fasta')
     cat_clusters_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     hqcs_db_search_task = pipeline.transform(hqcs_db_search,
                                              input=cat_clusters_task,
                                              filter=suffix('.fasta'),
-                                             output='.pairs.fasta')
+                                             output='.refpairs.fasta')
     hqcs_db_search_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     hqcs_shift_correction_task = pipeline.transform(hqcs_shift_correction,
@@ -650,9 +650,9 @@ def make_alignment_pipeline(name=None):
 
     compute_copynumbers_task = pipeline.collate(compute_copynumbers,
                                                 input=[unique_hqcs_task, make_individual_dbs_task, filter_length_task],
-                                                filter=formatter(r'(?P<NAME>.+).qfilter'),
-                                                output='{NAME[0]}.copynumbers.tsv',
-                                                extras=['{NAME[0]}'])
+                                                filter=formatter(r'.*/(?P<LABEL>.+).(qfilter|clusters)'),
+                                                output='{LABEL[0]}.copynumbers.tsv',
+                                                extras=['{LABEL[0]}'])
     compute_copynumbers_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     merge_copynumbers_task = pipeline.merge(cat_wrapper,
@@ -693,7 +693,7 @@ def make_alignment_pipeline(name=None):
     if globals_.config.getboolean('Tasks', 'align_ccs'):
         degap_backtranslated_alignment_task = pipeline.transform(degap_backtranslated_alignment,
                                                                  input=backtranslate_alignment_task,
-                                                                 filter=formatter('.suffix'),
+                                                                 filter=suffix('.fasta'),
                                                                  output='.degapped.fasta')
         degap_backtranslated_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
 
@@ -707,7 +707,7 @@ def make_alignment_pipeline(name=None):
                                                  input=filter_length_task,
                                                  filter=suffix('.fasta'),
                                                  add_inputs=add_inputs(make_hqcs_db),
-                                                 output='.pairs.txt')
+                                                 output='.hqcs-pairs.txt')
         hqcs_ccs_pairs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
         combine_pairs_task = pipeline.subdivide(combine_pairs,
