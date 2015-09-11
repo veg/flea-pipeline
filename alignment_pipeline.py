@@ -407,26 +407,28 @@ def hqcs_ccs_pairs(infiles, outfile):
 
 @must_work()
 @report_wrapper
-def combine_pairs(infiles, outfiles, basename):
+def combine_pairs(infiles, outfiles, outdir):
     for f in outfiles:
         os.unlink(f)
-    infile, hqcsfile = infiles
-    check_suffix(infile, '.pairs.txt')
-    seqsfile = '{}.fasta'.format(basename)
-    with open(infile) as handle:
+    pairfile, hqcsfile = infiles
+    hqcs_suffix = '.hqcs-ccs-pairs.txt'
+    ccsfile = "{}.fasta".format(pairfile[:-len(hqcs_suffix)])
+    check_suffix(pairfile, hqcs_suffix)
+    check_suffix(ccsfile, '.lenfilter.fasta')
+    with open(pairfile) as handle:
         pairs = list(line.strip().split("\t") for line in handle.readlines())
     match_dict = defaultdict(list)
-    for seq, ref in pairs:
-        match_dict[ref].append(seq)
-    references_records = list(SeqIO.parse(hqcsfile, "fasta"))
-    seq_records = list(SeqIO.parse(seqsfile, "fasta"))
-    references_dict = {r.id : r for r in references_records}
-    seq_dict = {r.id : r for r in seq_records}
+    for ccs, hqcs in pairs:
+        match_dict[hqcs].append(ccs)
+    hqcs_records = list(SeqIO.parse(hqcsfile, "fasta"))
+    ccs_records = list(SeqIO.parse(ccsfile, "fasta"))
+    hqcs_dict = {r.id : r for r in hqcs_records}
+    ccs_dict = {r.id : r for r in ccs_records}
 
-    for ref_id, seq_ids in match_dict.items():
-        outfile = '{}.alignments/combined.{}.unaligned.fasta'.format(basename, ref_id)
-        records = [references_dict[ref_id]]
-        records.extend(list(seq_dict[i] for i in seq_ids))
+    for hqcs_id, ccs_ids in match_dict.items():
+        outfile = os.path.join(outdir, 'combined.{}.unaligned.fasta'.format(hqcs_id))
+        records = [hqcs_dict[hqcs_id]]
+        records.extend(list(ccs_dict[i] for i in ccs_ids))
         SeqIO.write(records, outfile, "fasta")
 
 
@@ -707,17 +709,19 @@ def make_alignment_pipeline(name=None):
                                                  input=filter_length_task,
                                                  filter=suffix('.fasta'),
                                                  add_inputs=add_inputs(make_hqcs_db),
-                                                 output='.hqcs-pairs.txt')
+                                                 output='.hqcs-ccs-pairs.txt')
         hqcs_ccs_pairs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
         combine_pairs_task = pipeline.subdivide(combine_pairs,
-                                                input=hqcs_ccs_pairs_task,
-                                                filter=formatter('.*/(?P<NAME>.+).pairs.txt'),
+                                                input=[hqcs_ccs_pairs_task],
+                                                filter=formatter('.*/(?P<LABEL>.+).qfilter'),
                                                 add_inputs=add_inputs(degap_backtranslated_alignment),
-                                                output='{path[0]}/{NAME[0]}.alignments/combined.*.unaligned.fasta',
-                                                extras=['{path[0]}/{NAME[0]}'])
+                                                output='{path[0]}/{LABEL[0]}.ccs-alignments/combined.*.unaligned.fasta',
+                                                extras=['{path[0]}/{LABEL[0]}.ccs-alignments'])
         combine_pairs_task.jobs_limit(n_local_jobs, local_job_limiter)
-        combine_pairs_task.mkdir(hqcs_ccs_pairs_task, suffix('.pairs.txt'), '.alignments')
+        combine_pairs_task.mkdir(hqcs_ccs_pairs_task,
+                                 formatter('.*/(?P<LABEL>.+).qfilter'),
+                                 '{path[0]}/{LABEL[0]}.ccs-alignments')
 
         codon_align_task = pipeline.transform(codon_align,
                                               input=combine_pairs_task,
