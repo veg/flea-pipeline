@@ -361,8 +361,10 @@ def check_seq_number(filename, min_n):
 def check_seq_ids(inputs, output):
     a_ids = set(r.id for a in inputs for r in SeqIO.parse(a, 'fasta'))
     b_ids = set(r.id for r in SeqIO.parse(output, 'fasta'))
-    if a_ids != b_ids:
-        raise Exception('IDs from "{}" do not match "{}"'.format(inputs, output))
+    unmatched = a_ids.symmetric_difference(b_ids)
+    if unmatched:
+        raise Exception('IDs from "{}" do not match "{}".'
+                        ' Unmatched ids: {}'.format(inputs, output, sorted(unmatched)))
 
 
 def check_seq_ratio(inputs, output, expected):
