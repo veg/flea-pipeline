@@ -44,16 +44,13 @@ ccs_to_hqcs_identity: 0.95
 min_cluster_size: 5
 max_cluster_size: 30
 
-# used for clustering
+# for clustering
 min_length_ratio: 0.995
 
-# used for copy number
+# for copy number
 max_query_target_length_ratio: 1.005
 
-# used for poly-A and poly-T detection
-head_p: 0.25
-tail_p: 0.99
-min_tail_length: 5
+# for run filtering
 run_length: 16
 
 [Tasks]

@@ -26,7 +26,7 @@ from translate import translate as translate_file
 from backtranslate import backtranslate
 from DNAcons import consfile
 from correct_shifts import correct_shifts_fasta, write_correction_result
-from trim_tails import trim_tails_file
+from trim import trim_file
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "alignment")
@@ -59,46 +59,14 @@ def filter_fastq(infile, outfile):
     return maybe_qsub(cmd, infile, outfiles=outfile, name='filter-fastq')
 
 
-def trim_helper(infile, outfile, target, reverse, name=None):
-    tailfile = "{}.tails".format(outfile)
-    head_p = globals_.config.getfloat('Parameters', 'head_p')
-    tail_p = globals_.config.getfloat('Parameters', 'tail_p')
-    min_length = globals_.config.getint('Parameters', 'min_tail_length')
-    penalty = np.log(head_p) * min_length
-    reverse_option = "-r" if reverse else ""
+@must_work()
+@report_wrapper
+def trim_heads_and_tails(infile, outfile):
     python = globals_.config.get('Paths', 'python')
-    script = os.path.join(globals_.script_dir, 'trim_tails.py')
-    cmd = ("{python} {script} {reverse_option} --penalty \"{penalty}\" -t {target}"
-           " {head_p} {tail_p} {infile} {outfile}")
-    cmd = cmd.format(python=python, script=script, reverse_option=reverse_option,
-                     penalty=penalty,
-                     target=target, outfile=outfile, head_p=head_p, tail_p=tail_p,
-                     infile=infile)
-    return maybe_qsub(cmd, infile, outfile, name=name)
-
-
-@must_work()
-@report_wrapper
-def trim_polya_tail(infile, outfile):
-    return trim_helper(infile, outfile, "A", reverse=False, name='trim-polya-tail')
-
-
-@must_work()
-@report_wrapper
-def trim_polya_head(infile, outfile):
-    return trim_helper(infile, outfile, "A", reverse=True, name='trim-polya-head')
-
-
-@must_work()
-@report_wrapper
-def trim_polyt_tail(infile, outfile):
-    return trim_helper(infile, outfile, "T", reverse=False, name='trim-polyt-tail')
-
-
-@must_work()
-@report_wrapper
-def trim_polyt_head(infile, outfile):
-    return trim_helper(infile, outfile, "T", reverse=True, name='trim-polyt-head')
+    script = os.path.join(globals_.script_dir, 'trim.py')
+    cmd = ("{python} {script} {infile} {outfile}")
+    cmd = cmd.format(python=python, script=script, infile=infile, outfile=outfile)
+    return maybe_qsub(cmd, infile, outfile, name='trim-heads-and-tails')
 
 
 @must_work()
@@ -529,32 +497,14 @@ def make_alignment_pipeline(name=None):
                                            output=os.path.join(pipeline_dir, '{basename[0]}.qfilter.fasta'))
     filter_fastq_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    trim_polya_head_task = pipeline.transform(trim_polya_head,
-                                              input=filter_fastq_task,
-                                              filter=suffix('.fasta'),
-                                              output='.pAh.fasta')
-    trim_polya_head_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-
-    trim_polya_tail_task = pipeline.transform(trim_polya_tail,
-                                              input=trim_polya_head_task,
-                                              filter=suffix('.fasta'),
-                                              output='.pAt.fasta')
-    trim_polya_tail_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-
-    trim_polyt_head_task = pipeline.transform(trim_polyt_head,
-                                              input=trim_polya_tail_task,
-                                              filter=suffix('.fasta'),
-                                              output='.pTh.fasta')
-    trim_polyt_head_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-
-    trim_polyt_tail_task = pipeline.transform(trim_polyt_tail,
-                                              input=trim_polyt_head_task,
-                                              filter=suffix('.fasta'),
-                                              output='.pTt.fasta')
-    trim_polyt_tail_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+    trim_task = pipeline.transform(trim_heads_and_tails,
+                                    input=filter_fastq_task,
+                                    filter=suffix('.fasta'),
+                                    output='.trimmed.fasta')
+    trim_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     filter_runs_task = pipeline.transform(filter_runs,
-                                          input=trim_polyt_tail_task,
+                                          input=trim_task,
                                           filter=suffix('.fasta'),
                                           output='.noruns.fasta')
     filter_runs_task.jobs_limit(n_local_jobs, local_job_limiter)
