@@ -66,21 +66,27 @@ def decode(obs, transmat, emissionprob, startprob):
     startprob: (n_states,)
 
     """
+    startprob = startprob.ravel()
     n_states = transmat.shape[0]
     n_symbols = emissionprob.shape[1]
-    if not transmat.shape == (n_states, n_states):
-        raise Exception('')
-    if not startprob.shape == (n_states,):
-        raise Exception('')
-    if not emissionprob.shape[0] == n_states:
-        raise Exception('')
+    if transmat.shape != (n_states, n_states):
+        raise Exception('Transmission matrix shape {} is not square.'.format(transmat.shape))
+    if len(startprob) != n_states:
+        raise Exception('Wrong number of starting probabilities.'
+                        ' Expected {} and got {}.'.format(n_states, len(startprob)))
+    if emissionprob.shape != (n_states, n_symbols):
+        raise Exception('Emission matrix has wrong number of states.'
+                        ' Expected {} and got {}.'.format(n_states, emissionprob.shape[0]))
 
     if not np.all(np.sum(transmat, axis=1) == 1):
-        raise Exception('')
-    if not np.all(np.sum(startprob) == 1):
-        raise Exception('')
+        raise Exception('Transmission probabilities do not sum to 1.')
+    if not np.sum(startprob) == 1:
+        raise Exception('Starting probabilities do not sum to 1.')
     if not np.all(np.sum(emissionprob, axis=1) == 1):
-        raise Exception('')
+        raise Exception('Emission probabilities do not sum to 1.')
+
+    if np.max(obs) > n_symbols:
+        raise Exception('Observation contains an invalid state: {}'.format(np.max(obs)))
 
     with warnings.catch_warnings():
         # already checked probabilities, so should be safe to ignoring warnings
@@ -88,6 +94,9 @@ def decode(obs, transmat, emissionprob, startprob):
         logtrans = np.log(transmat)
         logstart = np.log(startprob)
         logemission = np.log(emissionprob)
+
+    # heavily adapted from:
+    # http://phvu.net/2013/12/06/sweet-implementation-of-viterbi-in-python/
 
     # dynamic programming matrix
     trellis = np.zeros((n_states, len(obs)))
@@ -132,7 +141,7 @@ def trim(seq):
     return ''.join(head), ''.join(body), ''.join(tail)
 
 
-def notempty(g):
+def _notempty(g):
     return (x for x in g if len(x))
 
 
@@ -141,9 +150,9 @@ def trim_file(infile, outfile):
     results = list(trim(str(r.seq)) for r in records)
     head, body, tail = zip(*results)
 
-    head_records = notempty(new_record_seq_str(r, s) for r, s in zip(records, head))
-    body_records = notempty(new_record_seq_str(r, s) for r, s in zip(records, body))
-    tail_records = notempty(new_record_seq_str(r, s) for r, s in zip(records, tail))
+    head_records = _notempty(new_record_seq_str(r, s) for r, s in zip(records, head))
+    body_records = _notempty(new_record_seq_str(r, s) for r, s in zip(records, body))
+    tail_records = _notempty(new_record_seq_str(r, s) for r, s in zip(records, tail))
 
     head_file = "{}.heads".format(outfile)
     tail_file = "{}.tails".format(outfile)
