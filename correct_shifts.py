@@ -14,8 +14,9 @@ Usage:
 
 Options:
   --keep            Do not discard sequences, even with bad inserts [default: False]
-  --calns=<FILE>    File with run-length encoded alignment summaries.
-  --discard=<FILE>  File to print discarded alignments.
+  --calns=<FILE>    File with run-length encoded alignment summaries
+  --discard=<FILE>  File to print discarded alignments
+  --summary=<FILE>  File to print correction summaries
   -v --verbose      Print summary [default: False]
   -h --help         Show this screen
 
@@ -35,7 +36,6 @@ from Bio.SeqIO.FastaIO import FastaWriter
 from util import grouper
 from util import new_record_seq_str
 from util import genlen
-from util import write_to_handle
 from util import nth
 
 
@@ -210,12 +210,13 @@ def correct_shifts_fasta(infile, outfile, calnfile=None,
     return len(results), len(keep)
 
 
-def write_correction_result(n_seqs, n_fixed, handle):
+def write_correction_result(n_seqs, n_fixed, outfile):
     n_dropped = n_seqs - n_fixed
     percent = 100 * n_dropped / n_seqs
     do_close = False
-    write_to_handle(handle, 'discarded {}/{} ({:.2f}%)'
-                    ' sequences\n'.format(n_dropped, n_seqs, percent))
+    with open(outfile, 'w') as handle:
+        handle.write('discarded {}/{} ({:.2f}%)'
+                     ' sequences\n'.format(n_dropped, n_seqs, percent))
 
 
 if __name__ == "__main__":
@@ -227,5 +228,5 @@ if __name__ == "__main__":
     discardfile = args['--discard']
     n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, discardfile=discardfile,
                                            calnfile=calnfile, keep=keep)
-    if args['--verbose']:
-        write_correction_result(n_seqs, n_fixed, sys.stdout)
+    if args['--summary']:
+        write_correction_result(n_seqs, n_fixed, args['--summary'])

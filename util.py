@@ -335,17 +335,6 @@ def strlist(arg):
     return arg
 
 
-def write_to_handle(handle, output):
-    if isinstance(handle, str):
-        handle = open(handle, 'w')
-        do_close = True
-    try:
-        handle.write(output)
-    finally:
-        if do_close:
-            handle.close()
-
-
 def ensure_not_empty(files):
     for f in strlist(files):
         if not os.path.exists(f):

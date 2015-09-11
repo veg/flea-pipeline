@@ -150,18 +150,27 @@ def filter_uncontaminated(infile, outfile):
     return usearch_reference_db(infile, outfile, name="filter-uncontaminated")
 
 
-def shift_correction_helper(infile, outfile, keep):
-    discardfile = "{}.discarded".format(outfile)
-    sumfile = "{}.summary".format(outfile)
-    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, discardfile=discardfile,
-                                           calnfile="{}.calns".format(infile), keep=keep)
-    write_correction_result(n_seqs, n_fixed, sumfile)
+def shift_correction_helper(infile, outfile, keep, name=None):
+    python = globals_.config.get('Paths', 'python')
+    script = os.path.join(globals_.script_dir, 'correct_shifts.py')
+    keep_option = "--keep" if keep else ""
+    calns_file = "{}.calns".format(infile)
+    discard_file = "{}.discarded".format(outfile)
+    summary_file = "{}.summary".format(outfile)
+    cmd = ("{python} {script} {keep_option} --calns={calns_file}"
+           " --discard={discard_file} --summary={summary_file}"
+           " {infile} {outfile}")
+    cmd = cmd.format(python=python, script=script, keep_option=keep_option,
+                     calns_file=calns_file, discard_file=discard_file,
+                     summary_file=summary_file, infile=infile, outfile=outfile)
+    return maybe_qsub(cmd, infile, outfile, name=name)
 
 
 @must_work(seq_ratio=(2, 1))
 @report_wrapper
-def shift_correction(infile, outfile):
-    shift_correction_helper(infile, outfile, keep=True)
+def ccs_shift_correction(infile, outfile):
+    return shift_correction_helper(infile, outfile, keep=True,
+                                   name="ccs-shift-correction")
 
 
 @must_work(seq_ratio=(2, 1))
@@ -278,7 +287,8 @@ def hqcs_db_search(infile, outfile):
 @must_work(in_frame=True)
 @report_wrapper
 def hqcs_shift_correction(infile, outfile):
-    shift_correction_helper(infile, outfile, keep=False)
+    return shift_correction_helper(infile, outfile, keep=False,
+                                   name="hqcs-shift-correction")
 
 
 @must_work(min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
@@ -560,12 +570,12 @@ def make_alignment_pipeline(name=None):
     filter_uncontaminated_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     if globals_.config.getboolean('Tasks', 'shift_correct_ccs'):
-        shift_correction_task = pipeline.transform(shift_correction,
-                                                   input=filter_uncontaminated_task,
-                                                   filter=suffix('.fasta'),
-                                                   output='.shifted.fasta')
-        shift_correction_task.jobs_limit(n_local_jobs, local_job_limiter)
-        filter_length_input_task = shift_correction_task
+        ccs_shift_correction_task = pipeline.transform(ccs_shift_correction,
+                                                       input=filter_uncontaminated_task,
+                                                       filter=suffix('.fasta'),
+                                                       output='.shifted.fasta')
+        ccs_shift_correction_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+        filter_length_input_task = ccs_shift_correction_task
     else:
         every_other_task = pipeline.transform(every_other,
                                               input=filter_uncontaminated_task,
