@@ -77,25 +77,25 @@ def trim_helper(infile, outfile, target, reverse, name=None):
     return maybe_qsub(cmd, infile, outfile, name=name)
 
 
-@must_work(seq_ids=True)
+@must_work()
 @report_wrapper
 def trim_polya_tail(infile, outfile):
     return trim_helper(infile, outfile, "A", reverse=False, name='trim-polya-tail')
 
 
-@must_work(seq_ids=True)
+@must_work()
 @report_wrapper
 def trim_polya_head(infile, outfile):
     return trim_helper(infile, outfile, "A", reverse=True, name='trim-polya-head')
 
 
-@must_work(seq_ids=True)
+@must_work()
 @report_wrapper
 def trim_polyt_tail(infile, outfile):
     return trim_helper(infile, outfile, "T", reverse=False, name='trim-polyt-tail')
 
 
-@must_work(seq_ids=True)
+@must_work()
 @report_wrapper
 def trim_polyt_head(infile, outfile):
     return trim_helper(infile, outfile, "T", reverse=True, name='trim-polyt-head')
