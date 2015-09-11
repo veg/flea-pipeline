@@ -19,14 +19,9 @@ from util import read_single_record
 from util import partition
 from util import grouper
 from util import run_regexp
+from util import translate_helper
 
 import pipeline_globals as globals_
-
-from translate import translate as translate_file
-from backtranslate import backtranslate
-from DNAcons import consfile
-from correct_shifts import correct_shifts_fasta, write_correction_result
-from trim import trim_file
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "alignment")
@@ -226,24 +221,32 @@ def cat_wrapper(infiles, outfile):
 @must_work()
 @report_wrapper
 def translate_wrapper(infile, outfile):
-    translate_file(infile, outfile)
+    return translate_helper(infile, outfile, gapped=False, name='translate')
 
 
 @must_work()
 @report_wrapper
 def gapped_translate_wrapper(infile, outfile):
-    translate_file(infile, outfile, gapped=True)
+    return translate_helper(infile, outfile, gapped=True, name='translate-gapped')
 
 
 @must_work(maybe=True, illegal_chars='-')
 @report_wrapper
 def cluster_consensus(infile, outfile):
-    ambifile = '{}.info'.format(outfile[:-len('.fasta')])
     n = re.search("cluster_([0-9]+)", infile).group(1)
     seq_id = next(SeqIO.parse(infile, 'fasta')).id
     label = re.split("_[0-9]+$", seq_id)[0]
-    new_id = "{label}_hqcs_{n}".format(label=label, n=n)
-    consfile(infile, outfile, ambifile, ungap=True, codon=False, id_str=new_id)
+    kwargs = {
+        'python': globals_.config.get('Paths', 'python'),
+        'script': os.path.join(globals_.script_dir, "DNAcons.py"),
+        'infile': infile,
+        'outfile': outfile,
+        'ambifile': '{}.info'.format(outfile[:-len('.fasta')]),
+        'id_str': "{label}_hqcs_{n}".format(label=label, n=n),
+        }
+    cmd = ("{python} {script} -o {outfile} --ambifile {ambifile}"
+           " --id {id_str} {infile}".format(**kwargs))
+    return maybe_qsub(cmd, infile, outfile, name="cluster-consensus")
 
 
 @must_work()
@@ -338,10 +341,22 @@ def pause(filename):
 @must_work()
 @report_wrapper
 def backtranslate_alignment(infiles, outfile):
-    hqcs, aligned = infiles
+    hqcs, aligned_protein = infiles
     check_basename(hqcs, 'hqcs.fasta')
-    check_suffix(aligned, '.aligned.fasta')
-    backtranslate(aligned, hqcs, outfile)
+    check_suffix(aligned_protein, '.aligned.fasta')
+    kwargs = {
+        'python': globals_.config.get('Paths', 'python'),
+        'script': os.path.join(globals_.script_dir, "backtranslate.py"),
+        'protein': aligned_protein,
+        'dna': hqcs,
+        'outfile': outfile,
+        }
+    cmd = "{python} {script} {protein} {dna} {outfile}".format(**kwargs)
+    stdout = os.path.join(globals_.qsub_dir, 'backtranslate.stdout')
+    stderr = os.path.join(globals_.qsub_dir, 'backtranslate.stderr')
+    return maybe_qsub(cmd, infiles, outfiles=outfile,
+                      stdout=stdout, stderr=stderr,
+                      name="backtranslate")
 
 
 @must_work()
@@ -567,7 +582,7 @@ def make_alignment_pipeline(name=None):
                                                 input=align_clusters_task,
                                                 filter=suffix('.fasta'),
                                                 output='.hqcs.fasta')
-    cluster_consensus_task.jobs_limit(n_local_jobs, local_job_limiter)
+    cluster_consensus_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     cat_clusters_task = pipeline.collate(cat_wrapper_ids,
                                          name="cat_clusters",
@@ -586,7 +601,7 @@ def make_alignment_pipeline(name=None):
                                                     input=hqcs_db_search_task,
                                                     filter=suffix('.fasta'),
                                                     output='.shifted.fasta')
-    hqcs_shift_correction_task.jobs_limit(n_local_jobs, local_job_limiter)
+    hqcs_shift_correction_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     unique_hqcs_task = pipeline.transform(unique_hqcs,
                                           input=hqcs_shift_correction_task,
@@ -623,7 +638,7 @@ def make_alignment_pipeline(name=None):
                                              input=cat_all_hqcs_task,
                                              filter=suffix('.fasta'),
                                              output='.translated.fasta')
-    translate_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
+    translate_hqcs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     align_hqcs_protein_task = pipeline.transform(mafft_wrapper_seq_ids,
                                                  name='align_hqcs_protein',
@@ -637,7 +652,7 @@ def make_alignment_pipeline(name=None):
                                                   input=[cat_all_hqcs_task,
                                                          align_hqcs_protein_task],
                                                   output=os.path.join(pipeline_dir, 'hqcs.translated.aligned.backtranslated.fasta'))
-    backtranslate_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
+    backtranslate_alignment_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     pipeline.set_head_tasks([filter_fastq_task])
     pipeline.set_tail_tasks([backtranslate_alignment_task, merge_copynumbers_task])
@@ -710,6 +725,7 @@ def make_alignment_pipeline(name=None):
                                                 input=replace_gapped_codons_task,
                                                 filter=suffix('.fasta'),
                                                 output='.translated.fasta')
+        translate_ccs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
         diagnosis_output = list(os.path.join(pipeline_dir,
                                              'diagnosis',

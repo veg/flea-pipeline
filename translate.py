@@ -3,7 +3,7 @@
 Translate DNA reads from a fasta file.
 
 Usage:
-  translate.py <infile> <outfile>
+  translate.py [options] <infile> <outfile>
   translate.py -h | --help
 
 Options:

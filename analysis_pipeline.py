@@ -24,7 +24,8 @@ from util import extend_coordinates
 from util import new_record_seq_str
 from util import grouper
 from util import column_count, prob, js_divergence
-from DNAcons import consfile
+from util import translate_helper
+
 from alignment_pipeline import mafft, cat_wrapper_ids
 
 
@@ -100,7 +101,7 @@ def copynumber_json(infile, outfile):
 @must_work()
 @report_wrapper
 def gapped_translate_wrapper(infile, outfile):
-    translate_file(infile, outfile, gapped=True)
+    return translate_helper(infile, outfile, gapped=True, name='translate-gapped')
 
 
 @must_work()
@@ -127,13 +128,22 @@ def mrca(infile, recordfile, copynumber_file, outfile, oldest_id):
     `outfile`.
 
     """
-    len_id = len(oldest_id)
     records = SeqIO.parse(infile, "fasta")
     oldest_records = (r for r in records if r.id.startswith(oldest_id))
     SeqIO.write(oldest_records, recordfile, "fasta")
-    consfile(recordfile, outfile, copynumber_file=copynumber_file,
-             ambifile="{}.ambi".format(outfile),
-             id_str="mrca", ungap=False, codon=True)
+    kwargs = {
+        'python': globals_.config.get('Paths', 'python'),
+        'script': os.path.join(globals_.script_dir, "DNAcons.py"),
+        'infile': infile,
+        'outfile': outfile,
+        'copynumber_file': copynumber_file,
+        'ambifile': "{}.ambi".format(outfile),
+        'id_str': 'mrca',
+        }
+    cmd = ("{python} {script} --keep-gaps --codon -o {outfile}"
+           " --copynumbers {copynumber_file} --ambifile {ambifile}"
+           " --id {id_str} {infile}".format(**kwargs))
+    return maybe_qsub(cmd, infile, outfile, name="mrca")
 
 
 @must_work(in_frame=True)
@@ -143,8 +153,8 @@ def compute_mrca(infiles, outfile):
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
     oldest_timepoint = min(globals_.timepoints, key=strptime)
     oldest_records_filename = os.path.join(pipeline_dir, 'oldest_sequences.fasta')
-    mrca(alignment_file, oldest_records_filename, copynumber_file,
-         outfile, oldest_timepoint.label)
+    return mrca(alignment_file, oldest_records_filename, copynumber_file,
+                outfile, oldest_timepoint.label)
 
 
 @must_work()
@@ -346,7 +356,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                name='compute_mrca',
                                input=None,
                                output=os.path.join(pipeline_dir, 'mrca.fasta'))
-    mrca_task.jobs_limit(n_local_jobs, local_job_limiter)
+    mrca_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     add_mrca_task = pipeline.merge(cat_wrapper_ids,
                                    name='add_mrca',
@@ -376,14 +386,14 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                         input=add_copynumbers_task,
                                         filter=suffix('.fasta'),
                                         output='.translated.fasta')
-    translate_task.jobs_limit(n_local_jobs, local_job_limiter)
+    translate_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     translate_mrca_task = pipeline.transform(gapped_translate_wrapper,
                                              name='translate_mrca',
                                              input=mrca_task,
                                              filter=suffix('.fasta'),
                                              output='.translated.fasta')
-    translate_mrca_task.jobs_limit(n_local_jobs, local_job_limiter)
+    translate_mrca_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     coordinates_json_task = pipeline.transform(make_coordinates_json,
                                                input=translate_mrca_task,

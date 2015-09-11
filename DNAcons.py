@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Prints a gapless consensus sequence.
+Prints a consensus sequence.
 
 Sequences must be aligned, and all the same length'
 
@@ -16,6 +16,7 @@ Options:
   --id=<STRING>           Record id for the fasta output
   -o --outfile=<STRING>   Name of output file
   --ambifile=<STRING>
+  --codon                 Do codon alignment.
   -h --help               Show this screen
 
 """
@@ -137,6 +138,8 @@ if __name__ == "__main__":
     outfile = args["--outfile"]
     ambifile = args['--ambifile']
     keep_gap = args["--keep-gaps"]
+    codon = args["--codon"]
     ungap = not keep_gap
     consfile(filename, outfile, copynumber_file=copynumber_file,
-             ambifile=ambifile, id_str=id_str, ungap=ungap, verbose=verbose)
+             ambifile=ambifile, id_str=id_str, codon=codon, ungap=ungap,
+             verbose=verbose)

@@ -771,3 +771,15 @@ def run_regexp(runlen, targets=None):
     pattern = "|".join("({target}){{{runlen}}}".format(target=t, runlen=runlen)
                        for t in targets)
     return re.compile(pattern)
+
+
+def translate_helper(infile, outfile, gapped, name):
+    kwargs = {
+        'python': globals_.config.get('Paths', 'python'),
+        'script': os.path.join(globals_.script_dir, "translate.py"),
+        'infile': infile,
+        'outfile': outfile,
+        'gap_option': '--gapped' if gapped else '',
+        }
+    cmd = "{python} {script} {gap_option} {infile} {outfile}".format(**kwargs)
+    return maybe_qsub(cmd, infile, outfile, name=name)
