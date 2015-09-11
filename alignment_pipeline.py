@@ -115,7 +115,7 @@ def filter_runs(infile, outfile):
 @report_wrapper
 def filter_contaminants(infile, outfile):
     uncontam = outfile
-    contam = outfile.replace('uncontam', 'contam')
+    contam = outfile.replace('good', 'bad')
     outfiles = [uncontam, contam]
     cmd = ('{usearch} -usearch_global {infile} -db {db}'
            ' -id {id} -notmatched {uncontam} -matched {contam}'
@@ -524,31 +524,31 @@ def make_alignment_pipeline(name=None):
     filter_fastq_task = pipeline.transform(filter_fastq,
                                            input=None,
                                            filter=formatter(),
-                                           output=os.path.join(pipeline_dir, '{basename[0]}{ext[0]}.qfilter.fasta'))
+                                           output=os.path.join(pipeline_dir, '{basename[0]}.qfilter.fasta'))
     filter_fastq_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     trim_polya_head_task = pipeline.transform(trim_polya_head,
                                               input=filter_fastq_task,
                                               filter=suffix('.fasta'),
-                                              output='.poly-a-head.fasta')
+                                              output='.pAh.fasta')
     trim_polya_head_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     trim_polya_tail_task = pipeline.transform(trim_polya_tail,
                                               input=trim_polya_head_task,
                                               filter=suffix('.fasta'),
-                                              output='.poly-a-tail.fasta')
+                                              output='.pAt.fasta')
     trim_polya_tail_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     trim_polyt_head_task = pipeline.transform(trim_polyt_head,
                                               input=trim_polya_tail_task,
                                               filter=suffix('.fasta'),
-                                              output='.poly-t-head.fasta')
+                                              output='.pTh.fasta')
     trim_polyt_head_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     trim_polyt_tail_task = pipeline.transform(trim_polyt_tail,
                                               input=trim_polyt_head_task,
                                               filter=suffix('.fasta'),
-                                              output='.poly-t-tail.fasta')
+                                              output='.pTt.fasta')
     trim_polyt_tail_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     filter_runs_task = pipeline.transform(filter_runs,
@@ -560,34 +560,34 @@ def make_alignment_pipeline(name=None):
     filter_contaminants_task = pipeline.transform(filter_contaminants,
                                                   input=filter_runs_task,
                                                   filter=suffix('.fasta'),
-                                                  output='.uncontam.fasta')
+                                                  output='.good.fasta')
     filter_contaminants_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     filter_uncontaminated_task = pipeline.transform(filter_uncontaminated,
                                                     input=filter_contaminants_task,
-                                                    filter=suffix('.uncontam.fasta'),
-                                                    output='.uncontam.rfilter.fasta')
+                                                    filter=suffix('.fasta'),
+                                                    output='.refpairs.fasta')
     filter_uncontaminated_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     if globals_.config.getboolean('Tasks', 'shift_correct_ccs'):
         ccs_shift_correction_task = pipeline.transform(ccs_shift_correction,
                                                        input=filter_uncontaminated_task,
                                                        filter=suffix('.fasta'),
-                                                       output='.shifted.fasta')
+                                                       output='.shift.fasta')
         ccs_shift_correction_task.jobs_limit(n_remote_jobs, remote_job_limiter)
         filter_length_input_task = ccs_shift_correction_task
     else:
         every_other_task = pipeline.transform(every_other,
                                               input=filter_uncontaminated_task,
                                               filter=suffix('.fasta'),
-                                              output='.ccs-only.fasta')
+                                              output='.norefs.fasta')
         every_other_task.jobs_limit(n_local_jobs, local_job_limiter)
         filter_length_input_task = every_other_task
 
     filter_length_task = pipeline.transform(filter_length,
                                             input=filter_length_input_task,
                                             filter=suffix('.fasta'),
-                                            output='.length-filtered.fasta')
+                                            output='.lenfilter.fasta')
     filter_length_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     cluster_task = pipeline.subdivide(cluster,
