@@ -76,8 +76,6 @@ do_alignment = options.alignment is None
 # read configuration
 if options.config is None:
     configfile = os.path.join(data_dir, 'flea.config')
-    if not os.path.exists(configfile):
-        configfile = os.path.join(script_dir, 'flea.config')
 else:
     configfile = options.config
 if not os.path.exists(configfile):
