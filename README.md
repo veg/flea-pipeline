@@ -11,26 +11,19 @@ Install with `pip install -r requirements.txt`.
 - mafft
 
 
-Setup
------
-1. Copy `flea_pipeline.config.tpl` to `flea_pipeline.config`.
+Installation
+------------
 
-2. Download contaminants and references files.
-
-3. Generate usearch databases for each. (http://www.drive5.com/usearch/manual/cmd_makeudb_usearch.html)
-
-4. Edit paths in `flea_pipeline.config` to point to those databases.
+`python setup.py install`
 
 
 Usage
 -----
-For now, we assume this is running on silverback. All the Python
-dependencies are already installed in a virtual environment. Just
-activate it like so:
+1. Copy `flea.config.tpl` to `flea.config` in your data directory.
 
-`source /opt/flea-env/bin/activate`
+2. Edit other parameters in `flea.config`.
 
-Run the whole pipeline with `flea_pipeline.py <control file>`.
+3. Run the whole pipeline with `flea.py <control file>`.
 
 The `<control file>` argument is a file containing a list of fasta
 files, their sequence ids, and their dates, seperated by spaces.
@@ -42,7 +35,7 @@ files, their sequence ids, and their dates, seperated by spaces.
 Dates must be in 'YYYYMMDD' format.
 
 If no config file is specified, we look for it in in the data
-directory, and then in the script directory.
+directory.
 
 
 Testing
