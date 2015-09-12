@@ -123,7 +123,11 @@ def consfile(filename, outfile=None, ambifile=None, copynumber_file=None,
         with open(ambifile, 'w') as handle:
             for i, (freq, cands) in enumerate(ambiguous):
                 if len(cands) > 1:
-                    assert(_consensus[i] in cands)
+                    if codon:
+                        chosen = _consensus[i * 3: i * 3 + 3]
+                    else:
+                        chosen = _consensus[i]
+                    assert(chosen in cands)
                     handle.write('{} {} {}\n'.format(i, freq, cands))
     if verbose:
         sys.stderr.write('Consensus written with name {}.\n'.format(id_str))
