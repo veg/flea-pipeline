@@ -33,10 +33,10 @@ from docopt import docopt
 from Bio import SeqIO
 from Bio.SeqIO.FastaIO import FastaWriter
 
-from util import grouper
-from util import new_record_seq_str
-from util import genlen
-from util import nth
+from flea_pipeline.util import grouper
+from flea_pipeline.util import new_record_seq_str
+from flea_pipeline.util import genlen
+from flea_pipeline.util import nth
 
 
 def first_index(target, it):

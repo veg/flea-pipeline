@@ -35,7 +35,7 @@ from Bio import AlignIO
 from Bio.Align import AlignInfo
 from Bio.Alphabet import IUPAC
 
-from util import grouper
+from flea_pipeline.util import grouper
 
 
 def _column_consensus(counter, seed=None, codon=False):

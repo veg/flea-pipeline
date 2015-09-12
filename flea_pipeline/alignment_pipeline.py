@@ -10,18 +10,18 @@ import numpy as np
 from ruffus import Pipeline, suffix, formatter, add_inputs
 from Bio import SeqIO
 
-from util import maybe_qsub, cat_files, touch, strlist, traverse
-from util import new_record_seq_str, insert_gaps, update_record_seq
-from util import must_work, must_produce, report_wrapper
-from util import local_job_limiter, remote_job_limiter
-from util import check_suffix, check_basename, n_jobs
-from util import read_single_record
-from util import partition
-from util import grouper
-from util import run_regexp
-from util import translate_helper
+from flea_pipeline.util import maybe_qsub, cat_files, touch, strlist, traverse
+from flea_pipeline.util import new_record_seq_str, insert_gaps, update_record_seq
+from flea_pipeline.util import must_work, must_produce, report_wrapper
+from flea_pipeline.util import local_job_limiter, remote_job_limiter
+from flea_pipeline.util import check_suffix, check_basename, n_jobs
+from flea_pipeline.util import read_single_record
+from flea_pipeline.util import partition
+from flea_pipeline.util import grouper
+from flea_pipeline.util import run_regexp
+from flea_pipeline.util import translate_helper
 
-import pipeline_globals as globals_
+import flea_pipeline.pipeline_globals as globals_
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "alignment")

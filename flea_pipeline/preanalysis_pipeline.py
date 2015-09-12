@@ -1,14 +1,14 @@
 import os
 from shutil import copyfile
 
-from ruffus import Pipeline, suffix
+from ruffus import Pipeline, formatter
 
 from Bio import SeqIO
 
-import pipeline_globals as globals_
-from util import must_work, n_jobs, local_job_limiter, remote_job_limiter
-from util import report_wrapper
-from util import split_name
+import flea_pipeline.pipeline_globals as globals_
+from flea_pipeline.util import must_work, n_jobs, local_job_limiter, remote_job_limiter
+from flea_pipeline.util import report_wrapper
+from flea_pipeline.util import split_name
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "preanalysis")
@@ -35,33 +35,35 @@ def rename_records(infile, outfile):
 
 @must_work()
 @report_wrapper
-def make_copynumbers(infiles, outfile):
-    alignfile, cnfile = infiles
-    if cnfile is None:
-        records = SeqIO.parse(alignfile, 'fasta')
+def make_copynumbers(infile, outfile):
+    cn_file = globals_.options.copynumbers
+    if cn_file is None:
+        records = SeqIO.parse(infile, 'fasta')
         with open(outfile, 'w') as handle:
             for r in records:
                 handle.write('{}\t{}\n'.format(r.id, 1))
     else:
-        copyfile(cnfile, outfile)
+        copyfile(cn_file, outfile)
 
 
-def make_preanalysis_pipeline(copynumbers_file, name=None):
+def make_preanalysis_pipeline(name=None):
     if name is None:
         name = "preanalysis_pipeline"
     pipeline = Pipeline(name)
 
     n_local_jobs, n_remote_jobs = n_jobs()
 
-    rename_records_task = pipeline.merge(rename_records,
-                                         name="rename_records",
-                                         input=None,
-                                         output=os.path.join(pipeline_dir, "msa_renamed.fasta"))
+    rename_records_task = pipeline.transform(rename_records,
+                                             name="rename_records",
+                                             input=None,
+                                             filter=formatter(),
+                                             output=os.path.join(pipeline_dir, "msa_renamed.fasta"))
 
-    make_copynumbers_task = pipeline.merge(make_copynumbers,
-                                           name="make_copynumbers",
-                                           input=[rename_records, copynumbers_file],
-                                           output=os.path.join(pipeline_dir, "copynumbers.tsv"))
+    make_copynumbers_task = pipeline.transform(make_copynumbers,
+                                               name="make_copynumbers",
+                                               input=rename_records,
+                                               filter=formatter(),
+                                               output=os.path.join(pipeline_dir, "copynumbers.tsv"))
     make_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     pipeline.set_head_tasks([rename_records_task])

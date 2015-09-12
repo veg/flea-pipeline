@@ -14,23 +14,22 @@ from Bio.Seq import translate
 from Bio import SeqIO
 from Bio import Phylo
 
-from translate import translate as translate_file
-import pipeline_globals as globals_
-from util import must_work, report_wrapper, maybe_qsub, call, n_jobs
-from util import local_job_limiter, remote_job_limiter
-from util import read_single_record, cat_files
-from util import name_to_date
-from util import extend_coordinates
-from util import new_record_seq_str
-from util import grouper
-from util import column_count, prob, js_divergence
-from util import translate_helper
+import flea_pipeline.pipeline_globals as globals_
+from flea_pipeline.util import must_work, report_wrapper, maybe_qsub, call, n_jobs
+from flea_pipeline.util import local_job_limiter, remote_job_limiter
+from flea_pipeline.util import read_single_record, cat_files
+from flea_pipeline.util import name_to_date
+from flea_pipeline.util import extend_coordinates
+from flea_pipeline.util import new_record_seq_str
+from flea_pipeline.util import grouper
+from flea_pipeline.util import column_count, prob, js_divergence
+from flea_pipeline.util import translate_helper
 
-from alignment_pipeline import mafft, cat_wrapper_ids
+from flea_pipeline.alignment_pipeline import mafft, cat_wrapper_ids
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "analysis")
-hyphy_script_dir = os.path.join(globals_.script_dir, 'hyphy_scripts')
+hyphy_script_dir = os.path.abspath(os.path.join(globals_.script_dir, '../hyphy_scripts'))
 
 
 def hyphy_script(name):

@@ -21,7 +21,7 @@ from Bio import SeqIO
 
 import numpy as np
 
-import pipeline_globals as globals_
+import flea_pipeline.pipeline_globals as globals_
 
 
 ################################################################################

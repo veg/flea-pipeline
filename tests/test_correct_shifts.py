@@ -1,6 +1,6 @@
 import unittest
 
-from correct_shifts import correct_shifts
+from flea_pipeline.correct_shifts import correct_shifts
 
 class TestCorrectShifts(unittest.TestCase):
 

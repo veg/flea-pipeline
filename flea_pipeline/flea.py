@@ -22,8 +22,6 @@ Options:
 
 """
 
-__version__ = "0.2.0"
-
 # FIXME: for now, filenames cannot have spaces. Make this more
 # robust. For instance use tab-seperated values.
 
@@ -40,9 +38,10 @@ from ruffus import cmdline, Pipeline
 
 from Bio import SeqIO
 
-from util import n_jobs, name_key_to_label
-from util import str_to_type
-import pipeline_globals as globals_
+from flea_pipeline import __version__
+from flea_pipeline.util import n_jobs, name_key_to_label
+from flea_pipeline.util import str_to_type
+import flea_pipeline.pipeline_globals as globals_
 
 
 parser = cmdline.get_argparse(description='Run complete env pipeline',
@@ -171,9 +170,9 @@ if len(ref_seq) != len(ref_coords):
     raise Exception('reference sequence does not match reference coordinates')
 
 # make pipelines
-from alignment_pipeline import make_alignment_pipeline
-from analysis_pipeline import make_analysis_pipeline
-from preanalysis_pipeline import make_preanalysis_pipeline
+from flea_pipeline.alignment_pipeline import make_alignment_pipeline
+from flea_pipeline.analysis_pipeline import make_analysis_pipeline
+from flea_pipeline.preanalysis_pipeline import make_preanalysis_pipeline
 
 
 if do_alignment:
@@ -190,7 +189,7 @@ if do_alignment:
             task.set_input(input=p1.tail_tasks)
 else:
     if globals_.config.getboolean('Tasks', 'analysis'):
-        p1 = make_preanalysis_pipeline(options.copynumbers)
+        p1 = make_preanalysis_pipeline()
         p1.set_input(input=options.alignment)
         p2 = make_analysis_pipeline(do_hyphy=globals_.config.getboolean('Tasks', 'hyphy_analysis'))
         for task in p2.head_tasks:

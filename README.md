@@ -9,7 +9,6 @@ Install with `pip install -r requirements.txt`.
 ----------------------
 - usearch (version >= 8.0.1623)
 - mafft
-- BioExt's bealign
 
 
 Setup
@@ -44,3 +43,9 @@ Dates must be in 'YYYYMMDD' format.
 
 If no config file is specified, we look for it in in the data
 directory, and then in the script directory.
+
+
+Testing
+-------
+
+`python setup.py nosetests`

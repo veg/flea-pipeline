@@ -10,9 +10,9 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet import IUPAC
 from Bio.Alphabet import Gapped
 
-from DNAcons import _column_consensus
-from DNAcons import consensus
-from DNAcons import consfile
+from flea_pipeline.DNAcons import _column_consensus
+from flea_pipeline.DNAcons import consensus
+from flea_pipeline.DNAcons import consfile
 
 
 class TestConsensus(unittest.TestCase):

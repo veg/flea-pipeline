@@ -6,7 +6,7 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet import IUPAC
 from Bio.Alphabet import Gapped
 
-from util import insert_gaps
+from flea_pipeline.util import insert_gaps
 
 
 class TestInsertGaps(unittest.TestCase):

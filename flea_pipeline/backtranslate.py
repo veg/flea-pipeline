@@ -23,7 +23,7 @@ from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC
 from Bio.Alphabet import Gapped
 
-from util import insert_gaps
+from flea_pipeline.util import insert_gaps
 
 
 def back_translate_gapped(protein, dna):
