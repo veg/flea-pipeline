@@ -4,6 +4,9 @@ Listed in `requirements.txt`.
 
 Install with `pip install -r requirements.txt`.
 
+Then run `pip install -r requirements2.txt`. This is done seperately
+because BioExt needs NumPy to be present.
+
 
 3rd party dependencies
 ----------------------

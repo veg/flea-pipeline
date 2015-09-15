@@ -1,12 +1,15 @@
 [Paths]
+python_virtualenv: /path/to/virtualenv
+bealign: ${python_virtualenv}/bin/bealign.py
+python: ${python_virtualenv}/bin/python
+
 mafft: /usr/local/bin/mafft
 usearch: /usr/local/bin/usearch8
 prinseq: prinseq
-bealign: /opt/flea-env/bin/bealign.py
 bam2msa: /opt/python-3.4.3/env/bam2msa
 hyphy: HYPHYMP
 FastTree: FastTree
-python: /opt/flea-env/bin/python
+
 
 [Jobs]
 # maximum number of concurrent jobs
