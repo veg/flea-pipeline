@@ -3,7 +3,7 @@ mafft: /usr/local/bin/mafft
 usearch: /usr/local/bin/usearch8
 prinseq: prinseq
 bealign: /opt/flea-env/bin/bealign.py
-bam2msa: /opt/python-3.4.3/env/bin/bam2msa.py
+bam2msa: /opt/python-3.4.3/env/bam2msa
 hyphy: HYPHYMP
 FastTree: FastTree
 python: /opt/flea-env/bin/python
