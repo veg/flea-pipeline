@@ -60,6 +60,14 @@ def replace_id(record, id_):
 
 @must_work()
 @report_wrapper
+def dates_json(infiles, outfile):
+    result = dict((v, k) for k, v in globals_.label_to_date.items())
+    with open(outfile, 'w') as handle:
+        json.dump(result, handle, separators=(",\n", ":"))
+
+
+@must_work()
+@report_wrapper
 def copy_copynumber_file(infiles, outfile):
     _, infile = infiles
     shutil.copyfile(infile, outfile)
@@ -333,6 +341,12 @@ def make_analysis_pipeline(do_hyphy, name=None):
 
     n_local_jobs, n_remote_jobs = n_jobs()
 
+    dates_json_task = pipeline.transform(dates_json,
+                                         input=None,
+                                         filter=formatter(),
+                                         output=os.path.join(pipeline_dir, 'dates.json'))
+    dates_json_task.jobs_limit(n_local_jobs, local_job_limiter)
+
     # evo_history needs copynumbers in sequence names
     add_copynumbers_task = pipeline.merge(add_copynumbers,
                                           name="add_copynumbers",
@@ -414,7 +428,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
     dates_task = pipeline.transform(write_dates,
                                     input=add_copynumbers_task,
                                     filter=formatter(),
-                                    output=os.path.join(pipeline_dir, 'dates.json'))
+                                    output=os.path.join(pipeline_dir, 'merged.dates'))
     dates_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     if do_hyphy:
@@ -440,7 +454,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                     output=os.path.join(pipeline_dir, 'rates.json'))
         fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    pipeline.set_head_tasks([add_copynumbers_task, copy_copynumber_task, mrca_task])
+    pipeline.set_head_tasks([add_copynumbers_task, copy_copynumber_task, mrca_task, dates_json_task])
     for task in pipeline.head_tasks:
         task.mkdir(pipeline_dir)
 
