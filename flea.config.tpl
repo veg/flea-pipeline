@@ -5,7 +5,7 @@ python: ${python_virtualenv}/bin/python
 
 mafft: /usr/local/bin/mafft
 usearch: /usr/local/bin/usearch8
-bam2msa: /opt/python-3.4.3/env/bam2msa
+bam2msa: /opt/python-3.4.3/bin/bam2msa
 hyphy: HYPHYMP
 FastTree: FastTree
 
