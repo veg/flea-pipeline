@@ -14,5 +14,5 @@ setup(name='flea-pipeline',
         'nose',
         'coverage',
         ],
-      scripts=['flea_pipeline/flea.py'],
+      scripts=['flea_pipeline/flea.py', 'scripts/publish.py'],
      )

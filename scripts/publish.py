@@ -8,7 +8,8 @@ Usage:
   publish -h | --help
 
 Options:
-  -h --help               Show this screen.
+  --dry-run  Print command and exit.
+  -h --help  Show this screen.
 
 """
 
@@ -96,6 +97,8 @@ if __name__ == "__main__":
     rsync_cmd = RSYNC_CMD.format(src=src, remote_user=remote_user,
                                  remote_host=remote_host,
                                  dest_path=dest_path)
-    result = call(rsync_cmd)
-
-    print("view results at http://test.datamonkey.org:5062/{}/".format(dir_name))
+    if args["--dry-run"]:
+        print(rsync_cmd)
+    else:
+        result = call(rsync_cmd)
+        print("view results at http://test.datamonkey.org:5062/{}/".format(dir_name))
