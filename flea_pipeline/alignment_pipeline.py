@@ -20,6 +20,7 @@ from flea_pipeline.util import partition
 from flea_pipeline.util import grouper
 from flea_pipeline.util import run_regexp
 from flea_pipeline.util import translate_helper
+from flea_pipeline.util import remove_suffix
 
 import flea_pipeline.pipeline_globals as globals_
 
@@ -300,13 +301,13 @@ def usearch_hqcs_ids(infile, outfile, dbfile, name=None):
 # FIXME: this is run with remote job limiter, but part of its task is run locally
 @must_work()
 @report_wrapper
-def compute_copynumbers(infiles, outfile, basename):
+def compute_copynumbers(infiles, outfile):
     hqcsfile, dbfile, ccsfile = infiles
     # make sure this suffix changes depending on what task comes before
     check_suffix(hqcsfile, '.uniques.fasta')
     check_suffix(dbfile, '.udb')
     check_suffix(ccsfile, '.lenfilter.fasta')
-    pairfile = '{}.copynumber.pairs'.format(basename)
+    pairfile = '{}.pairs'.format(remove_suffix(outfile, '.tsv'))
     usearch_hqcs_ids(ccsfile, pairfile, dbfile, name='compute-copynumber')
     with open(pairfile) as f:
         pairs = list(line.strip().split("\t") for line in f.readlines())
@@ -618,8 +619,7 @@ def make_alignment_pipeline(name=None):
     compute_copynumbers_task = pipeline.collate(compute_copynumbers,
                                                 input=[unique_hqcs_task, make_individual_dbs_task, filter_length_task],
                                                 filter=formatter(r'.*/(?P<LABEL>.+).(qfilter|clusters)'),
-                                                output=os.path.join(pipeline_dir, '{LABEL[0]}.copynumbers.tsv'),
-                                                extras=['{LABEL[0]}'])
+                                                output=os.path.join(pipeline_dir, '{LABEL[0]}.copynumbers.tsv'))
     compute_copynumbers_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     merge_copynumbers_task = pipeline.merge(cat_wrapper,
