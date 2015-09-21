@@ -88,6 +88,7 @@ if __name__ == "__main__":
     files.extend(recursive_glob(directory, "copynumbers.tsv"))
     if not files:
         raise Exception('no files found')
+    files = list(os.path.abspath(f) for f in files)
     src = " ".join(files)
 
     _, dir_name = os.path.split(os.path.abspath(directory))
