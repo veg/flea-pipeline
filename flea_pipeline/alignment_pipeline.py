@@ -618,7 +618,7 @@ def make_alignment_pipeline(name=None):
     compute_copynumbers_task = pipeline.collate(compute_copynumbers,
                                                 input=[unique_hqcs_task, make_individual_dbs_task, filter_length_task],
                                                 filter=formatter(r'.*/(?P<LABEL>.+).(qfilter|clusters)'),
-                                                output='{LABEL[0]}.copynumbers.tsv',
+                                                output=os.path.join(pipeline_dir, '{LABEL[0]}.copynumbers.tsv'),
                                                 extras=['{LABEL[0]}'])
     compute_copynumbers_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
