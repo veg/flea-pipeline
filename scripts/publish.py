@@ -85,7 +85,7 @@ if __name__ == "__main__":
     if not os.path.exists(directory):
         raise Exception('source directory does not exist: {}'.format(directory))
     files = recursive_glob(directory, "*json")
-    files.extend(recursive_glob(directory, "*tsv"))
+    files.extend(recursive_glob(directory, "copynumbers.tsv"))
     if not files:
         raise Exception('no files found')
     src = " ".join(files)
