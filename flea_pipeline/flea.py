@@ -197,6 +197,8 @@ else:
 def config_to_dict(config):
     config_dict = {}
     for section in config:
+        if section == "Paths":
+            continue
         d = dict(config[section])
         config_dict[section] = dict((k, str_to_type(v))
                                     for k, v in d.items())

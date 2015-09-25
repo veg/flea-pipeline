@@ -8,7 +8,8 @@ Usage:
   publish -h | --help
 
 Options:
-  -h --help               Show this screen.
+  --dry-run  Print command and exit.
+  -h --help  Show this screen.
 
 """
 
@@ -84,9 +85,10 @@ if __name__ == "__main__":
     if not os.path.exists(directory):
         raise Exception('source directory does not exist: {}'.format(directory))
     files = recursive_glob(directory, "*json")
-    files.extend(recursive_glob(directory, "*tsv"))
+    files.extend(recursive_glob(directory, "copynumbers.tsv"))
     if not files:
         raise Exception('no files found')
+    files = list(os.path.abspath(f) for f in files)
     src = " ".join(files)
 
     _, dir_name = os.path.split(os.path.abspath(directory))
@@ -96,6 +98,8 @@ if __name__ == "__main__":
     rsync_cmd = RSYNC_CMD.format(src=src, remote_user=remote_user,
                                  remote_host=remote_host,
                                  dest_path=dest_path)
-    result = call(rsync_cmd)
-
-    print("view results at http://test.datamonkey.org:5062/{}/".format(dir_name))
+    if args["--dry-run"]:
+        print(rsync_cmd)
+    else:
+        result = call(rsync_cmd)
+        print("view results at http://test.datamonkey.org:5062/{}/".format(dir_name))

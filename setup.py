@@ -14,11 +14,5 @@ setup(name='flea-pipeline',
         'nose',
         'coverage',
         ],
-      install_requires=[
-        'biopython >= 1.58',
-        'matplotlib >= 1.2.1',
-        'numpy >= 1.6',
-        'docopt >= 0.6.2'
-        ],
-       scripts=['flea_pipeline/flea.py']
+      scripts=['flea_pipeline/flea.py', 'scripts/publish.py'],
      )

@@ -328,6 +328,19 @@ def evo_history(infiles, outfile):
 
 @must_work()
 @report_wrapper
+def rates_pheno_json(infile, outfile):
+    with open(infile) as h:
+        lines = list(csv.reader(h, delimiter='\t'))
+    result = {}
+    keys, rest = lines[0], lines[1:]
+    result = list(dict((key, value) for key, value in zip(keys, line))
+                  for line in rest)
+    with open(outfile, 'w') as h:
+        json.dump(result, h, separators=(",\n", ":"))
+
+
+@must_work()
+@report_wrapper
 def run_fubar(infiles, outfile):
     params = infiles + ["{}/".format(pipeline_dir), outfile]
     return hyphy_call(hyphy_script('runFUBAR.bf'), infiles, outfile, 'fubar', params)
@@ -448,6 +461,12 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                           input=[replace_stop_codons_task, dates_task, region_coords_task, mrca_task],
                                           output=os.path.join(pipeline_dir, 'rates_pheno.tsv'))
         evo_history_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+
+        rates_pheno_json_task = pipeline.transform(rates_pheno_json,
+                                                   input=evo_history_task,
+                                                   filter=suffix('.tsv'),
+                                                   output='.json')
+        rates_pheno_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
         fubar_task = pipeline.merge(run_fubar,
                                     input=[replace_stop_codons_task, dates_task, mrca_task],
