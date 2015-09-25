@@ -29,7 +29,7 @@ from flea_pipeline.alignment_pipeline import mafft, cat_wrapper_ids
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "analysis")
-hyphy_script_dir = globals_.script_dir
+hyphy_script_dir = os.path.abspath(os.path.join(globals_.script_dir, '../hyphy_scripts'))
 
 
 def hyphy_script(name):
@@ -56,14 +56,6 @@ def replace_id(record, id_):
     result.name = ""
     result.description = ""
     return result
-
-
-@must_work()
-@report_wrapper
-def dates_json(infiles, outfile):
-    result = dict((v, k) for k, v in globals_.label_to_date.items())
-    with open(outfile, 'w') as handle:
-        json.dump(result, handle, separators=(",\n", ":"))
 
 
 @must_work()
@@ -328,19 +320,6 @@ def evo_history(infiles, outfile):
 
 @must_work()
 @report_wrapper
-def rates_pheno_json(infile, outfile):
-    with open(infile) as h:
-        lines = list(csv.reader(h, delimiter='\t'))
-    result = {}
-    keys, rest = lines[0], lines[1:]
-    result = list(dict((key, value) for key, value in zip(keys, line))
-                  for line in rest)
-    with open(outfile, 'w') as h:
-        json.dump(result, h, separators=(",\n", ":"))
-
-
-@must_work()
-@report_wrapper
 def run_fubar(infiles, outfile):
     params = infiles + ["{}/".format(pipeline_dir), outfile]
     return hyphy_call(hyphy_script('runFUBAR.bf'), infiles, outfile, 'fubar', params)
@@ -353,12 +332,6 @@ def make_analysis_pipeline(do_hyphy, name=None):
     pipeline = Pipeline(name)
 
     n_local_jobs, n_remote_jobs = n_jobs()
-
-    dates_json_task = pipeline.transform(dates_json,
-                                         input=None,
-                                         filter=formatter(),
-                                         output=os.path.join(pipeline_dir, 'dates.json'))
-    dates_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     # evo_history needs copynumbers in sequence names
     add_copynumbers_task = pipeline.merge(add_copynumbers,
@@ -441,7 +414,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
     dates_task = pipeline.transform(write_dates,
                                     input=add_copynumbers_task,
                                     filter=formatter(),
-                                    output=os.path.join(pipeline_dir, 'merged.dates'))
+                                    output=os.path.join(pipeline_dir, 'dates.json'))
     dates_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     if do_hyphy:
@@ -462,18 +435,12 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                           output=os.path.join(pipeline_dir, 'rates_pheno.tsv'))
         evo_history_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-        rates_pheno_json_task = pipeline.transform(rates_pheno_json,
-                                                   input=evo_history_task,
-                                                   filter=suffix('.tsv'),
-                                                   output='.json')
-        rates_pheno_json_task.jobs_limit(n_local_jobs, local_job_limiter)
-
         fubar_task = pipeline.merge(run_fubar,
                                     input=[replace_stop_codons_task, dates_task, mrca_task],
                                     output=os.path.join(pipeline_dir, 'rates.json'))
         fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    pipeline.set_head_tasks([add_copynumbers_task, copy_copynumber_task, mrca_task, dates_json_task])
+    pipeline.set_head_tasks([add_copynumbers_task, copy_copynumber_task, mrca_task])
     for task in pipeline.head_tasks:
         task.mkdir(pipeline_dir)
 

@@ -24,5 +24,10 @@ setup(name='flea-pipeline',
         'flea_pipeline/translate.py',
         'flea_pipeline/trim.py',
         'scripts/publish.py',
+        'flea_pipeline/HXB2partsSplitter.bf',
+        'flea_pipeline/obtainEvolutionaryHistory.bf',
+        'flea_pipeline/runFUBAR.bf',
+        'flea_pipeline/dates.bf',
+        'flea_pipeline/tools.bf',
         ],
-     )
+      )

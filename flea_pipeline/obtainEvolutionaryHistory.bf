@@ -1,5 +1,5 @@
 LoadFunctionLibrary ("HXB2Mapper", {"0": "Universal"});
-LoadFunctionLibrary ("lib/dates.bf");
+LoadFunctionLibrary ("dates.bf");
 LoadFunctionLibrary ("AncestralMapper");
 LoadFunctionLibrary ("LocalMGREV");
 LoadFunctionLibrary ("CF3x4");
@@ -9,7 +9,7 @@ LoadFunctionLibrary ("TreeFunctions");
 LoadFunctionLibrary ("dSdNTreeTools");
 LoadFunctionLibrary ("DescriptiveStatistics");
 LoadFunctionLibrary ("CodonTools");
-LoadFunctionLibrary ("lib/tools.bf");
+LoadFunctionLibrary ("tools.bf");
 LoadFunctionLibrary ("BranchLengthFitters");
 
 fprintf(stdout,"\nEnter the alignment file:");
