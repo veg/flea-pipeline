@@ -312,7 +312,10 @@ def compute_copynumbers(infiles, outfile):
     with open(pairfile) as f:
         pairs = list(line.strip().split("\t") for line in f.readlines())
     hqcs_counts = defaultdict(lambda: 0)
-    for ccs_id, ccs_id in pairs:
+    for pair in pairs:
+        if len(pair) != 2:
+            raise Exception('CCS {} did not match any HQCS'.format(pair))
+        ccs_id, _ = pair
         hqcs_counts[ccs_id] += 1
     # deal with hqcs sequences with no copynumber by giving them 0
     ids = list(r.id for r in SeqIO.parse(hqcsfile, 'fasta'))
