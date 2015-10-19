@@ -31,8 +31,8 @@ Usage
 The `<control file>` argument is a file containing a list of fasta
 files, their sequence ids, and their dates, seperated by spaces.
 
-    <file> <id> <date>
-    <file> <id> <date>
+    <file> <label> <date>
+    <file> <label> <date>
     ....
 
 Dates must be in 'YYYYMMDD' format.
@@ -40,6 +40,25 @@ Dates must be in 'YYYYMMDD' format.
 If no config file is specified, we look for it in in the data
 directory.
 
+Pre-existing alignment
+----------------------
+
+Control file should contain:
+
+    <prefix> <label> <date>
+    <prefix> <label> <date>
+    ...
+
+where each sequence id begins with a timepoint-unique <prefix>.
+
+Run with the option `--alignment <alignment file>`.
+
+Also, optionally add the option `--copynumbers <copynumber file>`,
+where each line of the copynumbers file contains a tab-seperated
+sequence id and integer:
+
+    <sequence id>\t<int>
+    ...
 
 Testing
 -------
