@@ -316,6 +316,7 @@ def compute_copynumbers(infiles, outfile):
     for pair in pairs:
         if len(pair) != 2:
             warnings.warn('CCS {} did not match any HQCS'.format(pair))
+            continue
         ccs_id, hqcs_id = pair
         hqcs_counts[hqcs_id] += 1
     # deal with hqcs sequences with no copynumber by giving them 0
@@ -396,6 +397,7 @@ def hqcs_ccs_pairs(infiles, outfile):
 @must_work()
 @report_wrapper
 def combine_pairs(infiles, outfiles, outdir):
+    # FIXME: code duplication with compute_copynumbers
     for f in outfiles:
         os.unlink(f)
     pairfile, hqcsfile = infiles
@@ -406,7 +408,11 @@ def combine_pairs(infiles, outfiles, outdir):
     with open(pairfile) as handle:
         pairs = list(line.strip().split("\t") for line in handle.readlines())
     match_dict = defaultdict(list)
-    for ccs, hqcs in pairs:
+    for pair in pairs:
+        if len(pair) != 2:
+            warnings.warn('CCS {} did not match any HQCS'.format(pair))
+            continue
+        ccs, hqcs = pair
         match_dict[hqcs].append(ccs)
     hqcs_records = list(SeqIO.parse(hqcsfile, "fasta"))
     ccs_records = list(SeqIO.parse(ccsfile, "fasta"))
