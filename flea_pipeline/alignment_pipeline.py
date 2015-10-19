@@ -5,6 +5,7 @@ import tempfile
 from functools import partial
 from collections import defaultdict
 import itertools
+import warnings
 
 import numpy as np
 from ruffus import Pipeline, suffix, formatter, add_inputs
@@ -314,7 +315,7 @@ def compute_copynumbers(infiles, outfile):
     hqcs_counts = defaultdict(lambda: 0)
     for pair in pairs:
         if len(pair) != 2:
-            raise Exception('CCS {} did not match any HQCS'.format(pair))
+            warnings.warn('CCS {} did not match any HQCS'.format(pair))
         ccs_id, _ = pair
         hqcs_counts[ccs_id] += 1
     # deal with hqcs sequences with no copynumber by giving them 0
