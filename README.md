@@ -49,7 +49,7 @@ Control file should contain:
     <prefix> <label> <date>
     ...
 
-where each sequence id begins with a timepoint-unique <prefix>.
+where each sequence id begins with a timepoint-unique `<prefix>`.
 
 Run with the option `--alignment <alignment file>`.
 
@@ -57,7 +57,7 @@ Also, optionally add the option `--copynumbers <copynumber file>`,
 where each line of the copynumbers file contains a tab-seperated
 sequence id and integer:
 
-    <sequence id>\t<int>
+    <sequence id>\t<integer>
     ...
 
 Testing
