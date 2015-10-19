@@ -316,8 +316,8 @@ def compute_copynumbers(infiles, outfile):
     for pair in pairs:
         if len(pair) != 2:
             warnings.warn('CCS {} did not match any HQCS'.format(pair))
-        ccs_id, _ = pair
-        hqcs_counts[ccs_id] += 1
+        ccs_id, hqcs_id = pair
+        hqcs_counts[hqcs_id] += 1
     # deal with hqcs sequences with no copynumber by giving them 0
     ids = list(r.id for r in SeqIO.parse(hqcsfile, 'fasta'))
     for i in ids:
