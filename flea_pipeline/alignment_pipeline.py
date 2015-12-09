@@ -6,6 +6,7 @@ from functools import partial
 from collections import defaultdict
 import itertools
 import warnings
+import shutil
 
 import numpy as np
 from ruffus import Pipeline, suffix, formatter, add_inputs
@@ -338,10 +339,27 @@ def cat_all_hqcs(infiles, outfile):
     cat_files(infiles, outfile)
 
 
-def pause(filename):
+@must_work()
+@report_wrapper
+def copy_protein_alignment(infile, outfile):
+    shutil.copyfile(infile, outfile)
+
+
+def pause_for_editing():
     if globals_.config.getboolean('Tasks', 'pause_after_codon_alignment'):
+        infile = os.path.join(pipeline_dir, 'hqcs.translated.aligned.fasta')
+        outfile = os.path.join(pipeline_dir, 'hqcs.translated.aligned.edited.fasta')
         input('Paused for manual editing of {}'
-              '\nPress Enter to continue.'.format(filename))
+              '\nPress Enter to continue.'.format(outfile))
+        # check that all sequences in `outfile` differ only in gap locations
+        unedited = dict((r.id, r) for r in SeqIO.parse(infile, 'fasta'))
+        edited = dict((r.id, r) for r in SeqIO.parse(outfile, 'fasta'))
+        for k in edited.keys():
+            edited_seq = list(c for c in str(edited[k].seq) if c != '-')
+            unedited_seq = list(c for c in str(unedited[k].seq) if c != '-')
+            if edited_seq != unedited_seq:
+                raise Exception('Incorrect manual editing of "{}".'
+                                ' "{}" differs after editing.'.format(outfile, k))
 
 
 @must_work()
@@ -349,7 +367,7 @@ def pause(filename):
 def backtranslate_alignment(infiles, outfile):
     hqcs, aligned_protein = infiles
     check_basename(hqcs, 'hqcs.fasta')
-    check_suffix(aligned_protein, '.aligned.fasta')
+    check_suffix(aligned_protein, '.translated.aligned.edited.fasta')
     kwargs = {
         'python': globals_.config.get('Paths', 'python'),
         'script': os.path.join(globals_.script_dir, "backtranslate.py"),
@@ -491,7 +509,7 @@ def insert_gaps_wrapper(infiles, outfile):
 @report_wrapper
 def diagnose_alignment(infiles, outfiles):
     hqcs, ccs, cn = infiles
-    check_suffix(hqcs, 'translated.aligned.fasta')
+    check_suffix(hqcs, 'translated.aligned.edited.fasta')
     check_suffix(ccs, '.no-partial-gaps.translated.fasta')
     check_suffix(cn, '.tsv')
     kwargs = {
@@ -656,12 +674,19 @@ def make_alignment_pipeline(name=None):
                                                  filter=suffix('.fasta'),
                                                  output='.aligned.fasta')
     align_hqcs_protein_task.jobs_limit(n_local_jobs, local_job_limiter)
-    align_hqcs_protein_task.posttask(partial(pause, 'protein alignment'))
+
+    copy_protein_alignment_task = pipeline.transform(copy_protein_alignment,
+                                                     name='copy_protein_alignment',
+                                                     input=align_hqcs_protein_task,
+                                                     filter=suffix('.fasta'),
+                                                     output='.edited.fasta')
+    copy_protein_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
+    copy_protein_alignment_task.posttask(pause_for_editing)
 
     backtranslate_alignment_task = pipeline.merge(backtranslate_alignment,
                                                   input=[cat_all_hqcs_task,
-                                                         align_hqcs_protein_task],
-                                                  output=os.path.join(pipeline_dir, 'hqcs.translated.aligned.backtranslated.fasta'))
+                                                         copy_protein_alignment_task],
+                                                  output=os.path.join(pipeline_dir, 'hqcs.translated.aligned.edited.backtranslated.fasta'))
     backtranslate_alignment_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     pipeline.set_head_tasks([filter_fastq_task])
@@ -743,7 +768,7 @@ def make_alignment_pipeline(name=None):
                                 for t in globals_.timepoints)
         diagnose_alignment_task = pipeline.merge(diagnose_alignment,
                                                  name='diagnose_alignment',
-                                                 input=[align_hqcs_protein_task,
+                                                 input=[copy_protein_alignment_task,
                                                         translate_ccs_task,
                                                         merge_copynumbers_task],
                                                  output=diagnosis_output)
