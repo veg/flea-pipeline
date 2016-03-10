@@ -3,9 +3,11 @@ python_virtualenv: /path/to/virtualenv
 bealign: ${python_virtualenv}/bin/bealign.py
 python: ${python_virtualenv}/bin/python
 
+# the version of bam2msa in tristan's fork of BioExt is outdated.
+bam2msa: /opt/python-3.4.3/bin/bam2msa
+
 mafft: /usr/local/bin/mafft
 usearch: /usr/local/bin/usearch8
-bam2msa: /opt/python-3.4.3/bin/bam2msa
 hyphy: HYPHYMP
 FastTree: FastTree
 
