@@ -293,6 +293,7 @@ def genlen(gen, ldict, name):
 
 def new_record_seq_str(record, seqstr):
     record = record[:]
+    record.letter_annotations = {}
     record.seq = Seq(seqstr, alphabet=record.seq.alphabet)
     return record
 

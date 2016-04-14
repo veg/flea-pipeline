@@ -62,7 +62,7 @@ def filter_fastq(infile, outfile):
 def trim_heads_and_tails(infile, outfile):
     python = globals_.config.get('Paths', 'python')
     script = os.path.join(globals_.script_dir, 'trim.py')
-    cmd = ("{python} {script} {infile} {outfile}")
+    cmd = ("{python} {script} --fastq {infile} {outfile}")
     cmd = cmd.format(python=python, script=script, infile=infile, outfile=outfile)
     return maybe_qsub(cmd, infile, outfile, name='trim-heads-and-tails')
 
@@ -591,8 +591,8 @@ def make_alignment_pipeline(name=None):
 
     trim_task = pipeline.transform(trim_heads_and_tails,
                                     input=filter_fastq_task,
-                                    filter=suffix('.fasta'),
-                                    output='.trimmed.fasta')
+                                    filter=suffix('.fastq'),
+                                    output='.trimmed.fastq')
     trim_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     filter_runs_task = pipeline.transform(filter_runs,

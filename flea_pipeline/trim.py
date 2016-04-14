@@ -3,11 +3,15 @@
 """
 Trim poly-A and poly-T heads and tails. Uses a simple HMM.
 
+Supports both FASTA and FASTQ files. Default is FASTA; use --fastq
+flag to switch.
+
 Usage:
-  trim_tails.py <infile> <outfile>
+  trim_tails.py [options] <infile> <outfile>
   trim_tails.py -h | --help
 
 Options:
+  --fastq  Treat input and output files as FASTQ.
   -h --help
 
 """
@@ -141,28 +145,43 @@ def trim(seq):
     return ''.join(head), ''.join(body), ''.join(tail)
 
 
-def _notempty(g):
-    return (x for x in g if len(x))
+def trim_file(infile, outfile, fastq=False):
+    filetype = 'fastq' if fastq else 'fasta'
 
+    head_records = []
+    body_records = []
+    tail_records = []
 
-def trim_file(infile, outfile):
-    records = list(SeqIO.parse(infile, 'fasta'))
-    results = list(trim(str(r.seq)) for r in records)
-    head, body, tail = zip(*results)
+    for r in SeqIO.parse(infile, filetype):
+        head, body, tail = trim(str(r.seq))
 
-    head_records = _notempty(new_record_seq_str(r, s) for r, s in zip(records, head))
-    body_records = _notempty(new_record_seq_str(r, s) for r, s in zip(records, body))
-    tail_records = _notempty(new_record_seq_str(r, s) for r, s in zip(records, tail))
+        head_record = new_record_seq_str(r, head)
+        body_record = new_record_seq_str(r, body)
+        tail_record = new_record_seq_str(r, tail)
+
+        if fastq:
+            quality = r.letter_annotations['phred_quality']
+
+            head_record.letter_annotations['phred_quality'] = quality[:len(head)]
+            body_record.letter_annotations['phred_quality'] = quality[len(head):(len(head) + len(body))]
+            tail_record.letter_annotations['phred_quality'] = quality[(len(head) + len(body)):]
+
+            body_records.append(body_record)
+            if len(head_record):
+                head_records.append(head_record)
+            if len(tail_record):
+                tail_records.append(tail_record)
 
     head_file = "{}.heads".format(outfile)
     tail_file = "{}.tails".format(outfile)
-    SeqIO.write(body_records, outfile, 'fasta')
-    SeqIO.write(head_records, head_file, 'fasta')
-    SeqIO.write(tail_records, tail_file, 'fasta')
+    SeqIO.write(body_records, outfile, filetype)
+    SeqIO.write(head_records, head_file, filetype)
+    SeqIO.write(tail_records, tail_file, filetype)
 
 
 if __name__ == "__main__":
     args = docopt(__doc__)
     filename = args["<infile>"]
     outfile = args["<outfile>"]
-    trim_file(filename, outfile)
+    fastq = args['--fastq']
+    trim_file(filename, outfile, fastq=fastq)
