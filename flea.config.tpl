@@ -56,8 +56,6 @@ max_query_target_length_ratio: 1.005
 run_length: 16
 
 [Tasks]
-shift_correct_ccs: False
-
 # if True, use all in-frame HQCS sequences as reference DB for shift
 # correction of HQCSs. Also pause to allow user to edit database.
 use_inframe_hqcs: False

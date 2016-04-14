@@ -81,73 +81,38 @@ def filter_runs(infile, outfile):
 @report_wrapper
 def filter_contaminants(infile, outfile):
     uncontam = outfile
-    contam = outfile.replace('good', 'bad')
+    contam = outfile.replace('uncontam', 'contam')
+    db = globals_.config.get('Parameters', 'contaminants_db'),
+    id_ = globals_.config.get('Parameters', 'contaminant_identity'),
     outfiles = [uncontam, contam]
-    cmd = ('{usearch} -usearch_global {infile} -db {db}'
-           ' -id {id} -notmatched {uncontam} -matched {contam}'
+    cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
+           ' -notmatchedfq {uncontam} -matchedfq {contam}'
            ' -strand both'.format(usearch=globals_.config.get('Paths', 'usearch'),
-                                  infile=infile, db=globals_.config.get('Parameters', 'contaminants_db'),
-                                  id=globals_.config.get('Parameters', 'contaminant_identity'),
+                                  infile=infile, db=db, id=id_,
                                   uncontam=uncontam, contam=contam))
     return maybe_qsub(cmd, infile, outfiles=outfiles, name='filter-contaminants')
-
-
-def usearch_reference_db(infile, outfile, dbfile=None, name=None):
-    """run usearch_global against reference database and print fasta hits"""
-    if dbfile is None:
-        dbfile = globals_.config.get('Parameters', 'reference_db')
-    identity = globals_.config.get('Parameters', 'reference_identity')
-    max_accepts = globals_.config.get('Parameters', 'max_accepts')
-    max_rejects = globals_.config.get('Parameters', 'max_rejects')
-    cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
-           ' -fastapairs {outfile} -alnout {outfile}.human -userout {outfile}.calns'
-           ' -userfields caln -top_hit_only -strand both'
-           ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
-    if name is None:
-        name = 'usearch-reference-db'
-    cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
-                     infile=infile, db=dbfile, id=identity, outfile=outfile,
-                     max_accepts=max_accepts, max_rejects=max_rejects)
-    return maybe_qsub(cmd, infile, outfiles=outfile, name=name)
 
 
 @must_work()
 @report_wrapper
 def filter_uncontaminated(infile, outfile):
-    return usearch_reference_db(infile, outfile, name="filter-uncontaminated")
+    dbfile = globals_.config.get('Parameters', 'reference_db')
+    identity = globals_.config.get('Parameters', 'reference_identity')
+    max_accepts = globals_.config.get('Parameters', 'max_accepts')
+    max_rejects = globals_.config.get('Parameters', 'max_rejects')
+    matched = outfile
+    notmatched = outfile.replace('matched', 'notmatched')
+    outfiles = [matched, notmatched]
 
-
-def shift_correction_helper(infile, outfile, keep, correct, name=None):
-    python = globals_.config.get('Paths', 'python')
-    script = os.path.join(globals_.script_dir, 'correct_shifts.py')
-    keep_option = "--keep" if keep else ""
-    correct_option = "--correct-dels" if correct else ""
-    calns_file = "{}.calns".format(infile)
-    discard_file = "{}.discarded".format(outfile)
-    summary_file = "{}.summary".format(outfile)
-    cmd = ("{python} {script} {keep_option} {correct_option} --calns={calns_file}"
-           " --discard={discard_file} --summary={summary_file}"
-           " {infile} {outfile}")
-    cmd = cmd.format(python=python, script=script, keep_option=keep_option,
-                     correct_option=correct_option,
-                     calns_file=calns_file, discard_file=discard_file,
-                     summary_file=summary_file, infile=infile, outfile=outfile)
-    return maybe_qsub(cmd, infile, outfile, name=name)
-
-
-@must_work(seq_ratio=(2, 1))
-@report_wrapper
-def ccs_shift_correction(infile, outfile):
-    return shift_correction_helper(infile, outfile, keep=True, correct=False,
-                                   name="ccs-shift-correction")
-
-
-@must_work(seq_ratio=(2, 1))
-@report_wrapper
-def every_other(infile, outfile):
-    records = SeqIO.parse(infile, 'fasta')
-    result = itertools.islice(records, 0, None, 2)
-    SeqIO.write(result, outfile, 'fasta')
+    cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
+           ' -notmatchedfq {notmatched} -matchedfq {matched}'
+           ' -top_hit_only -strand both'
+           ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
+    cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
+                     infile=infile, db=dbfile, id=identity,
+                     matched=matched, notmatched=notmatched,
+                     max_accepts=max_accepts, max_rejects=max_rejects)
+    return maybe_qsub(cmd, infile, outfiles=outfile, name="filter-uncontaminated")
 
 
 @must_work(illegal_chars='-')
@@ -162,9 +127,9 @@ def degap(infile, outfile):
 @report_wrapper
 def filter_length(infile, outfile):
     cutoff = min_len()
-    records = SeqIO.parse(infile, 'fasta')
+    records = SeqIO.parse(infile, 'fastq')
     result = (r for r in records if len(r.seq) >= cutoff)
-    SeqIO.write(result, outfile, 'fasta')
+    SeqIO.write(result, outfile, 'fastq')
 
 
 @must_produce(n=int(globals_.config.get('Parameters', 'min_n_clusters')))
@@ -282,6 +247,24 @@ def new_record_id(record, new_id):
     return result
 
 
+def usearch_reference_db(infile, outfile, name=None):
+    """run usearch_global against reference database and print fasta hits"""
+    dbfile = globals_.config.get('Parameters', 'reference_db')
+    identity = globals_.config.get('Parameters', 'reference_identity')
+    max_accepts = globals_.config.get('Parameters', 'max_accepts')
+    max_rejects = globals_.config.get('Parameters', 'max_rejects')
+    cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
+           ' -fastapairs {outfile} -alnout {outfile}.human -userout {outfile}.calns'
+           ' -userfields caln -top_hit_only -strand both'
+           ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
+    if name is None:
+        name = 'usearch-reference-db'
+    cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
+                     infile=infile, db=dbfile, id=identity, outfile=outfile,
+                     max_accepts=max_accepts, max_rejects=max_rejects)
+    return maybe_qsub(cmd, infile, outfiles=outfile, name=name)
+
+
 @must_work()
 @report_wrapper
 def inframe_hqcs(infile, outfile):
@@ -315,6 +298,23 @@ def hqcs_db_search(infiles, outfile):
     check_basename(dbfile, 'inframe_hqcs.edited.fasta')
     return usearch_reference_db(infile, outfile, dbfile=dbfile, name='hqcs-db-search')
 
+
+def shift_correction_helper(infile, outfile, keep, correct, name=None):
+    python = globals_.config.get('Paths', 'python')
+    script = os.path.join(globals_.script_dir, 'correct_shifts.py')
+    keep_option = "--keep" if keep else ""
+    correct_option = "--correct-dels" if correct else ""
+    calns_file = "{}.calns".format(infile)
+    discard_file = "{}.discarded".format(outfile)
+    summary_file = "{}.summary".format(outfile)
+    cmd = ("{python} {script} {keep_option} {correct_option} --calns={calns_file}"
+           " --discard={discard_file} --summary={summary_file}"
+           " {infile} {outfile}")
+    cmd = cmd.format(python=python, script=script, keep_option=keep_option,
+                     correct_option=correct_option,
+                     calns_file=calns_file, discard_file=discard_file,
+                     summary_file=summary_file, infile=infile, outfile=outfile)
+    return maybe_qsub(cmd, infile, outfile, name=name)
 
 @must_work(in_frame=True, illegal_chars='-')
 @report_wrapper
@@ -366,7 +366,7 @@ def compute_copynumbers(infiles, outfile):
     # make sure this suffix changes depending on what task comes before
     check_suffix(hqcsfile, '.uniques.fasta')
     check_suffix(dbfile, '.udb')
-    check_suffix(ccsfile, '.lenfilter.fasta')
+    check_suffix(ccsfile, '.lenfilter.fastq')
     pairfile = '{}.pairs'.format(remove_suffix(outfile, '.tsv'))
     usearch_hqcs_ids(ccsfile, pairfile, dbfile, name='compute-copynumber')
     with open(pairfile) as f:
@@ -455,7 +455,7 @@ def hqcs_ccs_pairs(infiles, outfile):
     # FIXME: this does basically the same thing as the copynumber task,
     # except it allows CCSs to map to HQCSs in different timepoints
     infile, dbfile = infiles
-    check_suffix(infile, '.lenfilter.fasta')
+    check_suffix(infile, '.lenfilter.fastq')
     check_suffix(dbfile, '.degapped.udb')
     usearch_hqcs_ids(infile, outfile, dbfile, name='hqcs_ccs_ids')
 
@@ -470,7 +470,7 @@ def combine_pairs(infiles, outfiles, outdir):
     hqcs_suffix = '.hqcs-ccs-pairs.txt'
     ccsfile = "{}.fasta".format(pairfile[:-len(hqcs_suffix)])
     check_suffix(pairfile, hqcs_suffix)
-    check_suffix(ccsfile, '.lenfilter.fasta')
+    check_suffix(ccsfile, '.lenfilter.fastq')
     with open(pairfile) as handle:
         pairs = list(line.strip().split("\t") for line in handle.readlines())
     match_dict = defaultdict(list)
@@ -603,41 +603,20 @@ def make_alignment_pipeline(name=None):
 
     filter_contaminants_task = pipeline.transform(filter_contaminants,
                                                   input=filter_runs_task,
-                                                  filter=suffix('.fasta'),
-                                                  output='.good.fasta')
+                                                  filter=suffix('.fastq'),
+                                                  output='.uncontam.fastq')
     filter_contaminants_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     filter_uncontaminated_task = pipeline.transform(filter_uncontaminated,
                                                     input=filter_contaminants_task,
-                                                    filter=suffix('.fasta'),
-                                                    output='.refpairs.fasta')
+                                                    filter=suffix('.fastq'),
+                                                    output='.matched.fastq')
     filter_uncontaminated_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    if globals_.config.getboolean('Tasks', 'shift_correct_ccs'):
-        ccs_shift_correction_task = pipeline.transform(ccs_shift_correction,
-                                                       input=filter_uncontaminated_task,
-                                                       filter=suffix('.fasta'),
-                                                       output='.shift.fasta')
-        ccs_shift_correction_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-        degap_input_task = ccs_shift_correction_task
-    else:
-        every_other_task = pipeline.transform(every_other,
-                                              input=filter_uncontaminated_task,
-                                              filter=suffix('.fasta'),
-                                              output='.norefs.fasta')
-        every_other_task.jobs_limit(n_local_jobs, local_job_limiter)
-        degap_input_task = every_other_task
-
-    degap_task = pipeline.transform(degap,
-                                    input = degap_input_task,
-                                    filter=suffix('.fasta'),
-                                    output='degapped.fasta')
-    degap_task.jobs_limit(n_local_jobs, local_job_limiter)
-
     filter_length_task = pipeline.transform(filter_length,
-                                            input=degap_task,
-                                            filter=suffix('.fasta'),
-                                            output='.lenfilter.fasta')
+                                            input=filter_uncontaminated_task,
+                                            filter=suffix('.fastq'),
+                                            output='.lenfilter.fastq')
     filter_length_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     cluster_task = pipeline.subdivide(cluster,
