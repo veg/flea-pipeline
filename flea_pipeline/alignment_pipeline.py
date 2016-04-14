@@ -82,8 +82,8 @@ def filter_runs(infile, outfile):
 def filter_contaminants(infile, outfile):
     uncontam = outfile
     contam = outfile.replace('uncontam', 'contam')
-    db = globals_.config.get('Parameters', 'contaminants_db'),
-    id_ = globals_.config.get('Parameters', 'contaminant_identity'),
+    db = globals_.config.get('Parameters', 'contaminants_db')
+    id_ = globals_.config.get('Parameters', 'contaminant_identity')
     outfiles = [uncontam, contam]
     cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
            ' -notmatchedfq {uncontam} -matchedfq {contam}'
@@ -95,24 +95,50 @@ def filter_contaminants(infile, outfile):
 
 @must_work()
 @report_wrapper
-def filter_uncontaminated(infile, outfile):
+def filter_db(infile, outfile):
+    """Keep sequences that match the database.
+
+    Also produces a 'calns' file with strand information (+ or -) and
+    compressed pairwise alignment information for each sequence and
+    its match.
+    """
     dbfile = globals_.config.get('Parameters', 'reference_db')
     identity = globals_.config.get('Parameters', 'reference_identity')
     max_accepts = globals_.config.get('Parameters', 'max_accepts')
     max_rejects = globals_.config.get('Parameters', 'max_rejects')
-    matched = outfile
-    notmatched = outfile.replace('matched', 'notmatched')
-    outfiles = [matched, notmatched]
+    useroutfile = '{}.userout'.format(remove_suffix(outfile, '.fastq'))
+    outfiles = [outfile, useroutfile]
 
     cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
-           ' -notmatchedfq {notmatched} -matchedfq {matched}'
+           ' -matchedfq {outfile} -userout {userout}'
+           ' -userfields qstrand+tstrand+caln'
            ' -top_hit_only -strand both'
            ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
                      infile=infile, db=dbfile, id=identity,
-                     matched=matched, notmatched=notmatched,
+                     outfile=outfile, userout=useroutfile,
                      max_accepts=max_accepts, max_rejects=max_rejects)
-    return maybe_qsub(cmd, infile, outfiles=outfile, name="filter-uncontaminated")
+    return maybe_qsub(cmd, infile, outfiles=outfile, name="filter-db")
+
+
+@must_work()
+@report_wrapper
+def trim_terminal_gaps(infile, outfile):
+    """Get reverse complement of each sequence if necessary. Then trim
+    terminal insertions relative to the matched database sequence.
+
+    """
+    userfile = '{}.userout'.format(remove_suffix(infile, '.fastq'))
+    infiles = [infile, userfile]
+    kwargs = {
+        'python': globals_.config.get('Paths', 'python'),
+        'script': os.path.join(globals_.script_dir, "trim_terminal_gaps.py"),
+        'infile': infile,
+        'userfile': userfile,
+        'outfile': outfile,
+        }
+    cmd = ("{python} {script} {infile} {userfile} {outfile}").format(**kwargs)
+    return maybe_qsub(cmd, infiles, outfile, name="trim-terminal-gaps")
 
 
 @must_work(illegal_chars='-')
@@ -607,14 +633,20 @@ def make_alignment_pipeline(name=None):
                                                   output='.uncontam.fastq')
     filter_contaminants_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    filter_uncontaminated_task = pipeline.transform(filter_uncontaminated,
-                                                    input=filter_contaminants_task,
-                                                    filter=suffix('.fastq'),
-                                                    output='.matched.fastq')
-    filter_uncontaminated_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+    filter_db_task = pipeline.transform(filter_db,
+                                        input=filter_contaminants_task,
+                                        filter=suffix('.fastq'),
+                                        output='.dbfiltered.fastq')
+    filter_db_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+
+    trim_terminal_gaps_task = pipeline.transform(trim_terminal_gaps,
+                                            input=filter_db_task,
+                                            filter=suffix('.fastq'),
+                                            output='.gapstripped.fastq')
+    trim_terminal_gaps_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     filter_length_task = pipeline.transform(filter_length,
-                                            input=filter_uncontaminated_task,
+                                            input=trim_terminal_gaps_task,
                                             filter=suffix('.fastq'),
                                             output='.lenfilter.fastq')
     filter_length_task.jobs_limit(n_local_jobs, local_job_limiter)

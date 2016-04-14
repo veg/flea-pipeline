@@ -145,38 +145,38 @@ def trim(seq):
     return ''.join(head), ''.join(body), ''.join(tail)
 
 
+def trim_record(r):
+    fastq = 'phred_quality' in r.letter_annotations
+    head, body, tail = trim(str(r.seq))
+
+    head_record = new_record_seq_str(r, head)
+    body_record = new_record_seq_str(r, body)
+    tail_record = new_record_seq_str(r, tail)
+
+    if fastq:
+        quality = r.letter_annotations['phred_quality']
+
+        head_record.letter_annotations['phred_quality'] = quality[:len(head)]
+        body_record.letter_annotations['phred_quality'] = quality[len(head):(len(head) + len(body))]
+        tail_record.letter_annotations['phred_quality'] = quality[(len(head) + len(body)):]
+    return head_record, body_record, tail_record
+
+
+def _notempty(rs):
+    return (r for r in rs if len(r.seq))
+
+
 def trim_file(infile, outfile, fastq=False):
     filetype = 'fastq' if fastq else 'fasta'
 
-    head_records = []
-    body_records = []
-    tail_records = []
-
-    for r in SeqIO.parse(infile, filetype):
-        head, body, tail = trim(str(r.seq))
-
-        head_record = new_record_seq_str(r, head)
-        body_record = new_record_seq_str(r, body)
-        tail_record = new_record_seq_str(r, tail)
-
-        if fastq:
-            quality = r.letter_annotations['phred_quality']
-
-            head_record.letter_annotations['phred_quality'] = quality[:len(head)]
-            body_record.letter_annotations['phred_quality'] = quality[len(head):(len(head) + len(body))]
-            tail_record.letter_annotations['phred_quality'] = quality[(len(head) + len(body)):]
-
-            body_records.append(body_record)
-            if len(head_record):
-                head_records.append(head_record)
-            if len(tail_record):
-                tail_records.append(tail_record)
+    results = (trim_record(r) for r in SeqIO.parse(infile, filetype))
+    heads, bodies, tails = zip(*results)
 
     head_file = "{}.heads".format(outfile)
     tail_file = "{}.tails".format(outfile)
-    SeqIO.write(body_records, outfile, filetype)
-    SeqIO.write(head_records, head_file, filetype)
-    SeqIO.write(tail_records, tail_file, filetype)
+    SeqIO.write(_notempty(heads), head_file, filetype)
+    SeqIO.write(_notempty(bodies), outfile, filetype)
+    SeqIO.write(_notempty(tails), tail_file, filetype)
 
 
 if __name__ == "__main__":
