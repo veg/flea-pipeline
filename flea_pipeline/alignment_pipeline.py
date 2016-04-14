@@ -72,9 +72,9 @@ def trim_heads_and_tails(infile, outfile):
 def filter_runs(infile, outfile):
     runlen = globals_.config.getint('Parameters', 'run_length')
     cregexp = run_regexp(runlen)
-    records = SeqIO.parse(infile, 'fasta')
+    records = SeqIO.parse(infile, 'fastq')
     result = (r for r in records if cregexp.search(str(r.seq)) is None)
-    SeqIO.write(result, outfile, 'fasta')
+    SeqIO.write(result, outfile, 'fastq')
 
 
 @must_work()
@@ -597,8 +597,8 @@ def make_alignment_pipeline(name=None):
 
     filter_runs_task = pipeline.transform(filter_runs,
                                           input=trim_task,
-                                          filter=suffix('.fasta'),
-                                          output='.noruns.fasta')
+                                          filter=suffix('.fastq'),
+                                          output='.noruns.fastq')
     filter_runs_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     filter_contaminants_task = pipeline.transform(filter_contaminants,
