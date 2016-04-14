@@ -49,7 +49,7 @@ def filter_fastq(infile, outfile):
     qmax = globals_.config.get('Parameters', 'qmax')
     max_err_rate = globals_.config.get('Parameters', 'max_err_rate')
     cmd = ('{usearch} -fastq_filter {infile} -fastq_maxee_rate {max_err_rate}'
-         ' -threads 1 -fastq_qmax {qmax} -fastq_minlen {min_len} -fastaout {outfile}'
+         ' -threads 1 -fastq_qmax {qmax} -fastq_minlen {min_len} -fastqout {outfile}'
          ' -relabel "{seq_id}_"'.format(
             usearch=globals_.config.get('Paths', 'usearch'),
             infile=infile, outfile=outfile, qmax=qmax, min_len=min_len(),
@@ -586,7 +586,7 @@ def make_alignment_pipeline(name=None):
     filter_fastq_task = pipeline.transform(filter_fastq,
                                            input=None,
                                            filter=formatter(),
-                                           output=os.path.join(pipeline_dir, '{basename[0]}.qfilter.fasta'))
+                                           output=os.path.join(pipeline_dir, '{basename[0]}.qfilter.fastq'))
     filter_fastq_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     trim_task = pipeline.transform(trim_heads_and_tails,
