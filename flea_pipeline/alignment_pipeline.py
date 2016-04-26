@@ -92,9 +92,10 @@ def filter_contaminants(infile, outfile):
     return maybe_qsub(cmd, infile, outfiles=outfiles, name='filter-contaminants')
 
 
-def usearch_reference_db(infile, outfile, name=None):
+def usearch_reference_db(infile, outfile, dbfile=None, name=None):
     """run usearch_global against reference database and print fasta hits"""
-    dbfile = globals_.config.get('Parameters', 'reference_db')
+    if dbfile is None:
+        dbfile = globals_.config.get('Parameters', 'reference_db')
     identity = globals_.config.get('Parameters', 'reference_identity')
     max_accepts = globals_.config.get('Parameters', 'max_accepts')
     max_rejects = globals_.config.get('Parameters', 'max_rejects')
@@ -252,10 +253,57 @@ def cluster_consensus(infile, outfile):
     return maybe_qsub(cmd, infile, outfile, name="cluster-consensus")
 
 
+def is_in_frame(seq):
+    if len(seq) % 3 != 0:
+        return False
+    t = seq.translate()
+    if len(t) != len(seq) / 3:
+        return False
+    if '*' in t:
+        return False
+    return True
+
+
+def new_record_id(record, new_id):
+    result = record[:]
+    result.id = new_id
+    result.name = ""
+    result.description = ""
+    return result
+
+
 @must_work()
 @report_wrapper
-def hqcs_db_search(infile, outfile):
-    return usearch_reference_db(infile, outfile, name='hqcs-db-search')
+def inframe_hqcs(infile, outfile):
+    """Filter to in-frame hqcs sequences with no stop codons"""
+    records = SeqIO.parse(infile, 'fasta')
+    result = list(new_record_id(r, '{}_inframe'.format(r.id))
+                  for r in records if is_in_frame(r.seq))
+    SeqIO.write(result, outfile, 'fasta')
+
+
+def pause_for_editing_inframe_hqcs():
+    infile = os.path.join(pipeline_dir, 'inframe_hqcs.fasta')
+    outfile = os.path.join(pipeline_dir, 'inframe_hqcs.edited.fasta')
+    if globals_.config.getboolean('Tasks', 'use_inframe_hqcs'):
+        input('Paused for manual editing of {}'
+              '\nPress Enter to continue.'.format(outfile))
+        # check that result is not eempty
+        n = sum(1 for r in SeqIO.parse(outfile, 'fasta'))
+        if n == 0:
+            raise Exception('{} is empty'.format(outfile))
+    else:
+        # just use global reference file
+        dbfile = globals_.config.get('Parameters', 'reference_db')
+        shutil.copyfile(dbfile, outfile)
+
+
+@must_work()
+@report_wrapper
+def hqcs_db_search(infiles, outfile):
+    infile, dbfile = infiles
+    check_basename(dbfile, 'inframe_hqcs.edited.fasta')
+    return usearch_reference_db(infile, outfile, dbfile=dbfile, name='hqcs-db-search')
 
 
 @must_work(in_frame=True)
@@ -341,11 +389,11 @@ def cat_all_hqcs(infiles, outfile):
 
 @must_work()
 @report_wrapper
-def copy_protein_alignment(infile, outfile):
+def copy_file(infile, outfile):
     shutil.copyfile(infile, outfile)
 
 
-def pause_for_editing():
+def pause_for_editing_alignment():
     if globals_.config.getboolean('Tasks', 'pause_after_codon_alignment'):
         infile = os.path.join(pipeline_dir, 'hqcs.translated.aligned.fasta')
         outfile = os.path.join(pipeline_dir, 'hqcs.translated.aligned.edited.fasta')
@@ -620,8 +668,27 @@ def make_alignment_pipeline(name=None):
                                          output='{path[0]}.hqcs.fasta')
     cat_clusters_task.jobs_limit(n_local_jobs, local_job_limiter)
 
+    inframe_hqcs_task = pipeline.transform(inframe_hqcs,
+                                           input=cat_clusters_task,
+                                           filter=suffix('.fasta'),
+                                           output='.inframe.fasta')
+    inframe_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    cat_inframe_hqcs_task = pipeline.merge(cat_wrapper_ids,
+                                           input=inframe_hqcs_task,
+                                           output=os.path.join(pipeline_dir, 'inframe_hqcs.fasta'))
+    cat_inframe_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    copy_inframe_hqcs_task = pipeline.transform(copy_file,
+                                                input=cat_inframe_hqcs_task,
+                                                filter=suffix('.fasta'),
+                                                output='.edited.fasta')
+    copy_inframe_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
+    copy_inframe_hqcs_task.posttask(pause_for_editing_inframe_hqcs)
+
     hqcs_db_search_task = pipeline.transform(hqcs_db_search,
                                              input=cat_clusters_task,
+                                             add_inputs=add_inputs(copy_inframe_hqcs_task),
                                              filter=suffix('.fasta'),
                                              output='.refpairs.fasta')
     hqcs_db_search_task.jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -675,13 +742,13 @@ def make_alignment_pipeline(name=None):
                                                  output='.aligned.fasta')
     align_hqcs_protein_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    copy_protein_alignment_task = pipeline.transform(copy_protein_alignment,
+    copy_protein_alignment_task = pipeline.transform(copy_file,
                                                      name='copy_protein_alignment',
                                                      input=align_hqcs_protein_task,
                                                      filter=suffix('.fasta'),
                                                      output='.edited.fasta')
     copy_protein_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
-    copy_protein_alignment_task.posttask(pause_for_editing)
+    copy_protein_alignment_task.posttask(pause_for_editing_alignment)
 
     backtranslate_alignment_task = pipeline.merge(backtranslate_alignment,
                                                   input=[cat_all_hqcs_task,
