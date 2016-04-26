@@ -1,8 +1,8 @@
 Python dependencies
 -------------------
-Listed in `requirements.txt`.
+pip-tools is used to list requirements and pin versions.
 
-Install with `pip install -r requirements.txt`.
+Install pip-tools. Then just run 'pip-sync requirements.txt'
 
 Then run `pip install -r requirements2.txt`. This is done seperately
 because BioExt needs NumPy to be present.
@@ -10,13 +10,12 @@ because BioExt needs NumPy to be present.
 
 3rd party dependencies
 ----------------------
-- usearch (version >= 8.0.1623)
+- usearch (version >= 8.1.1861)
 - mafft
 
 
 Installation
 ------------
-
 `python setup.py install`
 
 
