@@ -15,7 +15,7 @@ FastTree: FastTree
 local_jobs: 1
 
 # maximum jobs submitted to the cluster
-remote_jobs: 64
+remote_jobs: 4
 
 use_cluster: True
 queue: fast
