@@ -1,6 +1,8 @@
 [Paths]
 bealign: bealign.py
 python: python
+julia: julia
+consensus_script: /path/to/script.jl
 
 # the version of bam2msa in tristan's fork of BioExt is outdated.
 bam2msa: /opt/python-3.4.3/bin/bam2msa
@@ -44,10 +46,13 @@ reference_identity: 0.8
 cluster_identity: 0.99
 ccs_to_hqcs_identity: 0.95
 min_cluster_size: 5
-max_cluster_size: 30
 
 # for clustering
 min_length_ratio: 0.995
+
+consensus_batch_size: 30
+consensus_log_ins: -2
+consensus_log_del: -2
 
 # for copy number
 max_query_target_length_ratio: 1.005

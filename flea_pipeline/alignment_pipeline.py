@@ -158,59 +158,64 @@ def filter_length(infile, outfile):
     SeqIO.write(result, outfile, 'fastq')
 
 
-@must_produce(n=int(globals_.config.get('Parameters', 'min_n_clusters')))
+@must_work()
 @report_wrapper
-def cluster(infile, outfiles, pathname):
-    for f in outfiles:
-        os.unlink(f)
-    outdir = os.path.dirname(pathname)
-    outpattern = os.path.join(outdir, 'cluster_')
+def cluster(infile, outfile):
     minsl = globals_.config.get('Parameters', 'min_length_ratio')
     cmd = ('{usearch} -cluster_fast {infile} -id {id}'
-           ' -clusters {outpattern} -sort length'
+           ' -uc {outfile} -sort length'
            ' -maxaccepts {max_accepts} -maxrejects {max_rejects} -minsl {minsl}')
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
                      infile=infile, id=globals_.config.get('Parameters', 'cluster_identity'),
-                     outpattern=outpattern,
+                     outfile=outfile,
                      max_accepts=globals_.config.get('Parameters', 'max_accepts'),
                      max_rejects=globals_.config.get('Parameters', 'max_rejects'),
                      minsl=minsl)
-    result = maybe_qsub(cmd, infile, outfiles, name="cluster")
-    r = re.compile(r'^cluster_[0-9]+$')
-    for f in list(f for f in os.listdir(outdir) if r.match(f)):
-        oldfile = os.path.join(outdir, f)
-        newfile = ''.join([oldfile, '.raw.fasta'])
-        os.rename(oldfile, newfile)
-    return result
+    return maybe_qsub(cmd, infile, outfile, name="cluster")
 
 
+@must_work()
 @report_wrapper
-def select_clusters(infile, outfile):
-    records = list(SeqIO.parse(infile, 'fasta'))
-    minsize = int(globals_.config.get('Parameters', 'min_cluster_size'))
-    maxsize = int(globals_.config.get('Parameters', 'max_cluster_size'))
-    if len(records) < minsize:
-        touch(outfile)  # empty file; needed for pipeline sanity
-        return
-    if len(records) > maxsize:
-        records = sample(records, maxsize)
-    SeqIO.write(records, outfile, 'fasta')
+def fastq_clusters(infile, outfiles, outdir):
+    for f in outfiles:
+        os.unlink(f)
+    ucfile = infile
+    fastqfile = '{}.fastq'.format(remove_suffix(infile, '.clustered.uc'))
+    kwargs = {
+        'python': globals_.config.get('Paths', 'python'),
+        'script': os.path.join(globals_.script_dir, "cluster_fastq.py"),
+        'ucfile': ucfile,
+        'fastqfile': fastqfile,
+        'outdir': outdir,
+        'minsize': globals_.config.get('Parameters', 'min_cluster_size'),
+        }
+    cmd = ("{python} {script} --minsize {minsize}"
+           " {ucfile} {fastqfile} {outdir}".format(**kwargs))
+    return maybe_qsub(cmd, infile, [], name="cluster-fastq")
+
+
+@must_work(illegal_chars='-', min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
+@report_wrapper
+def cluster_consensus(infiles, outfile, directory, prefix):
+    """Alignment-free cluster consensus."""
+    kwargs = {
+        'julia': globals_.config.get('Paths', 'julia'),
+        'script': globals_.config.get('Paths', 'consensus_script'),
+        'pattern': os.path.join(directory, "*.fastq"),
+        'prefix': '{}_consensus_'.format(prefix),
+        'outfile': outfile,
+        'batch': globals_.config.get('Parameters', 'consensus_batch_size'),
+        'log_ins': globals_.config.get('Parameters', 'consensus_log_ins'),
+        'log_del': globals_.config.get('Parameters', 'consensus_log_del'),
+
+        }
+    cmd = ('{julia} {script} --prefix \'{prefix}\' --batch \'{batch}\''
+           ' \'{log_ins}\' \'{log_del}\' \'{pattern}\' > {outfile}').format(**kwargs)
+    return maybe_qsub(cmd, infiles, outfile, name="cluster-consensus-{}".format(prefix))
 
 
 # making wrappers like this is necessary because nested function
 # definitions are not picklable.
-
-@must_work(maybe=True)
-@report_wrapper
-def mafft_wrapper_maybe(infile, outfile):
-    mafft(infile, outfile)
-
-
-@must_work(seq_ids=True)
-@report_wrapper
-def mafft_wrapper_seq_ids(infile, outfile):
-    mafft(infile, outfile)
-
 
 @must_work(seq_ids=True)
 @report_wrapper
@@ -235,23 +240,10 @@ def gapped_translate_wrapper(infile, outfile):
     return translate_helper(infile, outfile, gapped=True, name='translate-gapped')
 
 
-@must_work(maybe=True, illegal_chars='-')
+@must_work(seq_ids=True)
 @report_wrapper
-def cluster_consensus(infile, outfile):
-    n = re.search("cluster_([0-9]+)", infile).group(1)
-    seq_id = next(SeqIO.parse(infile, 'fasta')).id
-    label = re.split("_[0-9]+$", seq_id)[0]
-    kwargs = {
-        'python': globals_.config.get('Paths', 'python'),
-        'script': os.path.join(globals_.script_dir, "DNAcons.py"),
-        'infile': infile,
-        'outfile': outfile,
-        'ambifile': '{}.info'.format(outfile[:-len('.fasta')]),
-        'id_str': "{label}_hqcs_{n}".format(label=label, n=n),
-        }
-    cmd = ("{python} {script} -o {outfile} --ambifile {ambifile}"
-           " --id {id_str} {infile}".format(**kwargs))
-    return maybe_qsub(cmd, infile, outfile, name="cluster-consensus")
+def mafft_wrapper_seq_ids(infile, outfile):
+    mafft(infile, outfile)
 
 
 def is_in_frame(seq):
@@ -651,42 +643,32 @@ def make_alignment_pipeline(name=None):
                                             output='.lenfilter.fastq')
     filter_length_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    cluster_task = pipeline.subdivide(cluster,
+    cluster_task = pipeline.transform(cluster,
                                       input=filter_length_task,
-                                      filter=formatter('.*/(?P<LABEL>.+).qfilter'),
-                                      output='{path[0]}/{LABEL[0]}.clusters/cluster_*.raw.fasta',
-                                      extras=['{path[0]}/{LABEL[0]}.clusters/cluster_*.raw.fasta'])
+                                      filter=suffix('.fastq'),
+                                      output='.clustered.uc')
     cluster_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-    cluster_task.mkdir(filter_length_task, formatter('.*/(?P<LABEL>.+).qfilter'), '{path[0]}/{LABEL[0]}.clusters')
 
-    select_clusters_task = pipeline.transform(select_clusters,
-                                              input=cluster_task,
-                                              filter=suffix('.fasta'),
-                                              output='.keep.fasta')
-    select_clusters_task.jobs_limit(n_local_jobs, local_job_limiter)
+    fastq_clusters_task = pipeline.subdivide(fastq_clusters,
+                                            input=cluster_task,
+                                            filter=formatter(),
+                                            output='{path[0]}/{basename[0]}.clusters/cluster_*.fastq',
+                                            extras=['{path[0]}/{basename[0]}.clusters'])
+    fastq_clusters_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+    fastq_clusters_task.mkdir(cluster_task,
+                             formatter('.*/(?P<LABEL>.+).clustered.uc'),
+                             '{path[0]}/{basename[0]}.clusters')
 
-    align_clusters_task = pipeline.transform(mafft_wrapper_maybe,
-                                             name="align_clusters",
-                                             input=select_clusters_task,
-                                             filter=suffix('.fasta'),
-                                             output='.aligned.fasta')
-    align_clusters_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-
-    cluster_consensus_task = pipeline.transform(cluster_consensus,
-                                                input=align_clusters_task,
-                                                filter=suffix('.fasta'),
-                                                output='.hqcs.fasta')
+    cluster_consensus_task = pipeline.collate(cluster_consensus,
+                                              input=fastq_clusters_task,
+                                              filter=formatter('.*/(?P<LABEL>.+).qfilter'),
+                                              output=os.path.join(pipeline_dir, '{LABEL[0]}.consensus.fasta'),
+                                              extras=['{path[0]}',
+                                                      '{LABEL[0]}'])
     cluster_consensus_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    cat_clusters_task = pipeline.collate(cat_wrapper_ids,
-                                         name="cat_clusters",
-                                         input=cluster_consensus_task,
-                                         filter=formatter(),
-                                         output='{path[0]}.hqcs.fasta')
-    cat_clusters_task.jobs_limit(n_local_jobs, local_job_limiter)
-
     inframe_hqcs_task = pipeline.transform(inframe_hqcs,
-                                           input=cat_clusters_task,
+                                           input=cluster_consensus_task,
                                            filter=suffix('.fasta'),
                                            output='.inframe.fasta')
     inframe_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
@@ -704,7 +686,7 @@ def make_alignment_pipeline(name=None):
     copy_inframe_hqcs_task.posttask(pause_for_editing_inframe_hqcs)
 
     hqcs_db_search_task = pipeline.transform(hqcs_db_search,
-                                             input=cat_clusters_task,
+                                             input=cluster_consensus_task,
                                              add_inputs=add_inputs(copy_inframe_hqcs_task),
                                              filter=suffix('.fasta'),
                                              output='.refpairs.fasta')
@@ -730,7 +712,7 @@ def make_alignment_pipeline(name=None):
 
     compute_copynumbers_task = pipeline.collate(compute_copynumbers,
                                                 input=[unique_hqcs_task, make_individual_dbs_task, filter_length_task],
-                                                filter=formatter(r'.*/(?P<LABEL>.+).(qfilter|clusters)'),
+                                                filter=formatter(r'.*/(?P<LABEL>.+).(qfilter|consensus)'),
                                                 output=os.path.join(pipeline_dir, '{LABEL[0]}.copynumbers.tsv'))
     compute_copynumbers_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 

@@ -131,6 +131,7 @@ def reroot_at_mrca(infile, outfile):
 
 def mrca(infile, copynumber_file, outfile):
     """Runs DNAcons, writing result to `outfile`."""
+    # TODO: replace with weighted alignment-free consensus
     kwargs = {
         'python': globals_.config.get('Paths', 'python'),
         'script': os.path.join(globals_.script_dir, "DNAcons.py"),
