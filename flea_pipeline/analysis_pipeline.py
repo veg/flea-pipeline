@@ -29,7 +29,7 @@ from flea_pipeline.alignment_pipeline import mafft, cat_wrapper_ids
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "analysis")
-hyphy_script_dir = os.path.abspath(os.path.join(globals_.script_dir, '../hyphy_scripts'))
+hyphy_script_dir = globals_.script_dir
 
 
 def hyphy_script(name):
@@ -129,15 +129,8 @@ def reroot_at_mrca(infile, outfile):
     Phylo.write([tree], outfile, 'newick')
 
 
-def mrca(infile, recordfile, copynumber_file, outfile, oldest_id):
-    """Writes records from `infile` to `recordfile` that have an ID
-    corresponding to `oldest_id`. Then runs DNAcons, writing result to
-    `outfile`.
-
-    """
-    records = SeqIO.parse(infile, "fasta")
-    oldest_records = (r for r in records if r.id.startswith(oldest_id))
-    SeqIO.write(oldest_records, recordfile, "fasta")
+def mrca(infile, copynumber_file, outfile):
+    """Runs DNAcons, writing result to `outfile`."""
     kwargs = {
         'python': globals_.config.get('Paths', 'python'),
         'script': os.path.join(globals_.script_dir, "DNAcons.py"),
@@ -156,12 +149,20 @@ def mrca(infile, recordfile, copynumber_file, outfile, oldest_id):
 @must_work(in_frame=True)
 @report_wrapper
 def compute_mrca(infiles, outfile):
+    """Writes oldest sequences to a seperate file, then generates
+    their consensus.
+
+    """
     alignment_file, copynumber_file = infiles
     strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
     oldest_timepoint = min(globals_.timepoints, key=strptime)
     oldest_records_filename = os.path.join(pipeline_dir, 'oldest_sequences.fasta')
-    return mrca(alignment_file, oldest_records_filename, copynumber_file,
-                outfile, oldest_timepoint.label)
+
+    records = SeqIO.parse(alignment_file, "fasta")
+    oldest_records = (r for r in records if r.id.startswith(oldest_timepoint.label))
+    SeqIO.write(oldest_records, oldest_records_filename, "fasta")
+
+    return mrca(oldest_records_filename, copynumber_file, outfile)
 
 
 @must_work()

@@ -5,6 +5,8 @@ import tempfile
 from functools import partial
 from collections import defaultdict
 import itertools
+import warnings
+import shutil
 
 import numpy as np
 from ruffus import Pipeline, suffix, formatter, add_inputs
@@ -90,9 +92,10 @@ def filter_contaminants(infile, outfile):
     return maybe_qsub(cmd, infile, outfiles=outfiles, name='filter-contaminants')
 
 
-def usearch_reference_db(infile, outfile, name=None):
+def usearch_reference_db(infile, outfile, dbfile=None, name=None):
     """run usearch_global against reference database and print fasta hits"""
-    dbfile = globals_.config.get('Parameters', 'reference_db')
+    if dbfile is None:
+        dbfile = globals_.config.get('Parameters', 'reference_db')
     identity = globals_.config.get('Parameters', 'reference_identity')
     max_accepts = globals_.config.get('Parameters', 'max_accepts')
     max_rejects = globals_.config.get('Parameters', 'max_rejects')
@@ -250,10 +253,57 @@ def cluster_consensus(infile, outfile):
     return maybe_qsub(cmd, infile, outfile, name="cluster-consensus")
 
 
+def is_in_frame(seq):
+    if len(seq) % 3 != 0:
+        return False
+    t = seq.translate()
+    if len(t) != len(seq) / 3:
+        return False
+    if '*' in t:
+        return False
+    return True
+
+
+def new_record_id(record, new_id):
+    result = record[:]
+    result.id = new_id
+    result.name = ""
+    result.description = ""
+    return result
+
+
 @must_work()
 @report_wrapper
-def hqcs_db_search(infile, outfile):
-    return usearch_reference_db(infile, outfile, name='hqcs-db-search')
+def inframe_hqcs(infile, outfile):
+    """Filter to in-frame hqcs sequences with no stop codons"""
+    records = SeqIO.parse(infile, 'fasta')
+    result = list(new_record_id(r, '{}_inframe'.format(r.id))
+                  for r in records if is_in_frame(r.seq))
+    SeqIO.write(result, outfile, 'fasta')
+
+
+def pause_for_editing_inframe_hqcs():
+    infile = os.path.join(pipeline_dir, 'inframe_hqcs.fasta')
+    outfile = os.path.join(pipeline_dir, 'inframe_hqcs.edited.fasta')
+    if globals_.config.getboolean('Tasks', 'use_inframe_hqcs'):
+        input('Paused for manual editing of {}'
+              '\nPress Enter to continue.'.format(outfile))
+        # check that result is not eempty
+        n = sum(1 for r in SeqIO.parse(outfile, 'fasta'))
+        if n == 0:
+            raise Exception('{} is empty'.format(outfile))
+    else:
+        # just use global reference file
+        dbfile = globals_.config.get('Parameters', 'reference_db')
+        shutil.copyfile(dbfile, outfile)
+
+
+@must_work()
+@report_wrapper
+def hqcs_db_search(infiles, outfile):
+    infile, dbfile = infiles
+    check_basename(dbfile, 'inframe_hqcs.edited.fasta')
+    return usearch_reference_db(infile, outfile, dbfile=dbfile, name='hqcs-db-search')
 
 
 @must_work(in_frame=True)
@@ -312,8 +362,12 @@ def compute_copynumbers(infiles, outfile):
     with open(pairfile) as f:
         pairs = list(line.strip().split("\t") for line in f.readlines())
     hqcs_counts = defaultdict(lambda: 0)
-    for ccs_id, ccs_id in pairs:
-        hqcs_counts[ccs_id] += 1
+    for pair in pairs:
+        if len(pair) != 2:
+            warnings.warn('CCS {} did not match any HQCS'.format(pair))
+            continue
+        ccs_id, hqcs_id = pair
+        hqcs_counts[hqcs_id] += 1
     # deal with hqcs sequences with no copynumber by giving them 0
     ids = list(r.id for r in SeqIO.parse(hqcsfile, 'fasta'))
     for i in ids:
@@ -333,10 +387,27 @@ def cat_all_hqcs(infiles, outfile):
     cat_files(infiles, outfile)
 
 
-def pause(filename):
+@must_work()
+@report_wrapper
+def copy_file(infile, outfile):
+    shutil.copyfile(infile, outfile)
+
+
+def pause_for_editing_alignment():
     if globals_.config.getboolean('Tasks', 'pause_after_codon_alignment'):
+        infile = os.path.join(pipeline_dir, 'hqcs.translated.aligned.fasta')
+        outfile = os.path.join(pipeline_dir, 'hqcs.translated.aligned.edited.fasta')
         input('Paused for manual editing of {}'
-              '\nPress Enter to continue.'.format(filename))
+              '\nPress Enter to continue.'.format(outfile))
+        # check that all sequences in `outfile` differ only in gap locations
+        unedited = dict((r.id, r) for r in SeqIO.parse(infile, 'fasta'))
+        edited = dict((r.id, r) for r in SeqIO.parse(outfile, 'fasta'))
+        for k in edited.keys():
+            edited_seq = list(c for c in str(edited[k].seq) if c != '-')
+            unedited_seq = list(c for c in str(unedited[k].seq) if c != '-')
+            if edited_seq != unedited_seq:
+                raise Exception('Incorrect manual editing of "{}".'
+                                ' "{}" differs after editing.'.format(outfile, k))
 
 
 @must_work()
@@ -344,7 +415,7 @@ def pause(filename):
 def backtranslate_alignment(infiles, outfile):
     hqcs, aligned_protein = infiles
     check_basename(hqcs, 'hqcs.fasta')
-    check_suffix(aligned_protein, '.aligned.fasta')
+    check_suffix(aligned_protein, '.translated.aligned.edited.fasta')
     kwargs = {
         'python': globals_.config.get('Paths', 'python'),
         'script': os.path.join(globals_.script_dir, "backtranslate.py"),
@@ -392,6 +463,7 @@ def hqcs_ccs_pairs(infiles, outfile):
 @must_work()
 @report_wrapper
 def combine_pairs(infiles, outfiles, outdir):
+    # FIXME: code duplication with compute_copynumbers
     for f in outfiles:
         os.unlink(f)
     pairfile, hqcsfile = infiles
@@ -402,7 +474,11 @@ def combine_pairs(infiles, outfiles, outdir):
     with open(pairfile) as handle:
         pairs = list(line.strip().split("\t") for line in handle.readlines())
     match_dict = defaultdict(list)
-    for ccs, hqcs in pairs:
+    for pair in pairs:
+        if len(pair) != 2:
+            warnings.warn('CCS {} did not match any HQCS'.format(pair))
+            continue
+        ccs, hqcs = pair
         match_dict[hqcs].append(ccs)
     hqcs_records = list(SeqIO.parse(hqcsfile, "fasta"))
     ccs_records = list(SeqIO.parse(ccsfile, "fasta"))
@@ -481,7 +557,7 @@ def insert_gaps_wrapper(infiles, outfile):
 @report_wrapper
 def diagnose_alignment(infiles, outfiles):
     hqcs, ccs, cn = infiles
-    check_suffix(hqcs, 'translated.aligned.fasta')
+    check_suffix(hqcs, 'translated.aligned.edited.fasta')
     check_suffix(ccs, '.no-partial-gaps.translated.fasta')
     check_suffix(cn, '.tsv')
     kwargs = {
@@ -592,8 +668,27 @@ def make_alignment_pipeline(name=None):
                                          output='{path[0]}.hqcs.fasta')
     cat_clusters_task.jobs_limit(n_local_jobs, local_job_limiter)
 
+    inframe_hqcs_task = pipeline.transform(inframe_hqcs,
+                                           input=cat_clusters_task,
+                                           filter=suffix('.fasta'),
+                                           output='.inframe.fasta')
+    inframe_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    cat_inframe_hqcs_task = pipeline.merge(cat_wrapper_ids,
+                                           input=inframe_hqcs_task,
+                                           output=os.path.join(pipeline_dir, 'inframe_hqcs.fasta'))
+    cat_inframe_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    copy_inframe_hqcs_task = pipeline.transform(copy_file,
+                                                input=cat_inframe_hqcs_task,
+                                                filter=suffix('.fasta'),
+                                                output='.edited.fasta')
+    copy_inframe_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
+    copy_inframe_hqcs_task.posttask(pause_for_editing_inframe_hqcs)
+
     hqcs_db_search_task = pipeline.transform(hqcs_db_search,
                                              input=cat_clusters_task,
+                                             add_inputs=add_inputs(copy_inframe_hqcs_task),
                                              filter=suffix('.fasta'),
                                              output='.refpairs.fasta')
     hqcs_db_search_task.jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -646,12 +741,19 @@ def make_alignment_pipeline(name=None):
                                                  filter=suffix('.fasta'),
                                                  output='.aligned.fasta')
     align_hqcs_protein_task.jobs_limit(n_local_jobs, local_job_limiter)
-    align_hqcs_protein_task.posttask(partial(pause, 'protein alignment'))
+
+    copy_protein_alignment_task = pipeline.transform(copy_file,
+                                                     name='copy_protein_alignment',
+                                                     input=align_hqcs_protein_task,
+                                                     filter=suffix('.fasta'),
+                                                     output='.edited.fasta')
+    copy_protein_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
+    copy_protein_alignment_task.posttask(pause_for_editing_alignment)
 
     backtranslate_alignment_task = pipeline.merge(backtranslate_alignment,
                                                   input=[cat_all_hqcs_task,
-                                                         align_hqcs_protein_task],
-                                                  output=os.path.join(pipeline_dir, 'hqcs.translated.aligned.backtranslated.fasta'))
+                                                         copy_protein_alignment_task],
+                                                  output=os.path.join(pipeline_dir, 'hqcs.translated.aligned.edited.backtranslated.fasta'))
     backtranslate_alignment_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     pipeline.set_head_tasks([filter_fastq_task])
@@ -733,7 +835,7 @@ def make_alignment_pipeline(name=None):
                                 for t in globals_.timepoints)
         diagnose_alignment_task = pipeline.merge(diagnose_alignment,
                                                  name='diagnose_alignment',
-                                                 input=[align_hqcs_protein_task,
+                                                 input=[copy_protein_alignment_task,
                                                         translate_ccs_task,
                                                         merge_copynumbers_task],
                                                  output=diagnosis_output)

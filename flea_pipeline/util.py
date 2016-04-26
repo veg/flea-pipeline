@@ -217,6 +217,9 @@ def insert_gaps(source, target, src_gap, target_gap, gap_char=None):
     >>> insert_gaps("a-bc", "dddeeefff", "-", "---")
     'ddd---eeefff'
 
+    >>> insert_gaps("a--bc", "dddeeefff", "-", "---")
+    'ddd------eeefff'
+
     >>> insert_gaps("aaa---bbbccc", "abc", "---", "-")
     'a-bc'
 
@@ -238,7 +241,7 @@ def insert_gaps(source, target, src_gap, target_gap, gap_char=None):
                                 if ''.join(chunk) != src_gap))
     if len(ungapped_src) % src_skip != 0:
         raise ValueError('ungapped source length does not match gap length')
-    if len(ungapped_src) / src_skip != len(target) / target_skip:
+    if len(ungapped_src) // src_skip != len(target) // target_skip:
         raise ValueError("`src` and `target` have different lengths.")
     result = []
     for chunk in grouper(source, src_skip):

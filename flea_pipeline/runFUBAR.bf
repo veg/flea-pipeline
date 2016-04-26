@@ -1,10 +1,10 @@
 LoadFunctionLibrary ("HXB2Mapper", {"0": "Universal"});
-LoadFunctionLibrary ("lib/dates.bf");
+LoadFunctionLibrary ("dates.bf");
 LoadFunctionLibrary ("DescriptiveStatistics");
 LoadFunctionLibrary ("CodonTools");
 LoadFunctionLibrary ("NJ");
 LoadFunctionLibrary ("ReadDelimitedFiles");
-LoadFunctionLibrary ("lib/tools.bf");
+LoadFunctionLibrary ("tools.bf");
 
 /* important -- specify as absolute paths, otherwise FUBAR breaks */
 fprintf(stdout,"\Enter the alignment file:");

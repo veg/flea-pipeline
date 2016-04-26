@@ -126,7 +126,7 @@ def trim(seq):
 
     """
     nuc_map = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
-    obs = np.array(list(nuc_map[c] for c in seq))
+    obs = np.array(list(nuc_map[c.upper()] for c in seq))
     states = decode(obs, TRANSMAT, EMISSIONPROB, STARTPROB)
     head, body, tail = [], [], []
     for s, c in zip(states, seq):

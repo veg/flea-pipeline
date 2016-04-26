@@ -3,9 +3,11 @@ python_virtualenv: /path/to/virtualenv
 bealign: ${python_virtualenv}/bin/bealign.py
 python: ${python_virtualenv}/bin/python
 
+# the version of bam2msa in tristan's fork of BioExt is outdated.
+bam2msa: /opt/python-3.4.3/bin/bam2msa
+
 mafft: /usr/local/bin/mafft
 usearch: /usr/local/bin/usearch8
-bam2msa: /opt/python-3.4.3/bin/bam2msa
 hyphy: HYPHYMP
 FastTree: FastTree
 
@@ -57,6 +59,11 @@ run_length: 16
 
 [Tasks]
 shift_correct_ccs: False
+
+# if True, use all in-frame HQCS sequences as reference DB for shift
+# correction of HQCSs. Also pause to allow user to edit database.
+use_inframe_hqcs: False
+
 pause_after_codon_alignment: False
 align_ccs: False
 # if False, stop after generating alignment
