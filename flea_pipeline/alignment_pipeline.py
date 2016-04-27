@@ -117,17 +117,19 @@ def filter_uncontaminated(infile, outfile):
     return usearch_reference_db(infile, outfile, name="filter-uncontaminated")
 
 
-def shift_correction_helper(infile, outfile, keep, name=None):
+def shift_correction_helper(infile, outfile, keep, correct, name=None):
     python = globals_.config.get('Paths', 'python')
     script = os.path.join(globals_.script_dir, 'correct_shifts.py')
     keep_option = "--keep" if keep else ""
+    correct_option = "--correct-dels" if correct else ""
     calns_file = "{}.calns".format(infile)
     discard_file = "{}.discarded".format(outfile)
     summary_file = "{}.summary".format(outfile)
-    cmd = ("{python} {script} {keep_option} --calns={calns_file}"
+    cmd = ("{python} {script} {keep_option} {correct_option} --calns={calns_file}"
            " --discard={discard_file} --summary={summary_file}"
            " {infile} {outfile}")
     cmd = cmd.format(python=python, script=script, keep_option=keep_option,
+                     correct_option=correct_option,
                      calns_file=calns_file, discard_file=discard_file,
                      summary_file=summary_file, infile=infile, outfile=outfile)
     return maybe_qsub(cmd, infile, outfile, name=name)
@@ -136,7 +138,7 @@ def shift_correction_helper(infile, outfile, keep, name=None):
 @must_work(seq_ratio=(2, 1))
 @report_wrapper
 def ccs_shift_correction(infile, outfile):
-    return shift_correction_helper(infile, outfile, keep=True,
+    return shift_correction_helper(infile, outfile, keep=True, correct=False,
                                    name="ccs-shift-correction")
 
 
@@ -309,7 +311,7 @@ def hqcs_db_search(infiles, outfile):
 @must_work(in_frame=True)
 @report_wrapper
 def hqcs_shift_correction(infile, outfile):
-    return shift_correction_helper(infile, outfile, keep=False,
+    return shift_correction_helper(infile, outfile, keep=False, correct=True,
                                    name="hqcs-shift-correction")
 
 
