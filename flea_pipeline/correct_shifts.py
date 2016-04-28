@@ -13,7 +13,8 @@ Usage:
   correct_shifts.py -h
 
 Options:
-  --keep            Do not discard sequences, even with bad inserts [default: False]
+  --keep            Do not discard sequences, even with bad inserts [default: True]
+  --correct-dels    Correct single deletion w/ reference base [default: True]
   --calns=<FILE>    File with run-length encoded alignment summaries
   --discard=<FILE>  File to print discarded alignments
   --summary=<FILE>  File to print correction summaries
@@ -120,12 +121,16 @@ def alignment_slice(caln):
     return start, stop
 
 
-def correct_shifts(seq, ref, caln=None, gap_char=None, keep=False):
+def correct_shifts(seq, ref, caln=None, gap_char=None, keep=True, correct=True):
     """Correct frameshifts relative to a reference.
 
     keep: bool
         If True, keep sequences even if they could not be totally
         corrected. Otherwise, discard the whole sequence.
+
+    correct: bool
+        If True, replace single delections with the base from the
+        reference.
 
     """
     # FIXME: make this codon-aware
@@ -152,9 +157,12 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=False):
             if len(subseq) % 3 == 0:
                 index += len(subseq)
                 continue  # keep codon deletions
-            if keep:
+            elif len(subseq) == 1 and correct:
+                result.append(subref)
+            elif keep:
                 result.append('N' * (len(subseq) % 3))
             else:
+                # give up
                 return '', index
         else:  # insertion
             if len(subseq) % 3 == 0:
@@ -179,7 +187,7 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=False):
 
 def correct_shifts_fasta(infile, outfile, calnfile=None,
                          discardfile=None,
-                         alphabet=None, keep=True):
+                         alphabet=None, keep=True, correct=True):
     """Correct all the pairs in a fasta file.
 
     Returns (n_seqs, n_fixed)
@@ -191,7 +199,8 @@ def correct_shifts_fasta(infile, outfile, calnfile=None,
     else:
         with open(calnfile) as handle:
             calns = handle.read().strip().split()
-    results = list(correct_shifts(seq.seq, ref.seq, caln, keep=keep)
+    results = list(correct_shifts(seq.seq, ref.seq, caln,
+                                  keep=keep, correct=correct)
                    for (seq, ref), caln in zip(pairs, calns))
 
     keep = list(new_record_seq_str(seq, result)
@@ -224,9 +233,11 @@ if __name__ == "__main__":
     infile = args["<infile>"]
     outfile = args["<outfile>"]
     keep = args['--keep']
+    correct = args['--correct-dels']
     calnfile = args['--calns']
     discardfile = args['--discard']
     n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, discardfile=discardfile,
-                                           calnfile=calnfile, keep=keep)
+                                           calnfile=calnfile, keep=keep,
+                                           correct=correct)
     if args['--summary']:
         write_correction_result(n_seqs, n_fixed, args['--summary'])

@@ -117,17 +117,19 @@ def filter_uncontaminated(infile, outfile):
     return usearch_reference_db(infile, outfile, name="filter-uncontaminated")
 
 
-def shift_correction_helper(infile, outfile, keep, name=None):
+def shift_correction_helper(infile, outfile, keep, correct, name=None):
     python = globals_.config.get('Paths', 'python')
     script = os.path.join(globals_.script_dir, 'correct_shifts.py')
     keep_option = "--keep" if keep else ""
+    correct_option = "--correct-dels" if correct else ""
     calns_file = "{}.calns".format(infile)
     discard_file = "{}.discarded".format(outfile)
     summary_file = "{}.summary".format(outfile)
-    cmd = ("{python} {script} {keep_option} --calns={calns_file}"
+    cmd = ("{python} {script} {keep_option} {correct_option} --calns={calns_file}"
            " --discard={discard_file} --summary={summary_file}"
            " {infile} {outfile}")
     cmd = cmd.format(python=python, script=script, keep_option=keep_option,
+                     correct_option=correct_option,
                      calns_file=calns_file, discard_file=discard_file,
                      summary_file=summary_file, infile=infile, outfile=outfile)
     return maybe_qsub(cmd, infile, outfile, name=name)
@@ -136,7 +138,7 @@ def shift_correction_helper(infile, outfile, keep, name=None):
 @must_work(seq_ratio=(2, 1))
 @report_wrapper
 def ccs_shift_correction(infile, outfile):
-    return shift_correction_helper(infile, outfile, keep=True,
+    return shift_correction_helper(infile, outfile, keep=True, correct=False,
                                    name="ccs-shift-correction")
 
 
@@ -146,6 +148,14 @@ def every_other(infile, outfile):
     records = SeqIO.parse(infile, 'fasta')
     result = itertools.islice(records, 0, None, 2)
     SeqIO.write(result, outfile, 'fasta')
+
+
+@must_work(illegal_chars='-')
+@report_wrapper
+def degap(infile, outfile):
+    records = (SeqIO.parse(infile, 'fasta'))
+    processed = (update_record_seq(r, r.seq.ungap('-')) for r in records)
+    SeqIO.write(processed, outfile, 'fasta')
 
 
 @must_work()
@@ -306,10 +316,10 @@ def hqcs_db_search(infiles, outfile):
     return usearch_reference_db(infile, outfile, dbfile=dbfile, name='hqcs-db-search')
 
 
-@must_work(in_frame=True)
+@must_work(in_frame=True, illegal_chars='-')
 @report_wrapper
 def hqcs_shift_correction(infile, outfile):
-    return shift_correction_helper(infile, outfile, keep=False,
+    return shift_correction_helper(infile, outfile, keep=False, correct=True,
                                    name="hqcs-shift-correction")
 
 
@@ -429,16 +439,6 @@ def backtranslate_alignment(infiles, outfile):
     return maybe_qsub(cmd, infiles, outfiles=outfile,
                       stdout=stdout, stderr=stderr,
                       name="backtranslate")
-
-
-@must_work()
-@report_wrapper
-def degap_backtranslated_alignment(infile, outfile):
-    # we need this in case sequences were removed during hand-editing
-    # of the alignment
-    records = (SeqIO.parse(infile, 'fasta'))
-    processed = (update_record_seq(r, r.seq.ungap('-')) for r in records)
-    SeqIO.write(processed, outfile, 'fasta')
 
 
 @must_work()
@@ -619,17 +619,23 @@ def make_alignment_pipeline(name=None):
                                                        filter=suffix('.fasta'),
                                                        output='.shift.fasta')
         ccs_shift_correction_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-        filter_length_input_task = ccs_shift_correction_task
+        degap_input_task = ccs_shift_correction_task
     else:
         every_other_task = pipeline.transform(every_other,
                                               input=filter_uncontaminated_task,
                                               filter=suffix('.fasta'),
                                               output='.norefs.fasta')
         every_other_task.jobs_limit(n_local_jobs, local_job_limiter)
-        filter_length_input_task = every_other_task
+        degap_input_task = every_other_task
+
+    degap_task = pipeline.transform(degap,
+                                    input = degap_input_task,
+                                    filter=suffix('.fasta'),
+                                    output='degapped.fasta')
+    degap_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     filter_length_task = pipeline.transform(filter_length,
-                                            input=filter_length_input_task,
+                                            input=degap_task,
                                             filter=suffix('.fasta'),
                                             output='.lenfilter.fasta')
     filter_length_task.jobs_limit(n_local_jobs, local_job_limiter)
@@ -760,7 +766,7 @@ def make_alignment_pipeline(name=None):
     pipeline.set_tail_tasks([backtranslate_alignment_task, merge_copynumbers_task])
 
     if globals_.config.getboolean('Tasks', 'align_ccs'):
-        degap_backtranslated_alignment_task = pipeline.transform(degap_backtranslated_alignment,
+        degap_backtranslated_alignment_task = pipeline.transform(degap,
                                                                  input=backtranslate_alignment_task,
                                                                  filter=suffix('.fasta'),
                                                                  output='.degapped.fasta')
