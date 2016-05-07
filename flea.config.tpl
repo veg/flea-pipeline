@@ -51,8 +51,8 @@ min_cluster_size: 5
 min_length_ratio: 0.995
 
 consensus_batch_size: 30
-consensus_log_ins: -2
-consensus_log_del: -2
+consensus_p_ins: 0.01
+consensus_p_del: 0.01
 
 # for copy number
 max_query_target_length_ratio: 1.005

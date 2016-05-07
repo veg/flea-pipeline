@@ -200,6 +200,8 @@ def cluster_consensus(infiles, outfile, directory, prefix):
     """Alignment-free cluster consensus."""
     seq_id = next(SeqIO.parse(infiles[0], 'fastq')).id
     label = re.split("_[0-9]+$", seq_id)[0]
+    log_ins = np.log10(globals_.config.getfloat('Parameters', 'consensus_p_ins'))
+    log_del = np.log10(globals_.config.getfloat('Parameters', 'consensus_p_del'))
     kwargs = {
         'julia': globals_.config.get('Paths', 'julia'),
         'script': globals_.config.get('Paths', 'consensus_script'),
@@ -207,9 +209,8 @@ def cluster_consensus(infiles, outfile, directory, prefix):
         'prefix': '{}_'.format(label),
         'outfile': outfile,
         'batch': globals_.config.get('Parameters', 'consensus_batch_size'),
-        'log_ins': globals_.config.get('Parameters', 'consensus_log_ins'),
-        'log_del': globals_.config.get('Parameters', 'consensus_log_del'),
-
+        'log_ins': log_ins,
+        'log_del': log_del,
         }
     cmd = ('{julia} {script} --prefix \'{prefix}\' --batch \'{batch}\''
            ' \'{log_ins}\' \'{log_del}\' \'{pattern}\' > {outfile}').format(**kwargs)
