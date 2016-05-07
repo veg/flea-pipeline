@@ -198,11 +198,13 @@ def fastq_clusters(infile, outfiles, outdir):
 @report_wrapper
 def cluster_consensus(infiles, outfile, directory, prefix):
     """Alignment-free cluster consensus."""
+    seq_id = next(SeqIO.parse(infiles[0], 'fastq')).id
+    label = re.split("_[0-9]+$", seq_id)[0]
     kwargs = {
         'julia': globals_.config.get('Paths', 'julia'),
         'script': globals_.config.get('Paths', 'consensus_script'),
         'pattern': os.path.join(directory, "*.fastq"),
-        'prefix': '{}_consensus_'.format(prefix),
+        'prefix': '{}_'.format(label),
         'outfile': outfile,
         'batch': globals_.config.get('Parameters', 'consensus_batch_size'),
         'log_ins': globals_.config.get('Parameters', 'consensus_log_ins'),
@@ -486,7 +488,7 @@ def combine_pairs(infiles, outfiles, outdir):
         os.unlink(f)
     pairfile, hqcsfile = infiles
     hqcs_suffix = '.hqcs-ccs-pairs.txt'
-    ccsfile = "{}.fasta".format(pairfile[:-len(hqcs_suffix)])
+    ccsfile = "{}.fastq".format(pairfile[:-len(hqcs_suffix)])
     check_suffix(pairfile, hqcs_suffix)
     check_suffix(ccsfile, '.lenfilter.fastq')
     with open(pairfile) as handle:
@@ -499,7 +501,7 @@ def combine_pairs(infiles, outfiles, outdir):
         ccs, hqcs = pair
         match_dict[hqcs].append(ccs)
     hqcs_records = list(SeqIO.parse(hqcsfile, "fasta"))
-    ccs_records = list(SeqIO.parse(ccsfile, "fasta"))
+    ccs_records = list(SeqIO.parse(ccsfile, "fastq"))
     hqcs_dict = {r.id : r for r in hqcs_records}
     ccs_dict = {r.id : r for r in ccs_records}
 
@@ -652,7 +654,7 @@ def make_alignment_pipeline(name=None):
     fastq_clusters_task = pipeline.subdivide(fastq_clusters,
                                             input=cluster_task,
                                             filter=formatter(),
-                                            output='{path[0]}/{basename[0]}.clusters/cluster_*.fastq',
+                                            output='{path[0]}/{basename[0]}.clusters/*.fastq',
                                             extras=['{path[0]}/{basename[0]}.clusters'])
     fastq_clusters_task.jobs_limit(n_remote_jobs, remote_job_limiter)
     fastq_clusters_task.mkdir(cluster_task,
@@ -773,7 +775,7 @@ def make_alignment_pipeline(name=None):
 
         hqcs_ccs_pairs_task = pipeline.transform(hqcs_ccs_pairs,
                                                  input=filter_length_task,
-                                                 filter=suffix('.fasta'),
+                                                 filter=suffix('.fastq'),
                                                  add_inputs=add_inputs(make_hqcs_db),
                                                  output='.hqcs-ccs-pairs.txt')
         hqcs_ccs_pairs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
