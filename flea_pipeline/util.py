@@ -591,6 +591,9 @@ def split_name(name):
     # TODO: duplicate code with name_to_label
     cands = list(t.key for t in globals_.timepoints
                  if name.startswith(t.key))
+    if not cands:
+        raise Exception('name matches no'
+                        ' key: "{}"'.format(name))
     if len(cands) != 1:
         raise Exception('name starts with non-unique'
                         ' key: "{}"'.format(name))
@@ -603,13 +606,16 @@ def split_name(name):
 
 
 def name_key_to_label(name):
-    key, _ =split_name(name)
+    key, _ = split_name(name)
     return globals_.key_to_label[key]
 
 
 def name_to_label(name):
     cands = list(t.label for t in globals_.timepoints
                  if name.startswith(t.label))
+    if not cands:
+        raise Exception('name matches no'
+                        ' label: "{}"'.format(name))
     if len(cands) != 1:
         raise Exception('name starts with non-unique'
                         ' label: "{}"'.format(name))
