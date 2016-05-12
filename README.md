@@ -12,6 +12,12 @@ because BioExt needs NumPy to be present.
 ----------------------
 - usearch (version >= 8.1.1861)
 - mafft
+- Julia
+
+To install Julia dependencies:
+
+> Pkg.clone("git@bitbucket.org:keren/Quiver2.jl.git")
+> Pkg.resolve()
 
 
 Installation
