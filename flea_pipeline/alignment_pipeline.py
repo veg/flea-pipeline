@@ -268,24 +268,6 @@ def new_record_id(record, new_id):
     return result
 
 
-def usearch_reference_db(infile, outfile, name=None):
-    """run usearch_global against reference database and print fasta hits"""
-    dbfile = globals_.config.get('Parameters', 'reference_db')
-    identity = globals_.config.get('Parameters', 'reference_identity')
-    max_accepts = globals_.config.get('Parameters', 'max_accepts')
-    max_rejects = globals_.config.get('Parameters', 'max_rejects')
-    cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
-           ' -fastapairs {outfile} -alnout {outfile}.human -userout {outfile}.calns'
-           ' -userfields caln -top_hit_only -strand both'
-           ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
-    if name is None:
-        name = 'usearch-reference-db'
-    cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
-                     infile=infile, db=dbfile, id=identity, outfile=outfile,
-                     max_accepts=max_accepts, max_rejects=max_rejects)
-    return maybe_qsub(cmd, infile, outfiles=outfile, name=name)
-
-
 @must_work()
 @report_wrapper
 def inframe_hqcs(infile, outfile):
@@ -318,7 +300,17 @@ def pause_for_editing_inframe_hqcs():
 def hqcs_db_search(infiles, outfile):
     infile, dbfile = infiles
     check_basename(dbfile, 'inframe_hqcs.edited.fasta')
-    return usearch_reference_db(infile, outfile, dbfile=dbfile, name='hqcs-db-search')
+    identity = globals_.config.get('Parameters', 'reference_identity')
+    max_accepts = globals_.config.get('Parameters', 'max_accepts')
+    max_rejects = globals_.config.get('Parameters', 'max_rejects')
+    cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
+           ' -fastapairs {outfile} -alnout {outfile}.human -userout {outfile}.calns'
+           ' -userfields caln -top_hit_only -strand both'
+           ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
+    cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
+                     infile=infile, db=dbfile, id=identity, outfile=outfile,
+                     max_accepts=max_accepts, max_rejects=max_rejects)
+    return maybe_qsub(cmd, infile, outfiles=outfile, name='hqcs-db-search')
 
 
 def shift_correction_helper(infile, outfile, keep, correct, name=None):
