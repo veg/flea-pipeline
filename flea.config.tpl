@@ -64,6 +64,7 @@ run_length: 16
 # if True, use all in-frame HQCS sequences as reference DB for shift
 # correction of HQCSs. Also pause to allow user to edit database.
 use_inframe_hqcs: False
+pause_for_inframe_hqcs: False
 
 pause_after_codon_alignment: False
 align_ccs: False

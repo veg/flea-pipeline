@@ -300,9 +300,10 @@ def pause_for_editing_inframe_hqcs():
     infile = os.path.join(pipeline_dir, 'inframe_hqcs.fasta')
     outfile = os.path.join(pipeline_dir, 'inframe_hqcs.edited.fasta')
     if globals_.config.getboolean('Tasks', 'use_inframe_hqcs'):
-        input('Paused for manual editing of {}'
-              '\nPress Enter to continue.'.format(outfile))
-        # check that result is not eempty
+        if globals_.config.getboolean('Tasks', 'pause_for_inframe_hqcs'):
+            input('Paused for manual editing of {}'
+                  '\nPress Enter to continue.'.format(outfile))
+        # check that result is not empty
         n = sum(1 for r in SeqIO.parse(outfile, 'fasta'))
         if n == 0:
             raise Exception('{} is empty'.format(outfile))
