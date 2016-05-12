@@ -784,7 +784,7 @@ def make_alignment_pipeline(name=None):
         combine_pairs_task = pipeline.subdivide(combine_pairs,
                                                 input=[hqcs_ccs_pairs_task],
                                                 filter=formatter('.*/(?P<LABEL>.+).qfilter'),
-                                                add_inputs=add_inputs(degap_backtranslated_alignment),
+                                                add_inputs=add_inputs(degap_backtranslated_alignment_task),
                                                 output='{path[0]}/{LABEL[0]}.ccs-alignments/combined.*.unaligned.fasta',
                                                 extras=['{path[0]}/{LABEL[0]}.ccs-alignments'])
         combine_pairs_task.jobs_limit(n_local_jobs, local_job_limiter)
