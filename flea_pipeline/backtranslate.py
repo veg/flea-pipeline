@@ -40,12 +40,20 @@ def back_translate_gapped(protein, dna):
 
     """
     try:
-        dna_str = str(dna.seq.ungap())
+        dna_seq = dna.seq.ungap()
     except ValueError:
-        dna_str = str(dna.seq)
+        dna_seq = dna.seq
+    translated = dna_seq.translate()
+    if translated[-1] == '*':
+        dna_seq = dna_seq[:-3]
+        translated = translated[:-1]
+    if '*' in translated:
+        raise Exception('dna sequence contains stop codons')
+    if not str(translated) == str(protein.seq.ungap()):
+        raise Exception('translated sequence does not match protein')
     gap_char = protein.seq.alphabet.gap_char
     gap_codon = Gapped(dna.seq.alphabet).gap_char * 3
-    result_str = insert_gaps(str(protein.seq), dna_str, gap_char, gap_codon)
+    result_str = insert_gaps(str(protein.seq), str(dna_seq), gap_char, gap_codon)
     result = dna[:]
     result.seq = Seq(result_str, alphabet=Gapped(dna.seq.alphabet))
     return result

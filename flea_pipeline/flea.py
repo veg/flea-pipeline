@@ -16,7 +16,8 @@ Usage:
   flea_pipeline.py -h | --help
 
 Options:
-  --alignment [STR]  Fasta file containing codon-aligned sequences.
+  --align [STR]  Fasta file containing nucleotide sequences.
+  --analyze [STR]  Fasta file containing codon-aligned sequences.
   --copynumbers [STR]  tsv file containing "<id>\t<number>" lines.
   --config [STR]   Configuration file.
 
@@ -49,7 +50,9 @@ parser = cmdline.get_argparse(description='Run complete env pipeline',
 parser.add_argument('file')
 parser.add_argument('--config', type=str,
                     help='Configuration file.')
-parser.add_argument('--alignment', type=str,
+parser.add_argument('--align', type=str,
+                    help='Fasta file.')
+parser.add_argument('--analyze', type=str,
                     help='Codon-aligned fasta file.')
 parser.add_argument('--copynumbers', type=str,
                     help='Copynumber file.')
@@ -71,7 +74,7 @@ logger, logger_mutex = cmdline.setup_logging(__name__,
                                              options.log_file,
                                              options.verbose)
 
-do_alignment = options.alignment is None
+do_quality = options.align is None and options.analyze is None
 
 # read configuration
 if options.config is None:
@@ -96,7 +99,7 @@ Timepoint = namedtuple('Timepoint', ['key', 'label', 'date'])
 with open(options.file, newline='') as csvfile:
     reader = csv.reader(csvfile, delimiter=' ')
     keymod = lambda k: k
-    if do_alignment:
+    if do_quality:
         keymod = lambda f: os.path.abspath(os.path.join(data_dir, f))
     timepoints = list(Timepoint(keymod(k), a, d) for k, a, d in reader)
 
@@ -132,13 +135,16 @@ options.jobs = max(n_local_jobs, n_remote_jobs)
 
 # check alignment options
 
-if do_alignment:
+if do_quality:
     if options.copynumbers is not None:
         raise Exception('--copynumber option is invalid without --alignment')
 else:
     # check every timepoint has at least three sequences, and
     # every sequence belongs to a timepoint
-    records = list(SeqIO.parse(options.alignment, 'fasta'))
+    if options.alignment is not None:
+        records = list(SeqIO.parse(options.alignment, 'fasta'))
+    else:
+        records = list(SeqIO.parse(options.analyze, 'fasta'))
     if len(set(r.id for r in records)) != len(records):
         raise Exception('non-unique ids')
     timepoint_counts = defaultdict(int)
@@ -168,30 +174,67 @@ if len(ref_seq) != len(ref_coords):
     raise Exception('reference sequence does not match reference coordinates')
 
 # make pipelines
+from flea_pipeline.quality_pipeline import make_quality_pipeline
+from flea_pipeline.consensus_pipeline import make_consensus_pipeline
 from flea_pipeline.alignment_pipeline import make_alignment_pipeline
 from flea_pipeline.analysis_pipeline import make_analysis_pipeline
+from flea_pipeline.diagnosis_pipeline import make_diagnosis_pipeline
+
 from flea_pipeline.preanalysis_pipeline import make_preanalysis_pipeline
 
 
-if do_alignment:
+if do_quality:
     inputs = list(t.key for t in timepoints)
     for f in inputs:
         if not os.path.exists(f):
             raise Exception('file does not exist: "{}"'.format(f))
-    p1 = make_alignment_pipeline()
-    p1.set_input(input=inputs)
+    p_qual = make_quality_pipeline()
+    p_qual.set_input(input=inputs)
+
+    p_cons = make_consensus_pipeline()
+    p_cons.set_input(input=p_qual)
+    # for task in p_cons.head_tasks:
+    #     task.set_input(input=p_qual.tail_tasks)
+
+    p_aln = make_alignment_pipeline()
+    p_aln.set_input(input=p_cons['cat_all_hqcs'])
+    # for task in p_aln.head_tasks:
+    #     task.set_input(input=p_cons.tail_tasks)
+
     if globals_.config.getboolean('Tasks', 'analysis'):
-        p2 = make_analysis_pipeline(do_hyphy=globals_.config.getboolean('Tasks', 'hyphy_analysis'))
-        p2.set_input(input=p1)
-        for task in p2.head_tasks:
-            task.set_input(input=p1.tail_tasks)
+        p_anl = make_analysis_pipeline()
+        p_anl.set_input(input=[p_aln['backtranslate_alignment'],
+                               p_cons['cat_copynumbers']])
+        # for task in p_anl.head_tasks:
+        #     task.set_input(input=p3.tail_tasks)
+
+    if globals_.config.getboolean('Tasks', 'align_ccs'):
+        p_diag = make_diagnosis_pipeline()
+        p_diag['degap_backtranslated'].set_input(input=p_aln['backtranslate_alignment'])
+        p_diag['hqcs_ccs_pairs'].set_input(input=p_qual)
+        p_diag['combine_pairs'].set_input(input=p_qual)
+        p_diag['insert_gaps'].set_input(input=p_aln['backtranslate_alignment'])
+        p_diag['diagnose_alignment'].set_input(input=[
+                p_aln['copy_protein_alignment'],
+                p_cons['cat_copynumbers'],
+                ])
+
 else:
-    if globals_.config.getboolean('Tasks', 'analysis'):
-        p1 = make_preanalysis_pipeline()
-        p1.set_input(input=options.alignment)
-        p2 = make_analysis_pipeline(do_hyphy=globals_.config.getboolean('Tasks', 'hyphy_analysis'))
-        for task in p2.head_tasks:
-            task.set_input(input=p1.tail_tasks)
+    p_pre = make_preanalysis_pipeline()
+    if config.align is not None:
+        p_pre.set_input(input=options.align)
+        p_aln = make_alignment_pipeline()
+        p_aln.set_input(input=p_pre['rename_records'])
+
+        if globals_.config.getboolean('Tasks', 'analysis'):
+            p_anl = make_analysis_pipeline()
+            p_anl.set_input(input=[p_aln['backtranslate_alignment'],
+                                   p_pre['make_copynumbers']])
+
+    else:
+        pre.set_input(input=options.analyze)
+        p_anl = make_analysis_pipeline()
+        p_anl.set_input(input=p_pre)
 
 
 def config_to_dict(config):

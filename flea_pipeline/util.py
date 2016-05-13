@@ -793,3 +793,22 @@ def translate_helper(infile, outfile, gapped, name):
         }
     cmd = "{python} {script} {gap_option} {infile} {outfile}".format(**kwargs)
     return maybe_qsub(cmd, infile, outfile, name=name)
+
+
+def usearch_hqcs_ids(infile, outfile, dbfile, name=None):
+    """run usearch_global against a hqcs database and print pairs of ids"""
+    identity = globals_.config.get('Parameters', 'ccs_to_hqcs_identity')
+    max_accepts = globals_.config.get('Parameters', 'max_accepts')
+    max_rejects = globals_.config.get('Parameters', 'max_rejects')
+    maxqt = globals_.config.get('Parameters', 'max_query_target_length_ratio')
+    cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
+           " -userout {outfile} -top_hit_only -userfields query+target -strand both"
+           " -maxaccepts {max_accepts} -maxrejects {max_rejects}"
+           " -maxqt {maxqt}")
+    if name is None:
+        name = 'usearch-hqcs-ids'
+    cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
+                     infile=infile, db=dbfile, id=identity, outfile=outfile,
+                     max_accepts=max_accepts, max_rejects=max_rejects,
+                     maxqt=maxqt)
+    return maybe_qsub(cmd, infile, outfiles=outfile, name=name)

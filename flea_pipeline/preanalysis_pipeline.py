@@ -1,3 +1,8 @@
+"""Prepare input as though it came from the consensus pipeline.
+
+This may go before either the alignment or the analysis pipelines.
+
+"""
 import os
 from shutil import copyfile
 
@@ -57,7 +62,7 @@ def make_preanalysis_pipeline(name=None):
                                              name="rename_records",
                                              input=None,
                                              filter=formatter(),
-                                             output=os.path.join(pipeline_dir, "msa_renamed.fasta"))
+                                             output=os.path.join(pipeline_dir, "input_renamed.fasta"))
 
     make_copynumbers_task = pipeline.transform(make_copynumbers,
                                                name="make_copynumbers",

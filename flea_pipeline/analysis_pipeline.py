@@ -1,3 +1,11 @@
+"""Analysis pipeline.
+
+Head tasks expect two inputs: `[msa, cn]`, where `msa` is a FASTA file
+containing codon-aligned nucleotide sequences, and `cn` is a TSV
+copynumber file.
+
+"""
+
 import os
 import json
 from itertools import islice
@@ -25,7 +33,8 @@ from flea_pipeline.util import grouper
 from flea_pipeline.util import column_count, prob, js_divergence
 from flea_pipeline.util import translate_helper
 
-from flea_pipeline.alignment_pipeline import mafft, cat_wrapper_ids
+from flea_pipeline.consensus_pipeline import cat_wrapper_ids
+from flea_pipeline.alignment_pipeline import mafft
 
 
 pipeline_dir = os.path.join(globals_.data_dir, "analysis")
@@ -96,7 +105,8 @@ def add_copynumbers(infiles, outfile):
 
 @must_work()
 @report_wrapper
-def copynumber_json(infile, outfile):
+def copynumber_json(infiles, outfile):
+    _, infile = infiles
     d = parse_copynumbers(infile)
     # add copynumber to name, to match rest of this pipeline
     result = dict((id_with_cn(key, value), value)
@@ -348,7 +358,7 @@ def run_fubar(infiles, outfile):
     return hyphy_call(hyphy_script('runFUBAR.bf'), infiles, outfile, 'fubar', params)
 
 
-def make_analysis_pipeline(do_hyphy, name=None):
+def make_analysis_pipeline(name=None):
     """Factory for the analysis sub-pipeline."""
     if name is None:
         name = "analysis_pipeline"
@@ -369,14 +379,8 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                           output=os.path.join(pipeline_dir, "msa.copynumber-ids.fasta"))
     add_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    copy_copynumber_task = pipeline.merge(copy_copynumber_file,
-                                          name="copy_copynumber_task",
-                                          input=None,
-                                          output=os.path.join(pipeline_dir, 'copynumbers.tsv'))
-    copy_copynumber_task.jobs_limit(n_local_jobs, local_job_limiter)
-
     copynumber_json_task = pipeline.merge(copynumber_json,
-                                          input=copy_copynumber_task,
+                                          input=None,
                                           output=os.path.join(pipeline_dir, 'copynumbers.json'))
     copynumber_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
@@ -446,7 +450,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                     output=os.path.join(pipeline_dir, 'merged.dates'))
     dates_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    if do_hyphy:
+    if globals_.config.getboolean('Tasks', 'hyphy_analysis'):
         replace_stop_codons_task = pipeline.transform(replace_stop_codons_file,
                                                       input=add_copynumbers_task,
                                                       filter=suffix('.fasta'),
@@ -475,7 +479,7 @@ def make_analysis_pipeline(do_hyphy, name=None):
                                     output=os.path.join(pipeline_dir, 'rates.json'))
         fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    pipeline.set_head_tasks([add_copynumbers_task, copy_copynumber_task, mrca_task, dates_json_task])
+    pipeline.set_head_tasks([add_copynumbers_task, copynumber_json_task, mrca_task, dates_json_task])
     for task in pipeline.head_tasks:
         task.mkdir(pipeline_dir)
 
