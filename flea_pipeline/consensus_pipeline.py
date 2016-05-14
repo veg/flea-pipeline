@@ -1,6 +1,6 @@
 import os
 import re
-from random import sample
+import random
 import tempfile
 from functools import partial
 from collections import defaultdict
@@ -65,6 +65,36 @@ def fastq_clusters(infiles, outfiles, outdir):
     cmd = ("{python} {script} --minsize {minsize}"
            " {ucfile} {fastqfile} {outdir}".format(**kwargs))
     return maybe_qsub(cmd, infiles, [], name="cluster-fastq")
+
+
+def iter_sample(iterable, k):
+    """Sample `k` items from an iterable.
+
+    Adapted from http://stackoverflow.com/a/12581484
+
+    """
+    results = []
+    for i, v in enumerate(iterable):
+        r = random.randint(0, i)
+        if r < k:
+            if i < k:
+                results.insert(r, v) # add first `n` items in random order
+            else:
+                results[r] = v # at a decreasing rate, replace random items
+    if len(results) < k:
+        raise ValueError("Sample larger than population.")
+    return results
+
+
+@must_work()
+@report_wrapper
+def sample_clusters(infile, outfile):
+    n = sum(1 for r in SeqIO.parse(infile, 'fastq'))
+    records = SeqIO.parse(infile, 'fastq')
+    maxsize = int(globals_.config.get('Parameters', 'max_cluster_size'))
+    if n > maxsize:
+        records = iter_sample(records, maxsize)
+    SeqIO.write(records, outfile, 'fasta')
 
 
 @must_work(illegal_chars='-', min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
@@ -269,8 +299,14 @@ def make_consensus_pipeline(name=None):
                              formatter(r'.*/(?P<LABEL>.+).clustered.uc'),
                              '{path[0]}/{LABEL[0]}.clusters')
 
-    cluster_consensus_task = pipeline.collate(cluster_consensus,
+    sample_clusters_task = pipeline.transform(sample_clusters,
                                               input=fastq_clusters_task,
+                                              filter=suffix('.fastq'),
+                                              output='.sampled.fastq')
+    sample_clusters_task.jobs_limit(n_local_jobs, local_job_limiter)
+
+    cluster_consensus_task = pipeline.collate(cluster_consensus,
+                                              input=sample_clusters_task,
                                               filter=formatter(r'.*/(?P<LABEL>.+).clusters'),
                                               output=os.path.join(pipeline_dir, '{LABEL[0]}.consensus.fasta'),
                                               extras=['{path[0]}',

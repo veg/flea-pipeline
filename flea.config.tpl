@@ -45,12 +45,13 @@ contaminant_identity: 0.98
 reference_identity: 0.8
 cluster_identity: 0.99
 ccs_to_hqcs_identity: 0.95
-min_cluster_size: 5
+min_cluster_size: 3
+max_cluster_size: 100
 
 # for clustering
 min_length_ratio: 0.995
 
-consensus_batch_size: 30
+consensus_batch_size: 10
 consensus_p_ins: 0.01
 consensus_p_del: 0.01
 
@@ -61,6 +62,7 @@ max_query_target_length_ratio: 1.005
 run_length: 16
 
 [Tasks]
+quality_pipeline: True
 # if True, use all in-frame HQCS sequences as reference DB for shift
 # correction of HQCSs. Also pause to allow user to edit database.
 use_inframe_hqcs: False
