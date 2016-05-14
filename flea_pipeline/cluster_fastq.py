@@ -15,6 +15,7 @@ Options:
 
 """
 import os
+import random
 from collections import defaultdict
 
 from docopt import docopt
@@ -23,14 +24,35 @@ from Bio import SeqIO
 
 
 def parse_ucfile(infile):
-    """Returns a dict of from cluster number to labels"""
-    result = defaultdict(list)
+    """Returns a dict from cluster number to labels.
+
+    Assumes input was generated with -top_hit_only. Breaks tie at
+    random, so cluster sizes may not exactly match those reported by
+    usearch.
+
+    """
+    centroid_to_cluster = {}
+    seq_to_centroids = defaultdict(list)
     with open(infile) as h:
-        lines = h.read().split('\n')
-    for elts in (line.split('\t') for line in lines if line):
-        cluster_id = elts[1]
-        label = elts[8]
-        result[cluster_id].append(label)
+        lines = h.read().strip().split('\n')
+    records = list(line.split('\t') for line in lines)
+    for elts in records:
+        if elts[0] == 'S':
+            cluster = elts[1]
+            centroid = elts[8]
+            centroid_to_cluster[centroid] = cluster
+        elif elts[0] == 'H':
+            label = elts[8]
+            centroid = elts[9]
+            seq_to_centroids[label].append(centroid)
+    result = defaultdict(list)
+    for label, centroids in seq_to_centroids.items():
+        centroid = random.choice(centroids)
+        result[centroid_to_cluster[centroid]].append(label)
+
+    for k, v in result.items():
+        if len(v) != len(set(v)):
+            raise Exception('cluster {} contains duplicate ids'.format(k))
     return result
 
 

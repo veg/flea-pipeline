@@ -37,7 +37,8 @@ def cluster(infile, outfile):
     minsl = globals_.config.get('Parameters', 'min_length_ratio')
     cmd = ('{usearch} -cluster_fast {infile} -id {id}'
            ' -uc {outfile} -sort length'
-           ' -maxaccepts {max_accepts} -maxrejects {max_rejects} -minsl {minsl}')
+           ' -maxaccepts {max_accepts} -maxrejects {max_rejects}'
+           ' -top_hits_only -minsl {minsl}')
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
                      infile=infile, id=globals_.config.get('Parameters', 'cluster_identity'),
                      outfile=outfile,
