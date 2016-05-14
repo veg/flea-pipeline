@@ -26,33 +26,28 @@ from Bio import SeqIO
 def parse_ucfile(infile):
     """Returns a dict from cluster number to labels.
 
-    Assumes input was generated with -top_hit_only. Breaks tie at
-    random, so cluster sizes may not exactly match those reported by
-    usearch.
+    Assumes input was generated with -top_hit_only.
 
     """
-    centroid_to_cluster = {}
-    seq_to_centroids = defaultdict(list)
+    result = defaultdict(list)
     with open(infile) as h:
         lines = h.read().strip().split('\n')
     records = list(line.split('\t') for line in lines)
     for elts in records:
-        if elts[0] == 'S':
+        if elts[0] in 'SH':
             cluster = elts[1]
-            centroid = elts[8]
-            centroid_to_cluster[centroid] = cluster
-        elif elts[0] == 'H':
             label = elts[8]
-            centroid = elts[9]
-            seq_to_centroids[label].append(centroid)
-    result = defaultdict(list)
-    for label, centroids in seq_to_centroids.items():
-        centroid = random.choice(centroids)
-        result[centroid_to_cluster[centroid]].append(label)
-
+            result[cluster].append(label)
     for k, v in result.items():
         if len(v) != len(set(v)):
             raise Exception('cluster {} contains duplicate ids'.format(k))
+    for elts in records:
+        if elts[0] == 'C':
+            cluster = elts[1]
+            size = int(elts[2])
+            obs = len(result[cluster])
+            if obs != size:
+                raise Exception('cluster {} size {} != {}'.format(cluster, size, obs))
     return result
 
 
