@@ -355,20 +355,32 @@ def read_single_record(filename, format, expected=None):
     return records[0]
 
 
+def parse_by_ext(filename):
+    format = filename[-len('fastx'):]
+    return SeqIO.parse(filename, format)
+
+
 def check_seq_number(filename, min_n):
-    found_n = sum(1 for _ in SeqIO.parse(filename, 'fasta'))
+    found_n = sum(1 for _ in parse_by_ext(filename))
     if found_n < min_n:
         raise Exception('file "{}" must have at least {} entries,'
                         'but it only has {}'.format(filename, min_n, found_n))
 
 
 def check_seq_ids(inputs, output):
-    a_ids = set(r.id for a in inputs for r in SeqIO.parse(a, 'fasta'))
-    b_ids = set(r.id for r in SeqIO.parse(output, 'fasta'))
+    a_ids = set(r.id for a in inputs for r in parse_by_ext(a))
+    b_ids = set(r.id for r in parse_by_ext(output))
     unmatched = a_ids.symmetric_difference(b_ids)
     if unmatched:
         raise Exception('IDs from "{}" do not match "{}".'
                         ' Unmatched ids: {}'.format(inputs, output, sorted(unmatched)))
+
+
+def check_unique_ids(f):
+    ids = list(r.id for r in parse_by_ext(f))
+    if len(set(ids)) < len(ids):
+        raise Exception('IDs in "{}" are not'
+                        ' unique'.format(f))
 
 
 def check_seq_ratio(inputs, output, expected):
@@ -377,8 +389,8 @@ def check_seq_ratio(inputs, output, expected):
         raise Exception('expected an int, but got {}'.format(a_exp))
     if b_exp != int(b_exp):
         raise Exception('expected an int, but got {}'.format(b_exp))
-    a_n = sum(1 for a in inputs for r in SeqIO.parse(a, 'fasta'))
-    b_n = sum(1 for r in SeqIO.parse(output, 'fasta'))
+    a_n = sum(1 for a in inputs for r in parse_by_ext(a))
+    b_n = sum(1 for r in parse_by_ext(output))
     if a_n * b_exp != b_n * a_exp:
         raise Exception('Sequnce ratios do not match.'
                         ' Expected {}:{}. Got: {}:{}.'
@@ -387,7 +399,7 @@ def check_seq_ratio(inputs, output, expected):
 
 
 def check_illegal_chars(f, chars):
-    for r in SeqIO.parse(f, 'fasta'):
+    for r in parse_by_ext(f):
         found = set(chars.upper()).intersection(set(str(r.seq).upper()))
         if found:
             raise Exception('Illegal characters "{}" found in sequence "{}"'
@@ -395,7 +407,7 @@ def check_illegal_chars(f, chars):
 
 
 def check_in_frame(f):
-    for r in SeqIO.parse(f, 'fasta'):
+    for r in parse_by_ext(f):
         len_ = len(r.seq.ungap('-'))
         if len_ % 3 != 0:
             raise Exception('Sequence "{}" in file "{}" has length={} not multiple'
@@ -503,6 +515,7 @@ def report_wrapper(function):
 
 
 def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
+              unique_ids=False,
               illegal_chars=None, pattern=None, in_frame=False):
     """Fail if any output is empty.
 
@@ -510,6 +523,7 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
     seq_ratio: (int, int): ensure numbers of sequences match
     seq_ids: ensure all ids present in input files are in output file
     min_seqs: minimum number of sequences in the output file
+    unique_ids: sequence ids must be unique
     pattern: pattern for determining input files to consider
 
     """
@@ -540,6 +554,9 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
                     raise Exception('cannot check seq_ids for'
                                     ' more than one outfile')
                 check_seq_ids(infiles, outfiles[0])
+            if unique_ids:
+                for o in outfiles:
+                    check_unique_ids(o)
             if seq_ratio is not None:
                 if len(outfiles) != 1:
                     raise Exception('cannot check seq_ratio for'
