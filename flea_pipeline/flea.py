@@ -210,15 +210,10 @@ if do_quality:
 
     if globals_.config.getboolean('Tasks', 'align_ccs'):
         p_diag = make_diagnosis_pipeline()
-        p_diag['degap_backtranslated'].set_input(input=p_aln['backtranslate_alignment'])
-        p_diag['hqcs_ccs_pairs'].set_input(input=p_qual)
-        p_diag['combine_pairs'].set_input(input=p_qual)
-        p_diag['insert_gaps'].set_input(input=p_aln['backtranslate_alignment'])
-        p_diag['diagnose_alignment'].set_input(input=[
-                p_aln['copy_protein_alignment'],
-                p_cons['cat_copynumbers'],
-                ])
-
+        p_diag.set_input(input=[p_aln['copy_protein_alignment'],
+                                p_aln['backtranslate_alignment'],
+                                p_cons['cat_copynumbers'],
+                                p_qual])
 else:
     p_pre = make_preanalysis_pipeline()
     if config.align is not None:
