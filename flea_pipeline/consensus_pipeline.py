@@ -57,9 +57,9 @@ def cluster(infile, outfile):
     return maybe_qsub(cmd, infile, outfile, name="cluster")
 
 
-@must_work()
+@must_work(many=True)
 @report_wrapper
-def fastq_clusters(infiles, outfiles, outdir):
+def fastq_clusters(infiles, outfiles, outdir, pattern):
     for f in outfiles:
         os.unlink(f)
     ucfile, fastqfile = infiles
@@ -313,7 +313,8 @@ def make_consensus_pipeline(name=None):
                                              filter=formatter(regex),
                                              add_inputs=add_inputs(ccs_pattern),
                                              output=os.path.join(pipeline_dir, '{LABEL[0]}.clusters/*.fastq'),
-                                             extras=[os.path.join(pipeline_dir, '{LABEL[0]}.clusters')])
+                                             extras=[os.path.join(pipeline_dir, '{LABEL[0]}.clusters'),
+                                                     'cluster_[0-9]+.fastq'])
     fastq_clusters_task.jobs_limit(n_remote_jobs, remote_job_limiter)
     fastq_clusters_task.mkdir(cluster_task,
                              formatter(r'.*/(?P<LABEL>.+).clustered.uc'),
@@ -328,7 +329,7 @@ def make_consensus_pipeline(name=None):
     cluster_consensus_task = pipeline.collate(cluster_consensus,
                                               input=sample_clusters_task,
                                               filter=formatter(regex),
-                                              output=os.path.join(pipeline_dir, '{LABEL[0]}.consensus.fasta'),
+                                              output=os.path.join(pipeline_dir, '{LABEL[0]}.hqcs.fasta'),
                                               extras=['{path[0]}',
                                                       '{LABEL[0]}'])
     cluster_consensus_task.jobs_limit(n_remote_jobs, remote_job_limiter)

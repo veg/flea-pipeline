@@ -515,7 +515,7 @@ def report_wrapper(function):
 
 
 def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
-              unique_ids=False,
+              unique_ids=False, many=False,
               illegal_chars=None, pattern=None, in_frame=False):
     """Fail if any output is empty.
 
@@ -524,6 +524,7 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
     seq_ids: ensure all ids present in input files are in output file
     min_seqs: minimum number of sequences in the output file
     unique_ids: sequence ids must be unique
+    many: produces an unknown number of output files. Search with a pattern.
     pattern: pattern for determining input files to consider
 
     """
@@ -545,6 +546,12 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
             if seq_ids or seq_ratio:
                 infiles = list(traverse(strlist(infiles)))
                 infiles = list(f for f in infiles if fnmatch(f, pattern))
+            if many:
+                outdir, outpattern = args[-2:]
+                outfiles = list(os.path.join(outdir, f)
+                                for f in os.listdir(outdir) if re.search(outpattern, f))
+                if not outfiles:
+                    raise Exception('Task produced no output')
             outfiles = strlist(outfiles)
             ensure_not_empty(outfiles)
             if min_seqs is not None:
