@@ -266,7 +266,6 @@ def make_consensus_pipeline(name=None):
                                       output=os.path.join(pipeline_dir, '{LABEL[0]}.clustered.uc'))
     cluster_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    # inputs need to be replaced with [fastq, cluster_task]
     fastq_clusters_task = pipeline.subdivide(fastq_clusters,
                                              input=None,
                                              filter=formatter(r'.*/(?P<LABEL>.+).qfilter'),
@@ -337,6 +336,7 @@ def make_consensus_pipeline(name=None):
             os.path.join(pipeline_dir, '{LABEL[0]}.consensus.refpairs.shifted.uniques.udb')),
                                                   output=os.path.join(pipeline_dir, '{LABEL[0]}.copynumbers.tsv'))
     compute_copynumbers_task.jobs_limit(n_remote_jobs, remote_job_limiter)
+    compute_copynumbers_task.follows(make_individual_dbs_task)
 
     merge_copynumbers_task = pipeline.merge(cat_wrapper,
                                             name='cat_copynumbers',
