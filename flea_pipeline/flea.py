@@ -40,13 +40,13 @@ from ruffus import cmdline, Pipeline
 from Bio import SeqIO
 
 from flea_pipeline import __version__
-from flea_pipeline.util import n_jobs, name_key_to_label
+from flea_pipeline.util import name_key_to_label
 from flea_pipeline.util import str_to_type
 import flea_pipeline.pipeline_globals as globals_
 
 
 parser = cmdline.get_argparse(description='Run complete env pipeline',
-                              ignored_args=['jobs'])
+                              ignored_args=['use_threads'])
 parser.add_argument('file')
 parser.add_argument('--config', type=str,
                     help='Configuration file.')
@@ -56,6 +56,8 @@ parser.add_argument('--analyze', type=str,
                     help='Codon-aligned fasta file.')
 parser.add_argument('--copynumbers', type=str,
                     help='Copynumber file.')
+parser.add_argument('--local', action='store_true',
+                    help='Run locally')
 
 
 options = parser.parse_args()
@@ -110,26 +112,27 @@ if len(set(t.label for t in timepoints)) != len(timepoints):
     raise Exception('non-unique timepoint labels')
 
 
+import drmaa
+drmaa_session = drmaa.Session()
+drmaa_session.initialize()
+
 # set globals
 globals_.config = config
 globals_.options = options
 globals_.script_dir = script_dir
 globals_.data_dir = data_dir
-globals_.qsub_dir = os.path.join(data_dir, 'qsub_files')
+globals_.job_script_dir = os.path.join(data_dir, 'drmaa_job_scripts')
 globals_.logger = logger
 globals_.logger_mutex = logger_mutex
+globals_.drmaa_session = drmaa_session
+globals_.run_locally = options.local
 
 globals_.timepoints = timepoints
 globals_.key_to_label = key_to_label
 globals_.label_to_date = label_to_date
 
-if not os.path.exists(globals_.qsub_dir):
-    os.mkdir(globals_.qsub_dir)
-
-# job handling
-n_local_jobs, n_remote_jobs = n_jobs()
-options.jobs = max(n_local_jobs, n_remote_jobs)
-
+if not os.path.exists(globals_.job_script_dir):
+    os.mkdir(globals_.job_script_dir)
 
 #################################################################################
 
@@ -250,9 +253,12 @@ if __name__ == '__main__':
         json.dump(run_info, handle, separators=(",\n", ":"))
 
     checksum_level = config.getint('Misc', 'checksum_level')
+    kwargs = {}
+    if not options.local:
+        kwargs['multithread'] = options.jobs
     try:
         logger.info("pipeline start")
-        cmdline.run(options, checksum_level=checksum_level)
+        cmdline.run(options, checksum_level=checksum_level, **kwargs)
         logger.info("pipeline stop")
     except Exception as e:
         with logger_mutex:

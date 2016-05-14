@@ -12,11 +12,10 @@ import numpy as np
 from ruffus import Pipeline, suffix, formatter, add_inputs
 from Bio import SeqIO
 
-from flea_pipeline.util import maybe_qsub, cat_files, touch, strlist, traverse
+from flea_pipeline.util import maybe_qsub, cat_files, strlist, traverse
 from flea_pipeline.util import new_record_seq_str, insert_gaps, update_record_seq
 from flea_pipeline.util import must_work, must_produce, report_wrapper
-from flea_pipeline.util import local_job_limiter, remote_job_limiter
-from flea_pipeline.util import check_suffix, check_basename, n_jobs
+from flea_pipeline.util import check_suffix, check_basename
 from flea_pipeline.util import read_single_record
 from flea_pipeline.util import partition
 from flea_pipeline.util import grouper
@@ -149,49 +148,40 @@ def make_quality_pipeline(name=None):
         name = "quality_pipeline"
     pipeline = Pipeline(name)
 
-    n_local_jobs, n_remote_jobs = n_jobs()
-
     filter_fastq_task = pipeline.transform(filter_fastq,
                                            input=None,
                                            filter=formatter(),
                                            output=os.path.join(pipeline_dir, '{basename[0]}.qfilter.fastq'))
-    filter_fastq_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     trim_task = pipeline.transform(trim_heads_and_tails,
                                     input=filter_fastq_task,
                                     filter=suffix('.fastq'),
                                     output='.trimmed.fastq')
-    trim_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     filter_runs_task = pipeline.transform(filter_runs,
                                           input=trim_task,
                                           filter=suffix('.fastq'),
                                           output='.noruns.fastq')
-    filter_runs_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     filter_contaminants_task = pipeline.transform(filter_contaminants,
                                                   input=filter_runs_task,
                                                   filter=suffix('.fastq'),
                                                   output='.uncontam.fastq')
-    filter_contaminants_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     filter_db_task = pipeline.transform(filter_db,
                                         input=filter_contaminants_task,
                                         filter=suffix('.fastq'),
                                         output='.dbfiltered.fastq')
-    filter_db_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     trim_terminal_gaps_task = pipeline.transform(trim_terminal_gaps,
                                             input=filter_db_task,
                                             filter=suffix('.fastq'),
                                             output='.gapstripped.fastq')
-    trim_terminal_gaps_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     filter_length_task = pipeline.transform(filter_length,
                                             input=trim_terminal_gaps_task,
                                             filter=suffix('.fastq'),
                                             output='.lenfilter.fastq')
-    filter_length_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     pipeline.set_head_tasks([filter_fastq_task])
     pipeline.set_tail_tasks([filter_length_task])

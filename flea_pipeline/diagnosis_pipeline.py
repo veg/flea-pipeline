@@ -12,11 +12,10 @@ import numpy as np
 from ruffus import Pipeline, suffix, formatter, add_inputs
 from Bio import SeqIO
 
-from flea_pipeline.util import maybe_qsub, cat_files, touch, strlist, traverse
+from flea_pipeline.util import maybe_qsub, cat_files, strlist, traverse
 from flea_pipeline.util import new_record_seq_str, insert_gaps, update_record_seq
 from flea_pipeline.util import must_work, must_produce, report_wrapper
-from flea_pipeline.util import local_job_limiter, remote_job_limiter
-from flea_pipeline.util import check_suffix, check_basename, n_jobs
+from flea_pipeline.util import check_suffix, check_basename
 from flea_pipeline.util import read_single_record
 from flea_pipeline.util import partition
 from flea_pipeline.util import grouper
@@ -113,8 +112,8 @@ def combine_pairs(infiles, outfiles, outdir):
 def codon_align(infile, outfile):
     cmd = "{} -R -a codon {} {}".format(
         globals_.config.get('Paths', 'bealign'), infile, outfile)
-    stdout = os.path.join(globals_.qsub_dir, '{}.stdout'.format(outfile))
-    stderr = os.path.join(globals_.qsub_dir, '{}.stderr'.format(outfile))
+    stdout = os.path.join(globals_.job_script_dir, '{}.stdout'.format(outfile))
+    stderr = os.path.join(globals_.job_script_dir, '{}.stderr'.format(outfile))
     return maybe_qsub(cmd, infile, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
@@ -122,8 +121,8 @@ def codon_align(infile, outfile):
 @report_wrapper
 def convert_bam_to_fasta(infile, outfile):
     cmd = "{} {} {}".format(globals_.config.get('Paths', 'bam2msa'), infile, outfile)
-    stdout = os.path.join(globals_.qsub_dir, '{}.stdout'.format(outfile))
-    stderr = os.path.join(globals_.qsub_dir, '{}.stderr'.format(outfile))
+    stdout = os.path.join(globals_.job_script_dir, '{}.stdout'.format(outfile))
+    stderr = os.path.join(globals_.job_script_dir, '{}.stderr'.format(outfile))
     return maybe_qsub(cmd, infile, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
@@ -185,8 +184,8 @@ def diagnose_alignment(infiles, outfiles):
         'd': os.path.join(pipeline_dir, 'results'),
         }
     cmd = "{python} {script} {hqcs} {ccs} {cn} {d}".format(**kwargs)
-    stdout = os.path.join(globals_.qsub_dir, 'diagnose.stdout')
-    stderr = os.path.join(globals_.qsub_dir, 'diagnose.stderr')
+    stdout = os.path.join(globals_.job_script_dir, 'diagnose.stdout')
+    stderr = os.path.join(globals_.job_script_dir, 'diagnose.stderr')
     return maybe_qsub(cmd, infiles, outfiles=outfiles,
                       stdout=stdout, stderr=stderr,
                       name="diagnose-alignment")
@@ -196,8 +195,6 @@ def make_diagnosis_pipeline(name=None):
     if name is None:
         name = "diagnosis_pipeline"
     pipeline = Pipeline(name)
-
-    n_local_jobs, n_remote_jobs = n_jobs()
 
     innames = [
             'protein_alignment.fasta',
@@ -215,14 +212,12 @@ def make_diagnosis_pipeline(name=None):
                                       input=None,
                                       output=inputs)
     make_inputs_task.mkdir(pipeline_dir)
-    make_inputs_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     degap_backtranslated_alignment_task = pipeline.transform(degap,
                                                              name='degap_backtranslated',
                                                              input=indict['codon_alignment.fasta'],
                                                              filter=formatter('.*/(?P<LABEL>.+).fasta'),
                                                              output=os.path.join(pipeline_dir, '{LABEL[0]}.degapped.fasta'))
-    degap_backtranslated_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
     degap_backtranslated_alignment_task.follows(make_inputs_task)
 
     hqcs_ccs_pairs_task = pipeline.transform(hqcs_ccs_pairs,
@@ -230,7 +225,6 @@ def make_diagnosis_pipeline(name=None):
                                              add_inputs=add_inputs(degap_backtranslated_alignment_task),
                                              filter=formatter('.*/(?P<LABEL>.+).ccs'),
                                              output=os.path.join(pipeline_dir, '{LABEL[0]}.hqcs-ccs-pairs.txt'))
-    hqcs_ccs_pairs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     combine_pairs_task = pipeline.subdivide(combine_pairs,
                                             input=indict['ccs_sequences'],
@@ -240,7 +234,6 @@ def make_diagnosis_pipeline(name=None):
                                             output=os.path.join(pipeline_dir,
                                                                 '{LABEL[0]}.ccs-alignments/combined.*.unaligned.fasta'),
                                             extras=[os.path.join(pipeline_dir, '{LABEL[0]}.ccs-alignments')])
-    combine_pairs_task.jobs_limit(n_local_jobs, local_job_limiter)
     combine_pairs_task.mkdir(hqcs_ccs_pairs_task,
                              formatter('.*/(?P<LABEL>.+).hqcs-ccs-pairs.txt'),
                              '{path[0]}/{LABEL[0]}.ccs-alignments')
@@ -249,13 +242,11 @@ def make_diagnosis_pipeline(name=None):
                                           input=combine_pairs_task,
                                           filter=suffix('.unaligned.fasta'),
                                           output='.aligned.bam')
-    codon_align_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     convert_bam_to_fasta_task = pipeline.transform(convert_bam_to_fasta,
                                                    input=codon_align_task,
                                                    filter=suffix('.bam'),
                                                    output='.fasta')
-    convert_bam_to_fasta_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     insert_gaps_task = pipeline.transform(insert_gaps_wrapper,
                                           name='insert_gaps',
@@ -263,27 +254,23 @@ def make_diagnosis_pipeline(name=None):
                                           add_inputs=add_inputs(indict['codon_alignment.fasta']),
                                           filter=formatter('.*/(?P<LABEL>.+).fasta'),
                                           output='{path[0]}/{LABEL[0]}.gapped.fasta')
-    insert_gaps_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     merge_all_timepoints_task = pipeline.merge(cat_wrapper_ids,
                                                name='merge_all_timepoints',
                                                input=insert_gaps_task,
                                                output=os.path.join(pipeline_dir, 'ccs.aligned.fasta'))
-    merge_all_timepoints_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     replace_gapped_codons_task = pipeline.transform(replace_gapped_codons_file,
                                                     name='replace_gapped_codons',
                                                     input=merge_all_timepoints_task,
                                                     filter=suffix('.fasta'),
                                                     output='.no-partial-gaps.fasta')
-    replace_gapped_codons_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     translate_ccs_task = pipeline.transform(gapped_translate_wrapper,
                                             name='translate_ccs',
                                             input=replace_gapped_codons_task,
                                             filter=suffix('.fasta'),
                                             output='.translated.fasta')
-    translate_ccs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     diagnosis_output = list(os.path.join(pipeline_dir,
                                          'results',
@@ -296,7 +283,6 @@ def make_diagnosis_pipeline(name=None):
                                                                        indict['copynumbers.tsv']),
                                                  filter=formatter(),
                                                  output=diagnosis_output)
-    diagnose_alignment_task.jobs_limit(n_remote_jobs, remote_job_limiter)
     diagnose_alignment_task.mkdir(os.path.join(pipeline_dir, 'results'))
 
     pipeline.set_head_tasks([make_inputs_task])

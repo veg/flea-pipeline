@@ -11,7 +11,7 @@ from ruffus import Pipeline, formatter
 from Bio import SeqIO
 
 import flea_pipeline.pipeline_globals as globals_
-from flea_pipeline.util import must_work, n_jobs, local_job_limiter, remote_job_limiter
+from flea_pipeline.util import must_work
 from flea_pipeline.util import report_wrapper
 from flea_pipeline.util import split_name
 
@@ -56,8 +56,6 @@ def make_preanalysis_pipeline(name=None):
         name = "preanalysis_pipeline"
     pipeline = Pipeline(name)
 
-    n_local_jobs, n_remote_jobs = n_jobs()
-
     rename_records_task = pipeline.transform(rename_records,
                                              name="rename_records",
                                              input=None,
@@ -69,7 +67,6 @@ def make_preanalysis_pipeline(name=None):
                                                input=rename_records,
                                                filter=formatter(),
                                                output=os.path.join(pipeline_dir, "copynumbers.tsv"))
-    make_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     pipeline.set_head_tasks([rename_records_task])
     pipeline.set_tail_tasks([rename_records_task,

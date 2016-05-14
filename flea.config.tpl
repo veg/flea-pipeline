@@ -13,13 +13,6 @@ hyphy: HYPHYMP
 FastTree: FastTree
 
 [Jobs]
-# maximum number of concurrent jobs
-local_jobs: 1
-
-# maximum jobs submitted to the cluster
-remote_jobs: 4
-
-use_cluster: True
 queue: fast
 nodes: 1
 ppn: 16

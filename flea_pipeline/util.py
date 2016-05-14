@@ -21,98 +21,9 @@ from Bio import SeqIO
 
 import numpy as np
 
+from ruffus.drmaa_wrapper import run_job, error_drmaa_job
+
 import flea_pipeline.pipeline_globals as globals_
-
-
-################################################################################
-# job handling
-
-def n_jobs():
-    n_local_jobs = globals_.config.getint('Jobs', 'local_jobs')
-    n_remote_jobs = globals_.config.getint('Jobs', 'remote_jobs')
-    use_cluster = globals_.config.getboolean('Jobs', 'use_cluster')
-
-    if n_local_jobs < 1:
-        raise Exception('Bad parameters; n_local_jobs="{}"'.format(n_local_jobs))
-
-    if n_remote_jobs < 1 and use_cluster:
-        raise Exception('Bad parameters; use_cluster="{}"'
-                        ' but remote_jobs="{}"'.format(use_cluster, n_remote_jobs))
-
-    if not use_cluster:
-        n_remote_jobs = n_local_jobs
-    return n_local_jobs, n_remote_jobs
-
-
-local_job_limiter = 'local_jobs'
-remote_job_limiter = 'remote_jobs'
-
-################################################################################
-
-
-# TODO: capture and write all stdout and stderr to files.
-def call(cmd_str, stdin=None, stdout=None):
-    """Call a command in the shell. Captures STDOUT and STDERR.
-
-    If *args are given, they are passed as strings to STDIN.
-
-    Raises an exception if return code != 0.
-
-    """
-    if isinstance(stdin, str):
-        in_str = stdin.encode()
-        stdin = PIPE
-    else:
-        in_str = None
-    if stdout is None:
-        stdout = PIPE
-    process = Popen(cmd_str, stdin=stdin, stdout=stdout, stderr=PIPE, shell=True)
-    stdout_str, stderr_str = process.communicate(input=in_str)
-    if process.returncode != 0:
-        if in_str is None:
-            in_str = ''
-        else:
-            in_str = in_str.decode()
-        raise Exception("Failed to run '{}'\nExit status: {}\nSTDIN:\n{}"
-                        "\nSTDOUT:\n{}\nSTDERR\n{}\n".format(
-                cmd_str, process.returncode, in_str, stdout_str.decode(), stderr_str.decode()))
-    return stdout_str.decode()
-
-
-def job_state(job_id):
-    """Returns job state from qstat.
-
-    If the job is not found, returns 'M' for 'missing'.
-
-    """
-    cmd = 'qstat {}'.format(job_id)
-    try:
-        result = call(cmd)
-        name, _, _, _, state, _ = result.split('\n')[2].split()
-        return state
-    except CalledProcessError:
-        pass
-    return 'M'
-
-
-def wait_for_job(job_id, sleep):
-    """Check job state every `sleep` seconds; return if 'C' or 'M'."""
-    while True:
-        time.sleep(sleep)
-        state = job_state(job_id)
-        if state in 'CM':
-            return
-
-
-def wait_for_files(files, sleep, walltime):
-    """Wait up to `walltime` seconds for files in `files` to exist"""
-    files = strlist(files)
-    run_time = 0
-    while run_time < walltime:
-        time.sleep(sleep)
-        run_time += sleep
-        if all(os.path.exists(f) for f in files):
-            break
 
 
 def format_walltime(seconds):
@@ -122,86 +33,43 @@ def format_walltime(seconds):
     return "{:02}:{:02}:{:02}".format(h, m, s)
 
 
-def qsub(cmd, stdout, stderr, outfiles=None, control_dir=None, queue=None,
-         nodes=1, ppn=1, sleep=5, walltime=3600, waittime=10, name=None,
-         sentinel=None):
-    """A blocking qsub."""
-    if control_dir is None:
-        control_dir = '.'
-    if walltime < 1:
-        return False, 'walltime={} < 1'.format(walltime)
+# TODO: rename
+# TODO: handle stdout and stderr
+def maybe_qsub(cmd, infiles, outfiles, stdout=None, stderr=None, name=None):
+    from uuid import uuid4  # because this hangs on silverback compute nodes
+    walltime = globals_.config.getint('Jobs', 'walltime')
     if name is None:
         name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
-    if sentinel is None:
-        from uuid import uuid4  # because this hangs on silverback compute nodes
-        sentinel = os.path.join(control_dir, '{}-{}.complete'.format(name, uuid4()))
-    if os.path.exists(sentinel):
-        return False, 'sentinel file already exists: {}'.format(sentinel)
-    mycmd = '{}; echo \$? > {}'.format(cmd, sentinel)
-    fwalltime = format_walltime(walltime)
-    qsub_cmd = ('qsub -V -W umask=077 -l'
-                ' walltime={},nodes={}:ppn={} -N {name}'
-                ' -d `pwd` -w `pwd`'.format(fwalltime, nodes, ppn, name=name))
-    if queue is not None:
-        qsub_cmd = "{} -q {}".format(qsub_cmd, queue)
-    qsub_cmd = '{} -o {}'.format(qsub_cmd, stdout)
-    qsub_cmd = '{} -e {}'.format(qsub_cmd, stderr)
-    full_cmd = 'echo "{}" | {}'.format(mycmd, qsub_cmd)
-    try:
-        job_id = call(full_cmd)
-        wait_for_job(job_id, sleep)
-    finally:
-        if job_state(job_id) not in 'CM':
-            call('qdel {}'.format(job_id))
-    if outfiles is not None:
-        wait_for_files(outfiles, sleep, waittime)
-    if not os.path.exists(sentinel):
-        return False, 'qsub sentinel not found: "{}"'.format(sentinel)
-    with open(sentinel) as handle:
-        code = handle.read().strip()
-        if code != '0':
-            return False, 'qsub job exited with code "{}"'.format(code)
-    return True, 'success'
-
-
-def get_key(k, d, default=None):
-    if k in d:
-        return d[k]
-    return default
-
-
-def maybe_qsub(cmd, infiles, outfiles, stdout=None, stderr=None, **kwargs):
-    from uuid import uuid4  # because this hangs on silverback compute nodes
-    if 'walltime' not in kwargs:
-        kwargs['walltime'] = globals_.config.getint('Jobs', 'walltime')
-    if 'name' in kwargs:
-        name = kwargs['name']
-    else:
-        name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
     name = "{}-{}".format(name, uuid4())
-    base = os.path.join(globals_.qsub_dir, name)
-    if stdout is None:
-        stdout = "{}.stdout".format(base)
-    if stderr is None:
-        stderr = "{}.stderr".format(base)
-    sentinel = "{}.complete".format(base)
-    if globals_.config.getboolean('Jobs', 'use_cluster'):
-        success, msg = qsub(cmd, stdout, stderr,
-                            sentinel=sentinel,
-                            control_dir=globals_.qsub_dir,
-                            queue=globals_.config.get('Jobs', 'queue'),
-                            nodes=globals_.config.get('Jobs', 'nodes'),
-                            ppn=globals_.config.get('Jobs', 'ppn'), **kwargs)
-    else:
-        # TODO: handle stdout and stderr kwargs
-        success, msg = call(cmd)
-    with open(stdout) as handle:
-        stdout_msg = handle.read()
-    with open(stderr) as handle:
-        stderr_msg = handle.read()
-    return Result(infiles, outfiles, stdout=stdout_msg, stderr=stderr_msg,
-                  desc=get_key('name', kwargs), failed=(not success),
+    stdout_res, stderr_res = "", ""
+    queue_name = globals_.config.get('Jobs', 'queue')
+
+    fwalltime = format_walltime(walltime)
+    nodes=globals_.config.get('Jobs', 'nodes')
+    ppn=globals_.config.get('Jobs', 'ppn')
+    job_other_options = ('-q {} -l walltime={},nodes={}:ppn={}'.format(queue_name, fwalltime, nodes, ppn))
+
+    run_local = globals_.run_locally
+
+    success = False
+    msg = ''
+    try:
+        stdout_res, stderr_res = run_job(cmd_str=cmd,
+                                         job_name=name,
+                                         logger=globals_.logger,
+                                         drmaa_session = globals_.drmaa_session,
+                                         run_locally=run_local,
+                                         job_other_options=job_other_options,
+                                         job_script_directory=globals_.job_script_dir)
+        success = True
+    except error_drmaa_job as err:
+        print(err)
+        msg = err.msg
+
+    return Result(infiles, outfiles, stdout=stdout_res, stderr=stderr_res,
+                  desc=name, failed=(not success),
                   msg=msg, cmds=cmd)
+
 
 
 def insert_gaps(source, target, src_gap, target_gap, gap_char=None):
@@ -327,10 +195,6 @@ def cat_files(files, outfile, chunk=2**14):
                 out_handle.write(data)
             else:
                 break
-
-
-def touch(f):
-    call('touch {}'.format(f))
 
 
 def strlist(arg):
@@ -519,7 +383,6 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
               illegal_chars=None, pattern=None, in_frame=False):
     """Fail if any output is empty.
 
-    maybe: touch output and return if any input is empty
     seq_ratio: (int, int): ensure numbers of sequences match
     seq_ids: ensure all ids present in input files are in output file
     min_seqs: minimum number of sequences in the output file
@@ -537,11 +400,6 @@ def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
 
         @wraps(function)  # necessary because ruffus uses function name internally
         def wrapped(infiles, outfiles, *args, **kwargs):
-            if maybe:
-                if any(os.stat(f).st_size == 0 for f in traverse(strlist(infiles))):
-                    for f in traverse(strlist(outfiles)):
-                        touch(f)
-                    return
             function(infiles, outfiles, *args, **kwargs)
             if seq_ids or seq_ratio:
                 infiles = list(traverse(strlist(infiles)))

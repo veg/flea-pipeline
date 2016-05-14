@@ -23,8 +23,7 @@ from Bio import SeqIO
 from Bio import Phylo
 
 import flea_pipeline.pipeline_globals as globals_
-from flea_pipeline.util import must_work, report_wrapper, maybe_qsub, call, n_jobs
-from flea_pipeline.util import local_job_limiter, remote_job_limiter
+from flea_pipeline.util import must_work, report_wrapper, maybe_qsub
 from flea_pipeline.util import read_single_record, cat_files
 from flea_pipeline.util import name_to_date
 from flea_pipeline.util import extend_coordinates
@@ -50,7 +49,7 @@ def hyphy_call(script_file, infiles, outfiles,  name, args):
         in_str = "".join("{}\n".format(i) for i in args)
     else:
         in_str = ''
-    infile = os.path.join(globals_.qsub_dir, '{}.stdin'.format(name))
+    infile = os.path.join(globals_.job_script_dir, '{}.stdin'.format(name))
     with open(infile, 'w') as handle:
         handle.write(in_str)
     cmd = '{} {} < {}'.format(globals_.config.get('Paths', 'hyphy'), script_file, infile)
@@ -364,43 +363,35 @@ def make_analysis_pipeline(name=None):
         name = "analysis_pipeline"
     pipeline = Pipeline(name)
 
-    n_local_jobs, n_remote_jobs = n_jobs()
-
     dates_json_task = pipeline.transform(dates_json,
                                          input=None,
                                          filter=formatter(),
                                          output=os.path.join(pipeline_dir, 'dates.json'))
-    dates_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     # evo_history needs copynumbers in sequence names
     add_copynumbers_task = pipeline.merge(add_copynumbers,
                                           name="add_copynumbers",
                                           input=None,
                                           output=os.path.join(pipeline_dir, "msa.copynumber-ids.fasta"))
-    add_copynumbers_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     copynumber_json_task = pipeline.merge(copynumber_json,
                                           input=None,
                                           output=os.path.join(pipeline_dir, 'copynumbers.json'))
-    copynumber_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     mrca_task = pipeline.merge(compute_mrca,
                                name='compute_mrca',
                                input=None,
                                output=os.path.join(pipeline_dir, 'mrca.fasta'))
-    mrca_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     add_mrca_task = pipeline.merge(cat_wrapper_ids,
                                    name='add_mrca',
                                    input=[mrca_task, add_copynumbers_task],
                                    output=os.path.join(pipeline_dir, 'msa.with-mrca.fasta'))
-    add_mrca_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     fasttree_task = pipeline.transform(run_fasttree,
                                        input=add_mrca_task,
                                        filter=formatter(),
                                        output=os.path.join(pipeline_dir, 'tree.newick'))
-    fasttree_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     reroot_task = pipeline.transform(reroot_at_mrca,
                                      input=fasttree_task,
@@ -411,73 +402,61 @@ def make_analysis_pipeline(name=None):
                                          input=reroot_task,
                                          filter=formatter(),
                                          output=os.path.join(pipeline_dir, 'trees.json'))
-    trees_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     translate_task = pipeline.transform(gapped_translate_wrapper,
                                         name='translate_gapped',
                                         input=add_copynumbers_task,
                                         filter=suffix('.fasta'),
                                         output='.translated.fasta')
-    translate_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     translate_mrca_task = pipeline.transform(gapped_translate_wrapper,
                                              name='translate_mrca',
                                              input=mrca_task,
                                              filter=suffix('.fasta'),
                                              output='.translated.fasta')
-    translate_mrca_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     coordinates_json_task = pipeline.transform(make_coordinates_json,
                                                input=translate_mrca_task,
                                                filter=formatter(),
                                                output=os.path.join(pipeline_dir, 'coordinates.json'))
-    coordinates_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     sequences_json_task = pipeline.merge(make_sequences_json,
                                          input=[translate_task, translate_mrca_task, make_coordinates_json],
                                          output=os.path.join(pipeline_dir, 'sequences.json'))
-    sequences_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     js_divergence_task = pipeline.transform(js_divergence_json,
                                             input=translate_task,
                                             filter=formatter(),
                                             output=os.path.join(pipeline_dir, 'js_divergence.json'))
-    js_divergence_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     dates_task = pipeline.transform(write_dates,
                                     input=add_copynumbers_task,
                                     filter=formatter(),
                                     output=os.path.join(pipeline_dir, 'merged.dates'))
-    dates_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     if globals_.config.getboolean('Tasks', 'hyphy_analysis'):
         replace_stop_codons_task = pipeline.transform(replace_stop_codons_file,
                                                       input=add_copynumbers_task,
                                                       filter=suffix('.fasta'),
                                                       output='.no-stops.fasta')
-        replace_stop_codons_task.jobs_limit(n_local_jobs, local_job_limiter)
 
         region_coords_task = pipeline.transform(compute_hxb2_regions,
                                                 input=mrca_task,
                                                 filter=formatter(),
                                                 output=os.path.join(pipeline_dir, 'region_coords.json'))
-        region_coords_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
         evo_history_task = pipeline.merge(evo_history,
                                           input=[replace_stop_codons_task, dates_task, region_coords_task, mrca_task],
                                           output=os.path.join(pipeline_dir, 'rates_pheno.tsv'))
-        evo_history_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
         rates_pheno_json_task = pipeline.transform(rates_pheno_json,
                                                    input=evo_history_task,
                                                    filter=suffix('.tsv'),
                                                    output='.json')
-        rates_pheno_json_task.jobs_limit(n_local_jobs, local_job_limiter)
 
         fubar_task = pipeline.merge(run_fubar,
                                     input=[replace_stop_codons_task, dates_task, mrca_task],
                                     output=os.path.join(pipeline_dir, 'rates.json'))
-        fubar_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     pipeline.set_head_tasks([add_copynumbers_task, copynumber_json_task, mrca_task, dates_json_task])
     for task in pipeline.head_tasks:

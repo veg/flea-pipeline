@@ -12,11 +12,10 @@ import numpy as np
 from ruffus import Pipeline, suffix, formatter, add_inputs
 from Bio import SeqIO
 
-from flea_pipeline.util import maybe_qsub, cat_files, touch, strlist, traverse
+from flea_pipeline.util import maybe_qsub, cat_files, strlist, traverse
 from flea_pipeline.util import new_record_seq_str, insert_gaps, update_record_seq
 from flea_pipeline.util import must_work, must_produce, report_wrapper
-from flea_pipeline.util import local_job_limiter, remote_job_limiter
-from flea_pipeline.util import check_suffix, check_basename, n_jobs
+from flea_pipeline.util import check_suffix, check_basename
 from flea_pipeline.util import read_single_record
 from flea_pipeline.util import partition
 from flea_pipeline.util import grouper
@@ -94,8 +93,8 @@ def backtranslate_alignment(infiles, outfile):
         'outfile': outfile,
         }
     cmd = "{python} {script} {protein} {dna} {outfile}".format(**kwargs)
-    stdout = os.path.join(globals_.qsub_dir, 'backtranslate.stdout')
-    stderr = os.path.join(globals_.qsub_dir, 'backtranslate.stderr')
+    stdout = os.path.join(globals_.job_script_dir, 'backtranslate.stdout')
+    stderr = os.path.join(globals_.job_script_dir, 'backtranslate.stderr')
     return maybe_qsub(cmd, infiles, outfiles=outfile,
                       stdout=stdout, stderr=stderr,
                       name="backtranslate")
@@ -106,28 +105,23 @@ def make_alignment_pipeline(name=None):
         name = "alignment_pipeline"
     pipeline = Pipeline(name)
 
-    n_local_jobs, n_remote_jobs = n_jobs()
-
     translate_hqcs_task = pipeline.transform(translate_wrapper,
                                              name='translate_hqcs',
                                              input=None,
                                              filter=formatter('.*/(?P<LABEL>.+).fasta'),
                                              output=os.path.join(pipeline_dir, '{LABEL[0]}.translated.fasta'))
-    translate_hqcs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     align_hqcs_protein_task = pipeline.transform(mafft_wrapper_seq_ids,
                                                  name='align_hqcs_protein',
                                                  input=translate_hqcs_task,
                                                  filter=suffix('.fasta'),
                                                  output='.aligned.fasta')
-    align_hqcs_protein_task.jobs_limit(n_local_jobs, local_job_limiter)
 
     copy_protein_alignment_task = pipeline.transform(copy_file,
                                                      name='copy_protein_alignment',
                                                      input=align_hqcs_protein_task,
                                                      filter=suffix('.fasta'),
                                                      output='.edited.fasta')
-    copy_protein_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
     copy_protein_alignment_task.posttask(pause_for_editing_alignment)
 
     # expects all HQCSs as input
@@ -136,7 +130,6 @@ def make_alignment_pipeline(name=None):
                                                       add_inputs=add_inputs(copy_protein_alignment_task),
                                                       filter=formatter(),
                                                       output=os.path.join(pipeline_dir, 'hqcs.translated.aligned.edited.backtranslated.fasta'))
-    backtranslate_alignment_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     pipeline.set_head_tasks([translate_hqcs_task, backtranslate_alignment_task])
     pipeline.set_tail_tasks([backtranslate_alignment_task, copy_protein_alignment_task])

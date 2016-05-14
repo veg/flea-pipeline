@@ -9,6 +9,7 @@ biopython==1.65
 cycler==0.10.0            # via matplotlib
 Cython==0.23.1
 docopt==0.6.2
+drmaa==0.7.6
 matplotlib==1.5.1
 numpy==1.9.2
 pyparsing==2.1.1          # via matplotlib
