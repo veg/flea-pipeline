@@ -71,7 +71,7 @@ def hqcs_ccs_pairs(infiles, outfile):
     # FIXME: this does basically the same thing as the copynumber task,
     # except it allows CCSs to map to HQCSs in different timepoints
     infile, dbfile = infiles
-    check_suffix(infile, '-ccs.fastq')
+    check_suffix(infile, '.ccs.fastq')
     check_suffix(dbfile, '.degapped.fasta')
     usearch_hqcs_ids(infile, outfile, dbfile, name='hqcs_ccs_ids')
 
@@ -83,7 +83,7 @@ def combine_pairs(infiles, outfiles, outdir):
     for f in outfiles:
         os.unlink(f)
     ccsfile, hqcsfile, pairfile  = infiles
-    check_suffix(ccsfile, '-ccs.fastq')
+    check_suffix(ccsfile, '.ccs.fastq')
     check_suffix(hqcsfile, '.degapped.fasta')
     check_suffix(pairfile, '.hqcs-ccs-pairs.txt')
 
@@ -207,7 +207,7 @@ def make_diagnosis_pipeline(name=None):
     inputs = list(os.path.join(pipeline_dir, f) for f in innames)
     indict = dict((k, v) for k, v in zip(innames, inputs))
 
-    indict['ccs_sequences'] = list(os.path.join(pipeline_dir, '{}-ccs.fastq'.format(t.label))
+    indict['ccs_sequences'] = list(os.path.join(pipeline_dir, '{}.ccs.fastq'.format(t.label))
                                    for t in globals_.timepoints)
     inputs.extend(indict['ccs_sequences'])
 
@@ -228,13 +228,13 @@ def make_diagnosis_pipeline(name=None):
     hqcs_ccs_pairs_task = pipeline.transform(hqcs_ccs_pairs,
                                              input=indict['ccs_sequences'],
                                              add_inputs=add_inputs(degap_backtranslated_alignment_task),
-                                             filter=formatter('.*/(?P<LABEL>.+)-ccs'),
+                                             filter=formatter('.*/(?P<LABEL>.+).ccs'),
                                              output=os.path.join(pipeline_dir, '{LABEL[0]}.hqcs-ccs-pairs.txt'))
     hqcs_ccs_pairs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     combine_pairs_task = pipeline.subdivide(combine_pairs,
                                             input=indict['ccs_sequences'],
-                                            filter=formatter('.*/(?P<LABEL>.+)-ccs'),
+                                            filter=formatter('.*/(?P<LABEL>.+).ccs'),
                                             add_inputs=add_inputs(degap_backtranslated_alignment_task,
                                                                   os.path.join(pipeline_dir, '{LABEL[0]}.hqcs-ccs-pairs.txt')),
                                             output=os.path.join(pipeline_dir,
@@ -292,9 +292,8 @@ def make_diagnosis_pipeline(name=None):
     diagnose_alignment_task = pipeline.transform(diagnose_alignment,
                                                  name='diagnose_alignment',
                                                  input=translate_ccs_task,
-                                                 add_inputs=add_inputs(
-            indict['protein_alignment.fasta'],
-            indict['copynumbers.tsv']),
+                                                 add_inputs=add_inputs(indict['protein_alignment.fasta'],
+                                                                       indict['copynumbers.tsv']),
                                                  filter=formatter(),
                                                  output=diagnosis_output)
     diagnose_alignment_task.jobs_limit(n_remote_jobs, remote_job_limiter)
