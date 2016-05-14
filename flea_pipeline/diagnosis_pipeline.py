@@ -56,14 +56,6 @@ def degap(infile, outfile):
     SeqIO.write(processed, outfile, 'fasta')
 
 
-@must_work()
-@report_wrapper
-def make_hqcs_db(infile, outfile):
-    cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
-            usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
-    return maybe_qsub(cmd, infile, outfiles=outfile, name='make_hqcs_db')
-
-
 # making wrappers like this is necessary because nested function
 # definitions are not picklable.
 
@@ -80,7 +72,7 @@ def hqcs_ccs_pairs(infiles, outfile):
     # except it allows CCSs to map to HQCSs in different timepoints
     infile, dbfile = infiles
     check_suffix(infile, '-ccs.fastq')
-    check_suffix(dbfile, '.degapped.udb')
+    check_suffix(dbfile, '.degapped.fasta')
     usearch_hqcs_ids(infile, outfile, dbfile, name='hqcs_ccs_ids')
 
 
@@ -233,15 +225,9 @@ def make_diagnosis_pipeline(name=None):
     degap_backtranslated_alignment_task.jobs_limit(n_local_jobs, local_job_limiter)
     degap_backtranslated_alignment_task.follows(make_inputs_task)
 
-    make_hqcs_db_task = pipeline.transform(make_hqcs_db,
-                                           input=degap_backtranslated_alignment_task,
-                                           filter=suffix('.fasta'),
-                                           output='.udb')
-    make_hqcs_db_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-
     hqcs_ccs_pairs_task = pipeline.transform(hqcs_ccs_pairs,
                                              input=indict['ccs_sequences'],
-                                             add_inputs=add_inputs(make_hqcs_db_task),
+                                             add_inputs=add_inputs(degap_backtranslated_alignment_task),
                                              filter=formatter('.*/(?P<LABEL>.+)-ccs'),
                                              output=os.path.join(pipeline_dir, '{LABEL[0]}.hqcs-ccs-pairs.txt'))
     hqcs_ccs_pairs_task.jobs_limit(n_remote_jobs, remote_job_limiter)

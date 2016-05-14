@@ -200,25 +200,16 @@ def unique_hqcs(infile, outfile):
     return maybe_qsub(cmd, infile, outfiles=outfile, name='unique_hqcs')
 
 
-@must_work()
-@report_wrapper
-def make_individual_dbs(infile, outfile):
-    cmd = ("{usearch} -makeudb_usearch {infile} -output {outfile}".format(
-            usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
-    return maybe_qsub(cmd, infile, outfiles=outfile, name='make-individual-dbs')
-
-
 # FIXME: this is run with remote job limiter, but part of its task is run locally
 @must_work()
 @report_wrapper
 def compute_copynumbers(infiles, outfile):
-    ccsfile, hqcsfile, dbfile = infiles
+    ccsfile, hqcsfile = infiles
     # make sure this suffix changes depending on what task comes before
     check_suffix(hqcsfile, '.uniques.fasta')
-    check_suffix(dbfile, '.udb')
     check_suffix(ccsfile, '.lenfilter.fastq')
     pairfile = '{}.pairs'.format(remove_suffix(outfile, '.tsv'))
-    result = usearch_hqcs_ids(ccsfile, pairfile, dbfile, name='compute-copynumber')
+    result = usearch_hqcs_ids(ccsfile, pairfile, hqcsfile, name='compute-copynumber')
     with open(pairfile) as f:
         pairs = list(line.strip().split("\t") for line in f.readlines())
     hqcs_counts = defaultdict(lambda: 0)
@@ -323,21 +314,14 @@ def make_consensus_pipeline(name=None):
                                           output='.uniques.fasta')
     unique_hqcs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
-    make_individual_dbs_task = pipeline.transform(make_individual_dbs,
-                                                  input=unique_hqcs_task,
-                                                  filter=suffix('.fasta'),
-                                                  output='.udb')
-    make_individual_dbs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-
     compute_copynumbers_task = pipeline.transform(compute_copynumbers,
                                                   input=None,
                                                   filter=formatter(r'.*/(?P<LABEL>.+).qfilter'),
                                                   add_inputs=add_inputs(
-            os.path.join(pipeline_dir, '{LABEL[0]}.consensus.refpairs.shifted.uniques.fasta'),
-            os.path.join(pipeline_dir, '{LABEL[0]}.consensus.refpairs.shifted.uniques.udb')),
+            os.path.join(pipeline_dir, '{LABEL[0]}.consensus.refpairs.shifted.uniques.fasta')),
                                                   output=os.path.join(pipeline_dir, '{LABEL[0]}.copynumbers.tsv'))
     compute_copynumbers_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-    compute_copynumbers_task.follows(make_individual_dbs_task)
+    compute_copynumbers_task.follows(unique_hqcs_task)
 
     merge_copynumbers_task = pipeline.merge(cat_wrapper,
                                             name='cat_copynumbers',
