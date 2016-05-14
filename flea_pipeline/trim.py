@@ -12,10 +12,12 @@ Usage:
 
 Options:
   --fastq  Treat input and output files as FASTQ.
+  --jobs <INT>  Run in parallel.
   -h --help
 
 """
 import warnings
+import multiprocessing
 
 import numpy as np
 from Bio import SeqIO
@@ -166,10 +168,16 @@ def _notempty(rs):
     return (r for r in rs if len(r.seq))
 
 
-def trim_file(infile, outfile, fastq=False):
+def trim_file(infile, outfile, fastq=False, jobs=1):
+    if jobs < 1:
+        jobs = 1
     filetype = 'fastq' if fastq else 'fasta'
-
-    results = (trim_record(r) for r in SeqIO.parse(infile, filetype))
+    records = SeqIO.parse(infile, filetype)
+    if jobs > 1:
+        pool = multiprocessing.Pool(jobs)
+        results = pool.map(trim_record, records)
+    else:
+        results = (trim_record(r) for r in records)
     heads, bodies, tails = zip(*results)
 
     head_file = "{}.heads".format(outfile)
@@ -184,4 +192,5 @@ if __name__ == "__main__":
     filename = args["<infile>"]
     outfile = args["<outfile>"]
     fastq = args['--fastq']
-    trim_file(filename, outfile, fastq=fastq)
+    jobs = int(args['--jobs'])
+    trim_file(filename, outfile, fastq=fastq, jobs=jobs)

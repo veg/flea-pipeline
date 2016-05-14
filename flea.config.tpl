@@ -14,8 +14,7 @@ FastTree: FastTree
 
 [Jobs]
 queue: fast
-nodes: 1
-ppn: 1
+ppn: 4
 walltime: 3600
 hyphy_walltime: 86400
 

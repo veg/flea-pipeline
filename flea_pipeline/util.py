@@ -35,35 +35,33 @@ def format_walltime(seconds):
 
 # TODO: rename
 # TODO: handle stdout and stderr
-def maybe_qsub(cmd, infiles, outfiles, stdout=None, stderr=None, name=None):
+def maybe_qsub(cmd, infiles, outfiles, ppn=1, walltime=None,
+               stdout=None, stderr=None, name=None):
     from uuid import uuid4  # because this hangs on silverback compute nodes
-    walltime = globals_.config.getint('Jobs', 'walltime')
+    if walltime is None:
+        walltime = globals_.config.getint('Jobs', 'walltime')
     if name is None:
         name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
     name = "{}-{}".format(name, uuid4())
-    stdout_res, stderr_res = "", ""
+
     queue_name = globals_.config.get('Jobs', 'queue')
-
     fwalltime = format_walltime(walltime)
-    nodes=globals_.config.get('Jobs', 'nodes')
-    ppn=globals_.config.get('Jobs', 'ppn')
+    nodes = 1
     job_other_options = ('-q {} -l walltime={},nodes={}:ppn={}'.format(queue_name, fwalltime, nodes, ppn))
-
-    run_local = globals_.run_locally
 
     success = False
     msg = ''
+    stdout_res, stderr_res = "", ""
     try:
         stdout_res, stderr_res = run_job(cmd_str=cmd,
                                          job_name=name,
                                          logger=globals_.logger,
                                          drmaa_session = globals_.drmaa_session,
-                                         run_locally=run_local,
+                                         run_locally=globals_.run_locally,
                                          job_other_options=job_other_options,
                                          job_script_directory=globals_.job_script_dir)
         success = True
     except error_drmaa_job as err:
-        print(err)
         msg = err.msg
 
     return Result(infiles, outfiles, stdout=stdout_res, stderr=stderr_res,
