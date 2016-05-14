@@ -74,7 +74,7 @@ logger, logger_mutex = cmdline.setup_logging(__name__,
                                              options.log_file,
                                              options.verbose)
 
-do_quality = options.align is None and options.analyze is None
+do_full = options.align is None and options.analyze is None
 
 # read configuration
 if options.config is None:
@@ -99,7 +99,7 @@ Timepoint = namedtuple('Timepoint', ['key', 'label', 'date'])
 with open(options.file, newline='') as csvfile:
     reader = csv.reader(csvfile, delimiter=' ')
     keymod = lambda k: k
-    if do_quality:
+    if do_full:
         keymod = lambda f: os.path.abspath(os.path.join(data_dir, f))
     timepoints = list(Timepoint(keymod(k), a, d) for k, a, d in reader)
 
@@ -135,7 +135,7 @@ options.jobs = max(n_local_jobs, n_remote_jobs)
 
 # check alignment options
 
-if do_quality:
+if do_full:
     if options.copynumbers is not None:
         raise Exception('--copynumber option is invalid without --alignment')
 else:
@@ -183,37 +183,35 @@ from flea_pipeline.diagnosis_pipeline import make_diagnosis_pipeline
 from flea_pipeline.preanalysis_pipeline import make_preanalysis_pipeline
 
 
-if do_quality:
+if do_full:
     inputs = list(t.key for t in timepoints)
     for f in inputs:
         if not os.path.exists(f):
             raise Exception('file does not exist: "{}"'.format(f))
-    p_qual = make_quality_pipeline()
-    p_qual.set_input(input=inputs)
+    if globals_.config.getboolean('Tasks', 'quality_pipeline'):
+        p_qual = make_quality_pipeline()
+        p_qual.set_input(input=inputs)
+        high_qual_inputs = p_qual
+    else:
+        high_qual_inputs = inputs
 
     p_cons = make_consensus_pipeline()
-    p_cons.set_input(input=p_qual)
-    # for task in p_cons.head_tasks:
-    #     task.set_input(input=p_qual.tail_tasks)
+    p_cons['make_input'].set_input(input=high_qual_inputs)
 
     p_aln = make_alignment_pipeline()
     p_aln.set_input(input=p_cons['cat_all_hqcs'])
-    # for task in p_aln.head_tasks:
-    #     task.set_input(input=p_cons.tail_tasks)
 
     if globals_.config.getboolean('Tasks', 'analysis'):
         p_anl = make_analysis_pipeline()
         p_anl.set_input(input=[p_aln['backtranslate_alignment'],
                                p_cons['cat_copynumbers']])
-        # for task in p_anl.head_tasks:
-        #     task.set_input(input=p3.tail_tasks)
 
     if globals_.config.getboolean('Tasks', 'align_ccs'):
         p_diag = make_diagnosis_pipeline()
         p_diag.set_input(input=[p_aln['copy_protein_alignment'],
                                 p_aln['backtranslate_alignment'],
                                 p_cons['cat_copynumbers'],
-                                p_qual])
+                                high_qual_inputs])
 else:
     p_pre = make_preanalysis_pipeline()
     if config.align is not None:

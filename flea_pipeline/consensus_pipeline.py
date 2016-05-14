@@ -33,6 +33,15 @@ pipeline_dir = os.path.join(globals_.data_dir, "consensus")
 
 @must_work()
 @report_wrapper
+def make_input(infile, outfile):
+    print(infile, outfile)
+    if os.path.exists(outfile):
+        os.unlink(outfile)
+    os.symlink(infile, outfile)
+
+
+@must_work()
+@report_wrapper
 def cluster(infile, outfile):
     minsl = globals_.config.get('Parameters', 'min_length_ratio')
     cmd = ('{usearch} -cluster_fast {infile} -id {id}'
@@ -53,7 +62,7 @@ def cluster(infile, outfile):
 def fastq_clusters(infiles, outfiles, outdir):
     for f in outfiles:
         os.unlink(f)
-    fastqfile, ucfile = infiles
+    ucfile, fastqfile = infiles
     kwargs = {
         'python': globals_.config.get('Paths', 'python'),
         'script': os.path.join(globals_.script_dir, "cluster_fastq.py"),
@@ -94,7 +103,7 @@ def sample_clusters(infile, outfile):
     maxsize = int(globals_.config.get('Parameters', 'max_cluster_size'))
     if n > maxsize:
         records = iter_sample(records, maxsize)
-    SeqIO.write(records, outfile, 'fasta')
+    SeqIO.write(records, outfile, 'fastq')
 
 
 @must_work(illegal_chars='-', min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
@@ -234,10 +243,10 @@ def unique_hqcs(infile, outfile):
 @must_work()
 @report_wrapper
 def compute_copynumbers(infiles, outfile):
-    ccsfile, hqcsfile = infiles
+    hqcsfile, ccsfile = infiles
     # make sure this suffix changes depending on what task comes before
     check_suffix(hqcsfile, '.uniques.fasta')
-    check_suffix(ccsfile, '.lenfilter.fastq')
+    check_suffix(ccsfile, '.ccs.fastq')
     pairfile = '{}.pairs'.format(remove_suffix(outfile, '.tsv'))
     result = usearch_hqcs_ids(ccsfile, pairfile, hqcsfile, name='compute-copynumber')
     with open(pairfile) as f:
@@ -282,16 +291,27 @@ def make_consensus_pipeline(name=None):
 
     n_local_jobs, n_remote_jobs = n_jobs()
 
+    inputs_regex = r'.*/.*(?P<LABEL>{}).*'.format('|'.join(t.label for t in globals_.timepoints))
+    regex = r'.*/(?P<LABEL>{}).*'.format('|'.join(t.label for t in globals_.timepoints))
+    ccs_pattern = os.path.join(pipeline_dir, '{LABEL[0]}.ccs.fastq')
+
+    make_inputs_task = pipeline.transform(make_input,
+                                          input=None,
+                                          filter=formatter(inputs_regex),
+                                          output=os.path.join(pipeline_dir, '{LABEL[0]}.ccs.fastq'))
+    make_inputs_task.mkdir(pipeline_dir)
+    make_inputs_task.jobs_limit(n_local_jobs, local_job_limiter)
+
     cluster_task = pipeline.transform(cluster,
-                                      input=None,
-                                      filter=formatter(r'.*/(?P<LABEL>.+).qfilter'),
+                                      input=make_inputs_task,
+                                      filter=formatter(regex),
                                       output=os.path.join(pipeline_dir, '{LABEL[0]}.clustered.uc'))
     cluster_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     fastq_clusters_task = pipeline.subdivide(fastq_clusters,
-                                             input=None,
-                                             filter=formatter(r'.*/(?P<LABEL>.+).qfilter'),
-                                             add_inputs=add_inputs(os.path.join(pipeline_dir, '{LABEL[0]}.clustered.uc')),
+                                             input=cluster_task,
+                                             filter=formatter(regex),
+                                             add_inputs=add_inputs(ccs_pattern),
                                              output=os.path.join(pipeline_dir, '{LABEL[0]}.clusters/*.fastq'),
                                              extras=[os.path.join(pipeline_dir, '{LABEL[0]}.clusters')])
     fastq_clusters_task.jobs_limit(n_remote_jobs, remote_job_limiter)
@@ -307,7 +327,7 @@ def make_consensus_pipeline(name=None):
 
     cluster_consensus_task = pipeline.collate(cluster_consensus,
                                               input=sample_clusters_task,
-                                              filter=formatter(r'.*/(?P<LABEL>.+).clusters'),
+                                              filter=formatter(regex),
                                               output=os.path.join(pipeline_dir, '{LABEL[0]}.consensus.fasta'),
                                               extras=['{path[0]}',
                                                       '{LABEL[0]}'])
@@ -351,13 +371,11 @@ def make_consensus_pipeline(name=None):
     unique_hqcs_task.jobs_limit(n_remote_jobs, remote_job_limiter)
 
     compute_copynumbers_task = pipeline.transform(compute_copynumbers,
-                                                  input=None,
-                                                  filter=formatter(r'.*/(?P<LABEL>.+).qfilter'),
-                                                  add_inputs=add_inputs(
-            os.path.join(pipeline_dir, '{LABEL[0]}.consensus.refpairs.shifted.uniques.fasta')),
+                                                  input=unique_hqcs_task,
+                                                  filter=formatter(regex),
+                                                  add_inputs=add_inputs(ccs_pattern),
                                                   output=os.path.join(pipeline_dir, '{LABEL[0]}.copynumbers.tsv'))
     compute_copynumbers_task.jobs_limit(n_remote_jobs, remote_job_limiter)
-    compute_copynumbers_task.follows(unique_hqcs_task)
 
     merge_copynumbers_task = pipeline.merge(cat_wrapper,
                                             name='cat_copynumbers',
@@ -370,10 +388,7 @@ def make_consensus_pipeline(name=None):
                                        output=os.path.join(pipeline_dir, "hqcs.fasta"))
     cat_all_hqcs_task.jobs_limit(n_local_jobs, local_job_limiter)
 
-    pipeline.set_head_tasks([cluster_task, fastq_clusters_task, compute_copynumbers_task])
+    pipeline.set_head_tasks([make_inputs_task])
     pipeline.set_tail_tasks([cat_all_hqcs_task, merge_copynumbers_task])
-
-    for task in pipeline.head_tasks:
-        task.mkdir(pipeline_dir)
 
     return pipeline
