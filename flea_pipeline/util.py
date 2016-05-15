@@ -62,7 +62,7 @@ def maybe_qsub(cmd, infiles, outfiles, ppn=1, walltime=None,
                                          job_script_directory=globals_.job_script_dir)
         success = True
     except error_drmaa_job as err:
-        msg = err.msg
+        msg = err.args[0]
 
     return Result(infiles, outfiles, stdout=stdout_res, stderr=stderr_res,
                   desc=name, failed=(not success),
