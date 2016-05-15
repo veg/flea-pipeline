@@ -31,10 +31,15 @@ def format_walltime(seconds):
     return "{:02}:{:02}:{:02}".format(h, m, s)
 
 
-# TODO: rename
 # TODO: handle stdout and stderr
-def maybe_qsub(cmd, infiles, outfiles, ppn=1, walltime=None,
+def run_command(cmd, infiles, outfiles, ppn=1, walltime=None,
                stdout=None, stderr=None, name=None):
+    """Run a command using ruffus's run_job.
+
+    Command may be submitted to the cluster or run locally, depending
+    on the value of `globals_.run_locally`.
+
+    """
     from uuid import uuid4  # because this hangs on silverback compute nodes
     if walltime is None:
         walltime = globals_.config.getint('Jobs', 'walltime')
@@ -45,7 +50,8 @@ def maybe_qsub(cmd, infiles, outfiles, ppn=1, walltime=None,
     queue_name = globals_.config.get('Jobs', 'queue')
     fwalltime = format_walltime(walltime)
     nodes = 1
-    job_other_options = ('-q {} -l walltime={},nodes={}:ppn={}'.format(queue_name, fwalltime, nodes, ppn))
+    job_other_options = ('-q {} -l walltime={},nodes={}:'
+                         'ppn={}'.format(queue_name, fwalltime, nodes, ppn))
 
     success = False
     msg = ''
@@ -670,7 +676,7 @@ def translate_helper(infile, outfile, gapped, name):
         'gap_option': '--gapped' if gapped else '',
         }
     cmd = "{python} {script} {gap_option} {infile} {outfile}".format(**kwargs)
-    return maybe_qsub(cmd, infile, outfile, name=name)
+    return run_command(cmd, infile, outfile, name=name)
 
 
 def usearch_hqcs_ids(infile, outfile, dbfile, name=None):
@@ -689,4 +695,4 @@ def usearch_hqcs_ids(infile, outfile, dbfile, name=None):
                      infile=infile, db=dbfile, id=identity, outfile=outfile,
                      max_accepts=max_accepts, max_rejects=max_rejects,
                      maxqt=maxqt)
-    return maybe_qsub(cmd, infile, outfiles=outfile, name=name)
+    return run_command(cmd, infile, outfiles=outfile, name=name)

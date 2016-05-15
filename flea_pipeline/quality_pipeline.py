@@ -3,7 +3,7 @@ import os
 from ruffus import Pipeline, suffix, formatter
 from Bio import SeqIO
 
-from flea_pipeline.util import maybe_qsub
+from flea_pipeline.util import run_command
 from flea_pipeline.util import must_work, report_wrapper
 from flea_pipeline.util import read_single_record
 from flea_pipeline.util import run_regexp
@@ -33,7 +33,7 @@ def filter_fastq(infile, outfile):
             usearch=globals_.config.get('Paths', 'usearch'),
             infile=infile, outfile=outfile, qmax=qmax, min_len=min_len(),
             max_err_rate=max_err_rate, seq_id=globals_.key_to_label[infile]))
-    return maybe_qsub(cmd, infile, outfiles=outfile, name='filter-fastq')
+    return run_command(cmd, infile, outfiles=outfile, name='filter-fastq')
 
 
 @must_work()
@@ -45,7 +45,7 @@ def trim_heads_and_tails(infile, outfile):
     cmd = ("{python} {script} --jobs {jobs} --fastq {infile} {outfile}")
     cmd = cmd.format(python=python, script=script, jobs=jobs,
                      infile=infile, outfile=outfile)
-    return maybe_qsub(cmd, infile, outfile, ppn=jobs,
+    return run_command(cmd, infile, outfile, ppn=jobs,
                       name='trim-heads-and-tails')
 
 
@@ -72,7 +72,7 @@ def filter_contaminants(infile, outfile):
            ' -strand both'.format(usearch=globals_.config.get('Paths', 'usearch'),
                                   infile=infile, db=db, id=id_,
                                   uncontam=uncontam, contam=contam))
-    return maybe_qsub(cmd, infile, outfiles=outfiles, name='filter-contaminants')
+    return run_command(cmd, infile, outfiles=outfiles, name='filter-contaminants')
 
 
 @must_work()
@@ -100,7 +100,7 @@ def filter_db(infile, outfile):
                      infile=infile, db=dbfile, id=identity,
                      outfile=outfile, userout=useroutfile,
                      max_accepts=max_accepts, max_rejects=max_rejects)
-    return maybe_qsub(cmd, infile, outfiles=outfile, name="filter-db")
+    return run_command(cmd, infile, outfiles=outfile, name="filter-db")
 
 
 @must_work()
@@ -120,7 +120,7 @@ def trim_terminal_gaps(infile, outfile):
         'outfile': outfile,
         }
     cmd = ("{python} {script} {infile} {userfile} {outfile}").format(**kwargs)
-    return maybe_qsub(cmd, infiles, outfile, name="trim-terminal-gaps")
+    return run_command(cmd, infiles, outfile, name="trim-terminal-gaps")
 
 
 @must_work()

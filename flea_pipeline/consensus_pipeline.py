@@ -9,7 +9,7 @@ import numpy as np
 from ruffus import Pipeline, suffix, formatter, add_inputs
 from Bio import SeqIO
 
-from flea_pipeline.util import maybe_qsub, cat_files
+from flea_pipeline.util import run_command, cat_files
 from flea_pipeline.util import must_work, report_wrapper
 from flea_pipeline.util import check_suffix, check_basename
 from flea_pipeline.util import remove_suffix
@@ -44,7 +44,7 @@ def cluster(infile, outfile):
                      max_accepts=globals_.config.get('Parameters', 'max_accepts'),
                      max_rejects=globals_.config.get('Parameters', 'max_rejects'),
                      minsl=minsl)
-    return maybe_qsub(cmd, infile, outfile, name="cluster")
+    return run_command(cmd, infile, outfile, name="cluster")
 
 
 @must_work(many=True)
@@ -63,7 +63,7 @@ def fastq_clusters(infiles, outfiles, outdir, pattern):
         }
     cmd = ("{python} {script} --minsize {minsize}"
            " {ucfile} {fastqfile} {outdir}".format(**kwargs))
-    return maybe_qsub(cmd, infiles, [], name="cluster-fastq")
+    return run_command(cmd, infiles, [], name="cluster-fastq")
 
 
 def iter_sample(iterable, k):
@@ -118,7 +118,7 @@ def cluster_consensus(infiles, outfile, directory, prefix):
         }
     cmd = ('{julia} -p {jobs} {script} --prefix \'{prefix}\' --batch \'{batch}\''
            ' \'{log_ins}\' \'{log_del}\' \'{pattern}\' > {outfile}').format(**kwargs)
-    return maybe_qsub(cmd, infiles, outfile, name="cluster-consensus-{}".format(prefix))
+    return run_command(cmd, infiles, outfile, name="cluster-consensus-{}".format(prefix))
 
 
 # making wrappers like this is necessary because nested function
@@ -196,7 +196,7 @@ def hqcs_db_search(infiles, outfile):
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
                      infile=infile, db=dbfile, id=identity, outfile=outfile,
                      max_accepts=max_accepts, max_rejects=max_rejects)
-    return maybe_qsub(cmd, infile, outfiles=outfile, name='hqcs-db-search')
+    return run_command(cmd, infile, outfiles=outfile, name='hqcs-db-search')
 
 
 def shift_correction_helper(infile, outfile, keep, correct, name=None):
@@ -214,7 +214,7 @@ def shift_correction_helper(infile, outfile, keep, correct, name=None):
                      correct_option=correct_option,
                      calns_file=calns_file, discard_file=discard_file,
                      summary_file=summary_file, infile=infile, outfile=outfile)
-    return maybe_qsub(cmd, infile, outfile, name=name)
+    return run_command(cmd, infile, outfile, name=name)
 
 @must_work(in_frame=True, illegal_chars='-')
 @report_wrapper
@@ -228,7 +228,7 @@ def hqcs_shift_correction(infile, outfile):
 def unique_hqcs(infile, outfile):
     cmd = ('{usearch} -derep_fulllength {infile} -fastaout {outfile}'.format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
-    return maybe_qsub(cmd, infile, outfiles=outfile, name='unique_hqcs')
+    return run_command(cmd, infile, outfiles=outfile, name='unique_hqcs')
 
 
 # FIXME: this is run with remote job limiter, but part of its task is run locally

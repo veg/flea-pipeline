@@ -5,7 +5,7 @@ import warnings
 from ruffus import Pipeline, suffix, formatter, add_inputs
 from Bio import SeqIO
 
-from flea_pipeline.util import maybe_qsub
+from flea_pipeline.util import run_command
 from flea_pipeline.util import new_record_seq_str, insert_gaps, update_record_seq
 from flea_pipeline.util import must_work, report_wrapper
 from flea_pipeline.util import check_suffix
@@ -103,7 +103,7 @@ def codon_align(infile, outfile):
         globals_.config.get('Paths', 'bealign'), infile, outfile)
     stdout = os.path.join(globals_.job_script_dir, '{}.stdout'.format(outfile))
     stderr = os.path.join(globals_.job_script_dir, '{}.stderr'.format(outfile))
-    return maybe_qsub(cmd, infile, outfiles=outfile, stdout=stdout, stderr=stderr)
+    return run_command(cmd, infile, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
 @must_work()
@@ -112,7 +112,7 @@ def convert_bam_to_fasta(infile, outfile):
     cmd = "{} {} {}".format(globals_.config.get('Paths', 'bam2msa'), infile, outfile)
     stdout = os.path.join(globals_.job_script_dir, '{}.stdout'.format(outfile))
     stderr = os.path.join(globals_.job_script_dir, '{}.stderr'.format(outfile))
-    return maybe_qsub(cmd, infile, outfiles=outfile, stdout=stdout, stderr=stderr)
+    return run_command(cmd, infile, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
 def handle_gap_codon(codon):
@@ -175,7 +175,7 @@ def diagnose_alignment(infiles, outfiles):
     cmd = "{python} {script} {hqcs} {ccs} {cn} {d}".format(**kwargs)
     stdout = os.path.join(globals_.job_script_dir, 'diagnose.stdout')
     stderr = os.path.join(globals_.job_script_dir, 'diagnose.stderr')
-    return maybe_qsub(cmd, infiles, outfiles=outfiles,
+    return run_command(cmd, infiles, outfiles=outfiles,
                       stdout=stdout, stderr=stderr,
                       name="diagnose-alignment")
 

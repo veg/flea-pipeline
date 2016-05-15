@@ -4,7 +4,7 @@ import shutil
 from ruffus import Pipeline, suffix, formatter, add_inputs
 from Bio import SeqIO
 
-from flea_pipeline.util import maybe_qsub, cat_files
+from flea_pipeline.util import run_command, cat_files
 from flea_pipeline.util import must_work, report_wrapper
 from flea_pipeline.util import check_suffix, check_basename
 from flea_pipeline.util import translate_helper
@@ -18,7 +18,7 @@ pipeline_dir = os.path.join(globals_.data_dir, "alignment")
 def mafft(infile, outfile):
     stderr = '{}.stderr'.format(outfile)
     cmd = 'mafft-fftns --ep 0.5 --quiet --preservecase {} > {} 2>{}'.format(infile, outfile, stderr)
-    return maybe_qsub(cmd, infile, outfiles=outfile)
+    return run_command(cmd, infile, outfiles=outfile)
 
 
 @must_work()
@@ -81,7 +81,7 @@ def backtranslate_alignment(infiles, outfile):
     cmd = "{python} {script} {protein} {dna} {outfile}".format(**kwargs)
     stdout = os.path.join(globals_.job_script_dir, 'backtranslate.stdout')
     stderr = os.path.join(globals_.job_script_dir, 'backtranslate.stderr')
-    return maybe_qsub(cmd, infiles, outfiles=outfile,
+    return run_command(cmd, infiles, outfiles=outfile,
                       stdout=stdout, stderr=stderr,
                       name="backtranslate")
 

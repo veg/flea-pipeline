@@ -21,7 +21,7 @@ from Bio import SeqIO
 from Bio import Phylo
 
 import flea_pipeline.pipeline_globals as globals_
-from flea_pipeline.util import must_work, report_wrapper, maybe_qsub
+from flea_pipeline.util import must_work, report_wrapper, run_command
 from flea_pipeline.util import read_single_record, cat_files
 from flea_pipeline.util import name_to_date
 from flea_pipeline.util import extend_coordinates
@@ -51,7 +51,7 @@ def hyphy_call(script_file, infiles, outfiles,  name, args):
     with open(infile, 'w') as handle:
         handle.write(in_str)
     cmd = '{} {} < {}'.format(globals_.config.get('Paths', 'hyphy'), script_file, infile)
-    return maybe_qsub(cmd, infiles, outfiles, name=name,
+    return run_command(cmd, infiles, outfiles, name=name,
                       walltime=globals_.config.getint('Jobs', 'hyphy_walltime'))
 
 
@@ -124,7 +124,7 @@ def run_fasttree(infile, outfile):
     binary = globals_.config.get('Paths', 'FastTree')
     stderr = '{}.stderr'.format(outfile)
     cmd = '{} -gtr -nt {} > {} 2>{}'.format(binary, infile, outfile, stderr)
-    return maybe_qsub(cmd, infile, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
+    return run_command(cmd, infile, outfiles=outfile, stdout='/dev/null', stderr='/dev/null')
 
 
 @must_work()
@@ -151,7 +151,7 @@ def mrca(infile, copynumber_file, outfile):
     cmd = ("{python} {script} --keep-gaps --codon -o {outfile}"
            " --copynumbers {copynumber_file} --ambifile {ambifile}"
            " --id {id_str} {infile}".format(**kwargs))
-    return maybe_qsub(cmd, infile, outfile, name="mrca")
+    return run_command(cmd, infile, outfile, name="mrca")
 
 
 @must_work(in_frame=True)
