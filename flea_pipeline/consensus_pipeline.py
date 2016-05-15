@@ -113,9 +113,11 @@ def cluster_consensus(infiles, outfile, directory, prefix):
     label = re.split("_[0-9]+$", seq_id)[0]
     log_ins = np.log10(globals_.config.getfloat('Parameters', 'consensus_p_ins'))
     log_del = np.log10(globals_.config.getfloat('Parameters', 'consensus_p_del'))
+    jobs = 1 if globals_.run_locally else globals_.config.get('Jobs', 'ppn')
     kwargs = {
         'julia': globals_.config.get('Paths', 'julia'),
         'script': globals_.config.get('Paths', 'consensus_script'),
+        'jobs': jobs,
         'pattern': os.path.join(directory, "*.fastq"),
         'prefix': '{}_'.format(label),
         'outfile': outfile,
@@ -123,7 +125,7 @@ def cluster_consensus(infiles, outfile, directory, prefix):
         'log_ins': log_ins,
         'log_del': log_del,
         }
-    cmd = ('{julia} {script} --prefix \'{prefix}\' --batch \'{batch}\''
+    cmd = ('{julia} -p {jobs} {script} --prefix \'{prefix}\' --batch \'{batch}\''
            ' \'{log_ins}\' \'{log_del}\' \'{pattern}\' > {outfile}').format(**kwargs)
     return maybe_qsub(cmd, infiles, outfile, name="cluster-consensus-{}".format(prefix))
 
