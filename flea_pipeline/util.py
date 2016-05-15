@@ -1,7 +1,6 @@
 """Utility functions used in more than one script."""
 
 from fnmatch import fnmatch
-from subprocess import Popen, PIPE, CalledProcessError
 from itertools import zip_longest
 from itertools import tee
 from itertools import filterfalse
@@ -13,7 +12,6 @@ import datetime
 import os
 from functools import wraps
 from glob import glob
-import warnings
 import sys
 
 from Bio.Seq import Seq

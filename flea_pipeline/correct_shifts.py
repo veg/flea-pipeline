@@ -26,17 +26,14 @@ Options:
 from itertools import groupby, repeat
 from itertools import zip_longest
 from functools import partial
-import sys
 import re
 
 from docopt import docopt
 
 from Bio import SeqIO
-from Bio.SeqIO.FastaIO import FastaWriter
 
 from flea_pipeline.util import grouper
 from flea_pipeline.util import new_record_seq_str
-from flea_pipeline.util import genlen
 from flea_pipeline.util import nth
 
 

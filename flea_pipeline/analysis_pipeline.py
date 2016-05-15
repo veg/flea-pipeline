@@ -8,9 +8,7 @@ copynumber file.
 
 import os
 import json
-from itertools import islice
 from datetime import datetime
-from collections import defaultdict
 import shutil
 import csv
 

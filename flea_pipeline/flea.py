@@ -35,7 +35,7 @@ from collections import namedtuple, defaultdict
 
 from configparser import ConfigParser, ExtendedInterpolation
 
-from ruffus import cmdline, Pipeline
+from ruffus import cmdline
 
 from Bio import SeqIO
 

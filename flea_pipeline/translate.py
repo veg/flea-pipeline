@@ -12,8 +12,6 @@ Options:
 
 """
 
-import sys
-
 from docopt import docopt
 
 from Bio import SeqIO

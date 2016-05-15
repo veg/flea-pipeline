@@ -17,7 +17,6 @@ Options:
 
 """
 
-import csv
 import re
 
 from docopt import docopt

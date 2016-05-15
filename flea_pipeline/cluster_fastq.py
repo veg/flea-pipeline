@@ -15,7 +15,6 @@ Options:
 
 """
 import os
-import random
 from collections import defaultdict
 
 from docopt import docopt
