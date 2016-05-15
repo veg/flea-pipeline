@@ -105,10 +105,13 @@ def cluster_consensus(infiles, outfile, directory, prefix):
     log_ins = np.log10(globals_.config.getfloat('Parameters', 'consensus_p_ins'))
     log_del = np.log10(globals_.config.getfloat('Parameters', 'consensus_p_del'))
     ppn = 1 if globals_.run_locally else globals_.ppn
+    options = ''
+    if ppn > 1:
+        options = '-p {}'.format(ppn)
     kwargs = {
         'julia': globals_.config.get('Paths', 'julia'),
         'script': globals_.config.get('Paths', 'consensus_script'),
-        'ppn': ppn,
+        'options': options,
         'pattern': os.path.join(directory, "*.sampled.fastq"),
         'prefix': '{}_'.format(label),
         'outfile': outfile,
@@ -116,7 +119,7 @@ def cluster_consensus(infiles, outfile, directory, prefix):
         'log_ins': log_ins,
         'log_del': log_del,
         }
-    cmd = ('{julia} -p {ppn} {script} --prefix \'{prefix}\' --batch \'{batch}\''
+    cmd = ('{julia} {options} {script} --prefix \'{prefix}\' --batch \'{batch}\''
            ' \'{log_ins}\' \'{log_del}\' \'{pattern}\' > {outfile}').format(**kwargs)
     return run_command(cmd, infiles, outfile, ppn=ppn, name="cluster-consensus-{}".format(prefix))
 
