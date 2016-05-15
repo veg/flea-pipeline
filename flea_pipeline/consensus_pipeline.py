@@ -118,7 +118,7 @@ def cluster_consensus(infiles, outfile, directory, prefix):
         'julia': globals_.config.get('Paths', 'julia'),
         'script': globals_.config.get('Paths', 'consensus_script'),
         'jobs': jobs,
-        'pattern': os.path.join(directory, "*.fastq"),
+        'pattern': os.path.join(directory, "*.sampled.fastq"),
         'prefix': '{}_'.format(label),
         'outfile': outfile,
         'batch': globals_.config.get('Parameters', 'consensus_batch_size'),
@@ -309,16 +309,16 @@ def make_consensus_pipeline(name=None):
                                              input=cluster_task,
                                              filter=formatter(regex),
                                              add_inputs=add_inputs(ccs_pattern),
-                                             output=os.path.join(pipeline_dir, '{LABEL[0]}.clusters/*.fastq'),
+                                             output=os.path.join(pipeline_dir, '{LABEL[0]}.clusters/*.raw.fastq'),
                                              extras=[os.path.join(pipeline_dir, '{LABEL[0]}.clusters'),
-                                                     'cluster_[0-9]+.fastq'])
+                                                     'cluster_[0-9]+.raw.fastq'])
     fastq_clusters_task.mkdir(cluster_task,
                              formatter(r'.*/(?P<LABEL>.+).clustered.uc'),
                              '{path[0]}/{LABEL[0]}.clusters')
 
     sample_clusters_task = pipeline.transform(sample_clusters,
                                               input=fastq_clusters_task,
-                                              filter=suffix('.fastq'),
+                                              filter=suffix('.raw.fastq'),
                                               output='.sampled.fastq')
 
     cluster_consensus_task = pipeline.collate(cluster_consensus,

@@ -66,5 +66,5 @@ if __name__ == "__main__":
         cluster_records = list(rdict[label] for label in labels)
         if len(cluster_records) < minsize:
             continue
-        outfile = os.path.join(outdir, "cluster_{}.fastq".format(cluster_id))
+        outfile = os.path.join(outdir, "cluster_{}.raw.fastq".format(cluster_id))
         SeqIO.write(cluster_records, outfile, 'fastq')
