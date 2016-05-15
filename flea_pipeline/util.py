@@ -290,7 +290,7 @@ class Result(object):
             `infiles`: Required list of input files to the task
             `outfiles`: Required list of output files to the task
             `failed`: Optional (but recommended) boolean indicating whether the
-                      task failed or not.  Default is False, implying that the
+                      task failed or not. Default is False, implying that the
                       task will always work
             `log`: Optional log file from running the task's commands
             `stdout`: Optional stdout that will be printed in the report if the
@@ -352,7 +352,6 @@ class Result(object):
             logger_proxy.info('')
             if self.failed:
                 sys.exit(1)
-
 
 
 def nicetime(seconds):

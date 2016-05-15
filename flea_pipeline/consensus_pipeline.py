@@ -104,11 +104,11 @@ def cluster_consensus(infiles, outfile, directory, prefix):
     label = re.split("_[0-9]+$", seq_id)[0]
     log_ins = np.log10(globals_.config.getfloat('Parameters', 'consensus_p_ins'))
     log_del = np.log10(globals_.config.getfloat('Parameters', 'consensus_p_del'))
-    jobs = 1 if globals_.run_locally else globals_.config.get('Jobs', 'ppn')
+    ppn = 1 if globals_.run_locally else globals_.ppn
     kwargs = {
         'julia': globals_.config.get('Paths', 'julia'),
         'script': globals_.config.get('Paths', 'consensus_script'),
-        'jobs': jobs,
+        'ppn': ppn,
         'pattern': os.path.join(directory, "*.sampled.fastq"),
         'prefix': '{}_'.format(label),
         'outfile': outfile,
@@ -116,9 +116,9 @@ def cluster_consensus(infiles, outfile, directory, prefix):
         'log_ins': log_ins,
         'log_del': log_del,
         }
-    cmd = ('{julia} -p {jobs} {script} --prefix \'{prefix}\' --batch \'{batch}\''
+    cmd = ('{julia} -p {ppn} {script} --prefix \'{prefix}\' --batch \'{batch}\''
            ' \'{log_ins}\' \'{log_del}\' \'{pattern}\' > {outfile}').format(**kwargs)
-    return run_command(cmd, infiles, outfile, name="cluster-consensus-{}".format(prefix))
+    return run_command(cmd, infiles, outfile, ppn=ppn, name="cluster-consensus-{}".format(prefix))
 
 
 # making wrappers like this is necessary because nested function

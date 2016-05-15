@@ -15,12 +15,6 @@ Usage:
   flea_pipeline.py [options] <file>
   flea_pipeline.py -h | --help
 
-Options:
-  --align [STR]  Fasta file containing nucleotide sequences.
-  --analyze [STR]  Fasta file containing codon-aligned sequences.
-  --copynumbers [STR]  tsv file containing "<id>\t<number>" lines.
-  --config [STR]   Configuration file.
-
 """
 
 # FIXME: for now, filenames cannot have spaces. Make this more
@@ -46,7 +40,7 @@ import flea_pipeline.pipeline_globals as globals_
 
 
 parser = cmdline.get_argparse(description='Run complete env pipeline',
-                              ignored_args=['use_threads'])
+                              ignored_args=['jobs', 'use_threads'])
 parser.add_argument('file')
 parser.add_argument('--config', type=str,
                     help='Configuration file.')
@@ -57,7 +51,13 @@ parser.add_argument('--analyze', type=str,
 parser.add_argument('--copynumbers', type=str,
                     help='Copynumber file.')
 parser.add_argument('--local', action='store_true',
-                    help='Run locally')
+                    help='Run locally, with processes instead of threads.')
+parser.add_argument('--jobs', type=int, default=-1,
+                    help=('Number of threads/processes.'
+                          ' If negative, use config value'))
+parser.add_argument('--ppn', type=int, default=-1,
+                    help=('Processors to use on cluster nodes.'
+                          ' If negative, use config value.'))
 
 
 options = parser.parse_args()
@@ -126,6 +126,12 @@ globals_.logger = logger
 globals_.logger_mutex = logger_mutex
 globals_.drmaa_session = drmaa_session
 globals_.run_locally = options.local
+if options.jobs <= 0:
+    options.jobs = config.getint('Jobs', 'jobs')
+if options.ppn > 0:
+    globals_.ppn = options.ppn
+else:
+    globals_.ppn = config.getint('Jobs', 'ppn')
 
 globals_.timepoints = timepoints
 globals_.key_to_label = key_to_label

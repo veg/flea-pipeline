@@ -41,11 +41,11 @@ def filter_fastq(infile, outfile):
 def trim_heads_and_tails(infile, outfile):
     python = globals_.config.get('Paths', 'python')
     script = os.path.join(globals_.script_dir, 'trim.py')
-    jobs = 1 if globals_.run_locally else globals_.config.get('Jobs', 'ppn')
-    cmd = ("{python} {script} --jobs {jobs} --fastq {infile} {outfile}")
-    cmd = cmd.format(python=python, script=script, jobs=jobs,
+    ppn = 1 if globals_.run_locally else globals_.ppn
+    cmd = ("{python} {script} --jobs {ppn} --fastq {infile} {outfile}")
+    cmd = cmd.format(python=python, script=script, ppn=ppn,
                      infile=infile, outfile=outfile)
-    return run_command(cmd, infile, outfile, ppn=jobs,
+    return run_command(cmd, infile, outfile, ppn=ppn,
                       name='trim-heads-and-tails')
 
 
