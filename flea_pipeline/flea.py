@@ -254,7 +254,7 @@ if __name__ == '__main__':
 
     checksum_level = config.getint('Misc', 'checksum_level')
     kwargs = {}
-    if not options.local:
+    if options.jobs > 1 and not options.local:
         kwargs['multithread'] = options.jobs
     try:
         logger.info("pipeline start")
