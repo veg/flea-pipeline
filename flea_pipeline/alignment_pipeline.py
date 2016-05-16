@@ -16,8 +16,9 @@ pipeline_dir = os.path.join(globals_.data_dir, "alignment")
 
 
 def mafft(infile, outfile):
+    binary = globals_.config.get('Paths', 'mafft')
     stderr = '{}.stderr'.format(outfile)
-    cmd = 'mafft-fftns --ep 0.5 --quiet --preservecase {} > {} 2>{}'.format(infile, outfile, stderr)
+    cmd = '{} --ep 0.5 --quiet --preservecase {} > {} 2>{}'.format(binary, infile, outfile, stderr)
     return run_command(cmd, infile, outfiles=outfile)
 
 
