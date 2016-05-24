@@ -113,6 +113,7 @@ def cluster_consensus(infiles, outfile, directory, prefix):
         'script': globals_.config.get('Paths', 'consensus_script'),
         'options': options,
         'pattern': os.path.join(directory, "*.sampled.fastq"),
+        'refpattern': globals_.config.get('Parameters', 'reference_dna'),
         'prefix': '{}_hqcs_'.format(label),
         'outfile': outfile,
         'batch': globals_.config.get('Parameters', 'consensus_batch_size'),
@@ -120,6 +121,7 @@ def cluster_consensus(infiles, outfile, directory, prefix):
         'log_del': log_del,
         }
     cmd = ('{julia} {options} {script} --prefix \'{prefix}\''
+           ' --reference \'{refpattern}\''
            ' --keep-unique-name --batch \'{batch}\''
            ' \'{log_ins}\' \'{log_del}\' \'{pattern}\' > {outfile}').format(**kwargs)
     return run_command(cmd, infiles, outfile, ppn=ppn, name="cluster-consensus-{}".format(prefix))
@@ -201,30 +203,6 @@ def hqcs_db_search(infiles, outfile):
                      infile=infile, db=dbfile, id=identity, outfile=outfile,
                      max_accepts=max_accepts, max_rejects=max_rejects)
     return run_command(cmd, infile, outfiles=outfile, name='hqcs-db-search')
-
-
-def shift_correction_helper(infile, outfile, keep, correct, name=None):
-    python = globals_.config.get('Paths', 'python')
-    script = os.path.join(globals_.script_dir, 'correct_shifts.py')
-    keep_option = "--keep" if keep else ""
-    correct_option = "--correct-dels" if correct else ""
-    calns_file = "{}.calns".format(infile)
-    discard_file = "{}.discarded".format(outfile)
-    summary_file = "{}.summary".format(outfile)
-    cmd = ("{python} {script} {keep_option} {correct_option} --calns={calns_file}"
-           " --discard={discard_file} --summary={summary_file}"
-           " {infile} {outfile}")
-    cmd = cmd.format(python=python, script=script, keep_option=keep_option,
-                     correct_option=correct_option,
-                     calns_file=calns_file, discard_file=discard_file,
-                     summary_file=summary_file, infile=infile, outfile=outfile)
-    return run_command(cmd, infile, outfile, name=name)
-
-@must_work(in_frame=True, illegal_chars='-')
-@report_wrapper
-def hqcs_shift_correction(infile, outfile):
-    return shift_correction_helper(infile, outfile, keep=False, correct=True,
-                                   name="hqcs-shift-correction")
 
 
 @must_work(min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
@@ -328,29 +306,10 @@ def make_consensus_pipeline(name=None):
                                            filter=suffix('.fasta'),
                                            output='.inframe.fasta')
 
-    cat_inframe_hqcs_task = pipeline.merge(cat_wrapper_ids,
-                                           input=inframe_hqcs_task,
-                                           output=os.path.join(pipeline_dir, 'inframe_hqcs.fasta'))
-
-    copy_inframe_hqcs_task = pipeline.transform(copy_file,
-                                                input=cat_inframe_hqcs_task,
-                                                filter=suffix('.fasta'),
-                                                output='.edited.fasta')
-    copy_inframe_hqcs_task.posttask(pause_for_editing_inframe_hqcs)
-
-    hqcs_db_search_task = pipeline.transform(hqcs_db_search,
-                                             input=cluster_consensus_task,
-                                             add_inputs=add_inputs(copy_inframe_hqcs_task),
-                                             filter=suffix('.fasta'),
-                                             output='.refpairs.fasta')
-
-    hqcs_shift_correction_task = pipeline.transform(hqcs_shift_correction,
-                                                    input=hqcs_db_search_task,
-                                                    filter=suffix('.fasta'),
-                                                    output='.shifted.fasta')
+    # TODO: redo consensus with orthologous references
 
     unique_hqcs_task = pipeline.transform(unique_hqcs,
-                                          input=hqcs_shift_correction_task,
+                                          input=inframe_hqcs_task,
                                           filter=suffix('.fasta'),
                                           output='.uniques.fasta')
 

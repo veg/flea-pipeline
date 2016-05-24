@@ -17,9 +17,9 @@ pipeline_dir = os.path.join(globals_.data_dir, "quality")
 
 def min_len():
     min_len_fraction = globals_.config.getfloat('Parameters', 'min_sequence_length')
-    ref_file = globals_.config.get('Parameters', 'reference_sequence')
+    ref_file = globals_.config.get('Parameters', 'reference_dna')
     # multiple by 3 because reference sequence is translated.
-    return 3 * int(min_len_fraction * len(read_single_record(ref_file, 'fasta').seq))
+    return int(min_len_fraction * len(read_single_record(ref_file, 'fasta').seq))
 
 
 @must_work()

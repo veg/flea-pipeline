@@ -191,7 +191,7 @@ def make_sequences_json(infiles, outfile):
     result['MRCA'] = str(mrca.seq)
 
     # add reference
-    reference = read_single_record(globals_.config.get('Parameters', 'reference_sequence'), 'fasta', True)
+    reference = read_single_record(globals_.config.get('Parameters', 'reference_protein'), 'fasta', True)
     rstr = str(reference.seq)
     with open(coords_file) as handle:
         alignment_coords = json.load(handle)['coordinates']
@@ -223,7 +223,7 @@ def make_coordinates_json(infile, outfile):
     # FIXME: split up so mafft can run remotely
     combined = os.path.join(pipeline_dir, 'combined.fasta')
     aligned = os.path.join(pipeline_dir, 'combined.aligned.fasta')
-    cat_files([infile, globals_.config.get('Parameters', 'reference_sequence')], combined)
+    cat_files([infile, globals_.config.get('Parameters', 'reference_protein')], combined)
     mafft(combined, aligned)
     pairwise_mrca, pairwise_ref = list(SeqIO.parse(aligned, 'fasta'))
     ref_coords = open(globals_.config.get('Parameters', 'reference_coordinates')).read().strip().split()

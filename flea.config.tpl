@@ -21,7 +21,8 @@ hyphy_walltime: 86400
 
 [Parameters]
 reference_dir: /path/to/references
-reference_sequence: ${reference_dir}/reference.translated.fasta
+reference_dna: ${reference_dir}/reference.dna.fasta
+reference_protein: ${reference_dir}/reference.aa.fasta
 reference_coordinates: ${reference_dir}/reference.numbers.csv
 reference_db: ${reference_dir}/reference.database.fasta
 contaminants_db: ${reference_dir}/contaminants.database.fasta
