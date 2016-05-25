@@ -20,40 +20,44 @@ walltime: 3600
 hyphy_walltime: 86400
 
 [Parameters]
+
+# references
 reference_dir: /path/to/references
 reference_dna: ${reference_dir}/reference.dna.fasta
 reference_protein: ${reference_dir}/reference.aa.fasta
 reference_coordinates: ${reference_dir}/reference.numbers.csv
 reference_db: ${reference_dir}/reference.database.fasta
 contaminants_db: ${reference_dir}/contaminants.database.fasta
+
+# quality pipeline
 min_sequence_length: .8
 max_err_rate: 0.01
 qmax: 55
 max_accepts: 300
 max_rejects: 600
-
-# obtainEvolutionaryHistory.bf fails if there are fewer than 3
-# consensus sequences per time point.
-min_n_clusters: 3
 contaminant_identity: 0.98
 reference_identity: 0.8
+run_length: 16
+
+# consensus pipeline
+# obtainEvolutionaryHistory.bf fails if there are fewer than 3
+# consensus sequences per time point.
 cluster_identity: 0.99
-ccs_to_hqcs_identity: 0.95
 min_cluster_size: 3
 max_cluster_size: 100
-
-# for clustering
 min_length_ratio: 0.995
+min_n_clusters: 3
 
 consensus_batch_size: 10
 consensus_p_ins: 0.01
 consensus_p_del: 0.01
 
-# for copy number
-max_query_target_length_ratio: 1.005
+copynumber_identity: 0.95
+cn_max_length_ratio: 1.005
 
-# for run filtering
-run_length: 16
+# diagnosis pipeline
+ccs_to_hqcs_identity: 0.95
+max_ccs_length_ratio: 1.005
 
 [Tasks]
 quality_pipeline: True

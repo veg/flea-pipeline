@@ -61,7 +61,10 @@ def hqcs_ccs_pairs(infiles, outfile):
     infile, dbfile = infiles
     check_suffix(infile, '.ccs.fastq')
     check_suffix(dbfile, '.degapped.fasta')
-    usearch_hqcs_ids(infile, outfile, dbfile, name='hqcs_ccs_ids')
+    identity = globals_.config.get('Parameters', 'ccs_to_hqcs_identity')
+    maxqt = globals_.config.get('Parameters', 'max_ccs_length_ratio')
+    usearch_hqcs_ids(infile, outfile, dbfile, identity,
+                     maxqt, name='hqcs_ccs_ids')
 
 
 @must_work()

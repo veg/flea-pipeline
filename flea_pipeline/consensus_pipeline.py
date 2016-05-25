@@ -222,7 +222,10 @@ def compute_copynumbers(infiles, outfile):
     check_suffix(hqcsfile, '.uniques.fasta')
     check_suffix(ccsfile, '.ccs.fastq')
     pairfile = '{}.pairs'.format(remove_suffix(outfile, '.tsv'))
-    result = usearch_hqcs_ids(ccsfile, pairfile, hqcsfile, name='compute-copynumber')
+    identity = globals_.config.get('Parameters', 'copynumber_identity')
+    maxqt = globals_.config.get('Parameters', 'cn_max_length_ratio')
+    result = usearch_hqcs_ids(ccsfile, pairfile, hqcsfile,
+                              identity, maxqt, name='compute-copynumber')
     with open(pairfile) as f:
         pairs = list(line.strip().split("\t") for line in f.readlines())
     hqcs_counts = defaultdict(lambda: 0)
@@ -306,7 +309,7 @@ def make_consensus_pipeline(name=None):
                                            filter=suffix('.fasta'),
                                            output='.inframe.fasta')
 
-    # TODO: redo consensus with orthologous references
+    # TODO: use highest-quality in-frame hqcs as reference
 
     unique_hqcs_task = pipeline.transform(unique_hqcs,
                                           input=inframe_hqcs_task,
