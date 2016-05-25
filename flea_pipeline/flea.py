@@ -146,12 +146,12 @@ if not os.path.exists(globals_.job_script_dir):
 
 if do_full:
     if options.copynumbers is not None:
-        raise Exception('--copynumber option is invalid without --alignment')
+        raise Exception('--copynumber option is invalid without --align or --analyze')
 else:
     # check every timepoint has at least three sequences, and
     # every sequence belongs to a timepoint
-    if options.alignment is not None:
-        records = list(SeqIO.parse(options.alignment, 'fasta'))
+    if options.align is not None:
+        records = list(SeqIO.parse(options.align, 'fasta'))
     else:
         records = list(SeqIO.parse(options.analyze, 'fasta'))
     if len(set(r.id for r in records)) != len(records):
@@ -160,9 +160,11 @@ else:
     for r in records:
         label = name_key_to_label(r.id)
         timepoint_counts[label] += 1
-    for k, v in timepoint_counts.items():
-        if v < 3:
-            raise Exception('timepoint {} has only {} sequences'.format(k, v))
+    min_n_hqcs = globals_.config.get('Parameters', 'min_n_clusters')
+    if globals_.config.getboolean('Tasks', 'hyphy_analysis'):
+        for k, v in timepoint_counts.items():
+            if v < min_n_hqcs:
+                raise Exception('timepoint {} has only {} sequences'.format(k, v))
 
 # check reference database
 references = SeqIO.parse(globals_.config.get('Parameters', 'reference_db'), 'fasta')
@@ -226,7 +228,7 @@ if do_full:
                                 high_qual_inputs])
 else:
     p_pre = make_preanalysis_pipeline()
-    if config.align is not None:
+    if options.align is not None:
         p_pre.set_input(input=options.align)
         p_aln = make_alignment_pipeline()
         p_aln.set_input(input=p_pre['rename_records'])

@@ -15,6 +15,14 @@ import flea_pipeline.pipeline_globals as globals_
 pipeline_dir = os.path.join(globals_.data_dir, "alignment")
 
 
+@must_work()
+@report_wrapper
+def make_input(infile, outfile):
+    if os.path.exists(outfile):
+        os.unlink(outfile)
+    os.symlink(infile, outfile)
+
+
 def mafft(infile, outfile):
     binary = globals_.config.get('Paths', 'mafft')
     stderr = '{}.stderr'.format(outfile)
@@ -92,9 +100,16 @@ def make_alignment_pipeline(name=None):
         name = "alignment_pipeline"
     pipeline = Pipeline(name)
 
+    inputfile = os.path.join(pipeline_dir, 'hqcs.fasta')
+    make_input_task = pipeline.transform(make_input,
+                                         input=None,
+                                         filter=formatter(),
+                                         output=inputfile)
+    make_input_task.mkdir(pipeline_dir)
+
     translate_hqcs_task = pipeline.transform(translate_wrapper,
                                              name='translate_hqcs',
-                                             input=None,
+                                             input=make_input_task,
                                              filter=formatter('.*/(?P<LABEL>.+).fasta'),
                                              output=os.path.join(pipeline_dir, '{LABEL[0]}.translated.fasta'))
 
@@ -113,15 +128,12 @@ def make_alignment_pipeline(name=None):
 
     # expects all HQCSs as input
     backtranslate_alignment_task = pipeline.transform(backtranslate_alignment,
-                                                      input=None,
+                                                      input=make_input_task,
                                                       add_inputs=add_inputs(copy_protein_alignment_task),
                                                       filter=formatter(),
                                                       output=os.path.join(pipeline_dir, 'hqcs.translated.aligned.edited.backtranslated.fasta'))
 
-    pipeline.set_head_tasks([translate_hqcs_task, backtranslate_alignment_task])
+    pipeline.set_head_tasks([make_input_task])
     pipeline.set_tail_tasks([backtranslate_alignment_task, copy_protein_alignment_task])
-
-    for task in pipeline.head_tasks:
-        task.mkdir(pipeline_dir)
 
     return pipeline

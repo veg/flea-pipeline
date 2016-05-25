@@ -40,12 +40,12 @@ reference_identity: 0.8
 run_length: 16
 
 # consensus pipeline
-# obtainEvolutionaryHistory.bf fails if there are fewer than 3
-# consensus sequences per time point.
 cluster_identity: 0.99
 min_cluster_size: 3
 max_cluster_size: 100
 min_length_ratio: 0.995
+# obtainEvolutionaryHistory.bf fails if there are fewer than 3
+# consensus sequences per time point.
 min_n_clusters: 3
 
 consensus_batch_size: 10
