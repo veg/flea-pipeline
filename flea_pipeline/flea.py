@@ -175,7 +175,6 @@ for r in references:
         raise Exception('reference sequence {} has stop codon'.format(r.id))
 
 # check reference sequence and coordinates
-ref_dna = next(SeqIO.parse(globals_.config.get('Parameters', 'reference_dna'), 'fasta'))
 ref_seq = next(SeqIO.parse(globals_.config.get('Parameters', 'reference_protein'), 'fasta'))
 ref_coords = open(globals_.config.get('Parameters', 'reference_coordinates')).read().strip().split()
 if '*' in str(ref_seq.seq):
@@ -184,8 +183,6 @@ if '-' in str(ref_seq.seq):
     raise Exception('translated reference sequence has a gap character')
 if len(ref_seq) != len(ref_coords):
     raise Exception('reference sequence does not match reference coordinates')
-if str(ref_dna.seq.translate()) != str(ref_seq.seq):
-    raise Exception('reference dna does not translate to reference protein')
 
 # make pipelines
 from flea_pipeline.quality_pipeline import make_quality_pipeline
