@@ -28,6 +28,8 @@ then ensure that the environment variable DRMAA_LIBRARY_PATH points to libdrmaa.
 
      export DRMAA_LIBRARY_PATH=$HOME/lib/libdrmaa.so.1
 
+Make sure your ~/.rhosts file is up to date, otherwise you may get ruserok validation errors when trying to submit a job via DRMAA.
+
 
 Installation
 ------------
