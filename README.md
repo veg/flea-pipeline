@@ -13,11 +13,20 @@ because BioExt needs NumPy to be present.
 - usearch (version >= 8.1.1861)
 - mafft
 - Julia
+- pbs-drmaa
 
 To install Julia dependencies:
 
-> Pkg.clone("git@bitbucket.org:keren/Quiver2.jl.git")
-> Pkg.resolve()
+    Pkg.clone("git@bitbucket.org:keren/Quiver2.jl.git")
+    Pkg.resolve()
+
+To install pbs-drmaa: do the usual
+
+    configure --prefix=$HOME; make; make install
+
+then ensure that the environment variable DRMAA_LIBRARY_PATH points to libdrmaa.so.1:
+
+     export DRMAA_LIBRARY_PATH=$HOME/lib/libdrmaa.so.1
 
 
 Installation
