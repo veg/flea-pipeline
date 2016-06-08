@@ -24,7 +24,6 @@ pipeline_dir = os.path.join(globals_.data_dir, "consensus")
 @must_work()
 @report_wrapper
 def make_input(infile, outfile):
-    print(infile, outfile)
     if os.path.exists(outfile):
         os.unlink(outfile)
     os.symlink(infile, outfile)
@@ -49,7 +48,7 @@ def cluster(infile, outfile):
 
 @must_work(many=True)
 @report_wrapper
-def fastq_clusters(infiles, outfiles, outdir, pattern):
+def fastq_clusters(infiles, outfiles, outdir):
     for f in outfiles:
         os.unlink(f)
     ucfile, fastqfile = infiles
@@ -264,31 +263,29 @@ def make_consensus_pipeline(name=None):
         name = "consensus_pipeline"
     pipeline = Pipeline(name)
 
-    inputs_regex = r'.*/.*(?P<LABEL>{}).*'.format('|'.join(t.label for t in globals_.timepoints))
-    regex = r'.*/(?P<LABEL>{}).*'.format('|'.join(t.label for t in globals_.timepoints))
-    ccs_pattern = os.path.join(pipeline_dir, '{LABEL[0]}.ccs.fastq')
+    basename_regex = r'(.*)/(?P<NAME>[a-zA-Z0-9-_]*)\.(.*)'
+    ccs_pattern = os.path.join(pipeline_dir, '{NAME[0]}.ccs.fastq')
 
     make_inputs_task = pipeline.transform(make_input,
                                           input=None,
-                                          filter=formatter(inputs_regex),
-                                          output=os.path.join(pipeline_dir, '{LABEL[0]}.ccs.fastq'))
+                                          filter=formatter(basename_regex),
+                                          output=os.path.join(pipeline_dir, '{NAME[0]}.ccs.fastq'))
     make_inputs_task.mkdir(pipeline_dir)
 
     cluster_task = pipeline.transform(cluster,
                                       input=make_inputs_task,
-                                      filter=formatter(regex),
-                                      output=os.path.join(pipeline_dir, '{LABEL[0]}.clustered.uc'))
+                                      filter=formatter(basename_regex),
+                                      output=os.path.join(pipeline_dir, '{NAME[0]}.clustered.uc'))
 
     fastq_clusters_task = pipeline.subdivide(fastq_clusters,
                                              input=cluster_task,
-                                             filter=formatter(regex),
+                                             filter=formatter(basename_regex),
                                              add_inputs=add_inputs(ccs_pattern),
-                                             output=os.path.join(pipeline_dir, '{LABEL[0]}.clusters/*.raw.fastq'),
-                                             extras=[os.path.join(pipeline_dir, '{LABEL[0]}.clusters'),
-                                                     'cluster_[0-9]+.raw.fastq'])
+                                             output=os.path.join(pipeline_dir, '{NAME[0]}.clusters/*.raw.fastq'),
+                                             extras=[os.path.join(pipeline_dir, '{NAME[0]}.clusters')])
     fastq_clusters_task.mkdir(cluster_task,
-                             formatter(r'.*/(?P<LABEL>.+).clustered.uc'),
-                             '{path[0]}/{LABEL[0]}.clusters')
+                             formatter(r'.*/(?P<NAME>.+).clustered.uc'),
+                             '{path[0]}/{NAME[0]}.clusters')
 
     sample_clusters_task = pipeline.transform(sample_clusters,
                                               input=fastq_clusters_task,
@@ -297,10 +294,10 @@ def make_consensus_pipeline(name=None):
 
     cluster_consensus_task = pipeline.collate(cluster_consensus,
                                               input=sample_clusters_task,
-                                              filter=formatter(regex),
-                                              output=os.path.join(pipeline_dir, '{LABEL[0]}.hqcs.fasta'),
+                                              filter=formatter(r'(.*)/(?P<NAME>[a-zA-Z0-9-_]*)\.clusters(.*)'),
+                                              output=os.path.join(pipeline_dir, '{NAME[0]}.hqcs.fasta'),
                                               extras=['{path[0]}',
-                                                      '{LABEL[0]}'])
+                                                      '{NAME[0]}'])
 
     inframe_hqcs_task = pipeline.transform(inframe_hqcs,
                                            input=cluster_consensus_task,
@@ -316,9 +313,9 @@ def make_consensus_pipeline(name=None):
 
     compute_copynumbers_task = pipeline.transform(compute_copynumbers,
                                                   input=unique_hqcs_task,
-                                                  filter=formatter(regex),
+                                                  filter=formatter(basename_regex),
                                                   add_inputs=add_inputs(ccs_pattern),
-                                                  output=os.path.join(pipeline_dir, '{LABEL[0]}.copynumbers.tsv'))
+                                                  output=os.path.join(pipeline_dir, '{NAME[0]}.copynumbers.tsv'))
 
     merge_copynumbers_task = pipeline.merge(cat_wrapper,
                                             name='cat_copynumbers',
