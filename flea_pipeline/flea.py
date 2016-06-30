@@ -160,7 +160,7 @@ else:
     for r in records:
         label = name_key_to_label(r.id)
         timepoint_counts[label] += 1
-    min_n_hqcs = globals_.config.get('Parameters', 'min_n_clusters')
+    min_n_hqcs = globals_.config.getint('Parameters', 'min_n_clusters')
     if globals_.config.getboolean('Tasks', 'hyphy_analysis'):
         for k, v in timepoint_counts.items():
             if v < min_n_hqcs:
