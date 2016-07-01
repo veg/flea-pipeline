@@ -311,6 +311,10 @@ def make_consensus_pipeline(name=None):
                                           filter=suffix('.fasta'),
                                           output='.uniques.fasta')
 
+    cat_all_hqcs_task = pipeline.merge(cat_all_hqcs,
+                                       input=unique_hqcs_task,
+                                       output=os.path.join(pipeline_dir, "hqcs.fasta"))
+
     compute_copynumbers_task = pipeline.transform(compute_copynumbers,
                                                   input=unique_hqcs_task,
                                                   filter=formatter(basename_regex),
@@ -321,10 +325,6 @@ def make_consensus_pipeline(name=None):
                                             name='cat_copynumbers',
                                             input=compute_copynumbers_task,
                                             output=os.path.join(pipeline_dir, 'copynumbers.tsv'))
-
-    cat_all_hqcs_task = pipeline.merge(cat_all_hqcs,
-                                       input=unique_hqcs_task,
-                                       output=os.path.join(pipeline_dir, "hqcs.fasta"))
 
     pipeline.set_head_tasks([make_inputs_task])
     pipeline.set_tail_tasks([cat_all_hqcs_task, merge_copynumbers_task])
