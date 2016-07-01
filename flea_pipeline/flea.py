@@ -225,7 +225,7 @@ if do_full:
                                 high_qual_inputs])
 else:
     p_pre = make_preanalysis_pipeline()
-    if options.align is not None:
+    if options.analyze is None:
         p_pre.set_input(input=options.align)
         p_aln = make_alignment_pipeline()
         p_aln.set_input(input=p_pre['rename_records'])
@@ -234,11 +234,11 @@ else:
             p_anl = make_analysis_pipeline()
             p_anl.set_input(input=[p_aln['backtranslate_alignment'],
                                    p_pre['make_copynumbers']])
-
     else:
-        pre.set_input(input=options.analyze)
+        p_pre.set_input(input=options.analyze)
         p_anl = make_analysis_pipeline()
-        p_anl.set_input(input=p_pre)
+        p_anl.set_input(input=[p_pre['rename_records'],
+                               p_pre['make_copynumbers']])
 
 
 def config_to_dict(config):
