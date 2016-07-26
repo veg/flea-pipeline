@@ -101,28 +101,26 @@ def cluster_consensus(infiles, outfile, directory, prefix):
     """Alignment-free cluster consensus."""
     seq_id = next(SeqIO.parse(infiles[0], 'fastq')).id
     label = re.split("_[0-9]+$", seq_id)[0]
-    log_ins = np.log10(globals_.config.getfloat('Parameters', 'consensus_p_ins'))
-    log_del = np.log10(globals_.config.getfloat('Parameters', 'consensus_p_del'))
     ppn = 1 if globals_.run_locally else globals_.ppn
     options = ''
     if ppn > 1:
         options = '-p {}'.format(ppn)
+    indel_file = '{}.indel-probs.txt'.format(remove_suffix(outfile, '.fastq'))
     kwargs = {
         'julia': globals_.config.get('Paths', 'julia'),
         'script': globals_.config.get('Paths', 'consensus_script'),
         'options': options,
-        'pattern': os.path.join(directory, "*.sampled.fastq"),
         'prefix': '{}_hqcs_'.format(label),
-        'outfile': outfile,
         'batch': globals_.config.get('Parameters', 'consensus_batch_size'),
-        'log_ins': log_ins,
-        'log_del': log_del,
+        'indel_file': indel_file,
+        'pattern': os.path.join(directory, "*.sampled.fastq"),
+        'outfile': outfile,
         }
     cmd = ('{julia} {options} {script} --prefix \'{prefix}\''
            ' --keep-unique-name --batch \'{batch}\''
-           ' \'{log_ins}\' \'{log_del}\' \'{pattern}\' > {outfile}').format(**kwargs)
+           ' --indel-file \'{indel_file}\''
+           ' \'{pattern}\' {outfile}').format(**kwargs)
     return run_command(cmd, infiles, outfile, ppn=ppn, name="cluster-consensus-{}".format(prefix))
-
 
 # making wrappers like this is necessary because nested function
 # definitions are not picklable.
@@ -296,21 +294,19 @@ def make_consensus_pipeline(name=None):
     cluster_consensus_task = pipeline.collate(cluster_consensus,
                                               input=sample_clusters_task,
                                               filter=formatter(r'(.*)/(?P<NAME>[a-zA-Z0-9-_]*)\.clusters(.*)'),
-                                              output=os.path.join(pipeline_dir, '{NAME[0]}.hqcs.fasta'),
+                                              output=os.path.join(pipeline_dir, '{NAME[0]}.hqcs.fastq'),
                                               extras=['{path[0]}',
                                                       '{NAME[0]}'])
 
     inframe_hqcs_task = pipeline.transform(inframe_hqcs,
                                            input=cluster_consensus_task,
-                                           filter=suffix('.fasta'),
-                                           output='.inframe.fasta')
-
-    # TODO: use highest-quality in-frame hqcs as reference
+                                           filter=suffix('.fastq'),
+                                           output='.inframe.fastq')
 
     unique_hqcs_task = pipeline.transform(unique_hqcs,
                                           input=inframe_hqcs_task,
-                                          filter=suffix('.fasta'),
-                                          output='.uniques.fasta')
+                                          filter=suffix('.fastq'),
+                                          output='.uniques.fastq')
 
     cat_all_hqcs_task = pipeline.merge(cat_all_hqcs,
                                        input=unique_hqcs_task,
