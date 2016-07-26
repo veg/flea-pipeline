@@ -48,7 +48,7 @@ def cluster(infile, outfile):
 
 @must_work(many=True)
 @report_wrapper
-def fastq_clusters(infiles, outfiles, outdir):
+def fastq_clusters(infiles, outfiles, outdir, pattern):
     for f in outfiles:
         os.unlink(f)
     ucfile, fastqfile = infiles
@@ -282,7 +282,8 @@ def make_consensus_pipeline(name=None):
                                              filter=formatter(basename_regex),
                                              add_inputs=add_inputs(ccs_pattern),
                                              output=os.path.join(pipeline_dir, '{NAME[0]}.clusters/*.raw.fastq'),
-                                             extras=[os.path.join(pipeline_dir, '{NAME[0]}.clusters')])
+                                             extras=[os.path.join(pipeline_dir, '{NAME[0]}.clusters'),
+                                                     'cluster_[0-9]+.raw.fastq'])
     fastq_clusters_task.mkdir(cluster_task,
                              formatter(r'.*/(?P<NAME>.+).clustered.uc'),
                              '{path[0]}/{NAME[0]}.clusters')
