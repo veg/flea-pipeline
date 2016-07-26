@@ -4,6 +4,7 @@ import random
 from collections import defaultdict
 import warnings
 import shutil
+import csv
 
 import numpy as np
 from ruffus import Pipeline, suffix, formatter, add_inputs
@@ -121,6 +122,25 @@ def cluster_consensus(infiles, outfile, directory, prefix):
            ' --indel-file \'{indel_file}\''
            ' \'{pattern}\' {outfile}').format(**kwargs)
     return run_command(cmd, infiles, outfile, ppn=ppn, name="cluster-consensus-{}".format(prefix))
+
+
+@must_work()
+@report_wrapper
+def no_indel_hqcs(infile, outfile):
+    indel_file = '{}.indel-probs.txt'.format(remove_suffix(infile, '.fastq'))
+    max_error_rate = globals_.config.getfloat('Parameters', 'hqcs_max_err_rate')
+    max_base_error_rate = globals_.config.getfloat('Parameters', 'hqcs_max_base_err_rate')
+    to_keep = set()
+    with open(indel_file) as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            if (float(row["max_indel_p"]) <= max_base_error_rate and
+                float(row["indel_rate"]) <= max_base_error_rate):
+                to_keep.add(row["label"])
+    records = (r for r in SeqIO.parse(infile, 'fastq')
+               if r.id in to_keep)
+    SeqIO.write(records, outfile, 'fastq')
+
 
 # making wrappers like this is necessary because nested function
 # definitions are not picklable.
@@ -298,8 +318,14 @@ def make_consensus_pipeline(name=None):
                                               extras=['{path[0]}',
                                                       '{NAME[0]}'])
 
-    inframe_hqcs_task = pipeline.transform(inframe_hqcs,
+    # keep in-frame hqcs sequences with low INDEL probability
+    no_indel_hqcs_task = pipeline.transform(no_indel_hqcs,
                                            input=cluster_consensus_task,
+                                           filter=suffix('.fastq'),
+                                           output='.no-indels.fastq')
+
+    inframe_hqcs_task = pipeline.transform(inframe_hqcs,
+                                           input=no_indel_hqcs_task,
                                            filter=suffix('.fastq'),
                                            output='.inframe.fastq')
 

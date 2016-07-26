@@ -48,8 +48,8 @@ min_length_ratio: 0.995
 min_n_clusters: 3
 
 consensus_batch_size: 10
-consensus_p_ins: 0.01
-consensus_p_del: 0.01
+hqcs_max_err_rate: 1e-6
+hqcs_max_base_err_rate: 1e-3
 
 copynumber_identity: 0.95
 cn_max_length_ratio: 1.005
