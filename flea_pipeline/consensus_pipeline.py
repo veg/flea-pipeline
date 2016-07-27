@@ -100,6 +100,37 @@ def sample_clusters(infile, outfile):
 @report_wrapper
 def cluster_consensus(infiles, outfile, directory, prefix):
     """Alignment-free cluster consensus."""
+    ppn = 1 if globals_.run_locally else globals_.ppn
+    options = ''
+    if ppn > 1:
+        options = '-p {}'.format(ppn)
+    indel_file = '{}.indel-probs.txt'.format(remove_suffix(outfile, '.fastq'))
+    kwargs = {
+        'julia': globals_.config.get('Paths', 'julia'),
+        'script': globals_.config.get('Paths', 'consensus_script'),
+        'options': options,
+        'batch': globals_.config.get('Parameters', 'consensus_batch_size'),
+        'maxiters': globals_.config.get('Parameters', 'consensus_max_iters'),
+        'indel_file': indel_file,
+        'pattern': os.path.join(directory, "*.sampled.fastq"),
+        'outfile': outfile,
+        }
+    cmd = ('{julia} {options} {script} --batch \'{batch}\''
+           ' --max-iters \'{maxiters}\''
+           ' --indel-file \'{indel_file}\''
+           ' \'{pattern}\' {outfile}').format(**kwargs)
+    return run_command(cmd, infiles, outfile,
+                       ppn=ppn, name="cluster-consensus-{}".format(prefix))
+
+
+@must_work(illegal_chars='-', min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
+@report_wrapper
+def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
+    """Alignment-free cluster consensus."""
+    # TODO: if reference is this cluster's HQCS, done
+    reffile = output=os.path.join(pipeline_dir, "inframe-db.fastq")
+    refmapfile = os.path.join(pipeline_dir,
+                              "{}.hqcs-ref-id.txt".format(prefix))
     seq_id = next(SeqIO.parse(infiles[0], 'fastq')).id
     label = re.split("_[0-9]+$", seq_id)[0]
     ppn = 1 if globals_.run_locally else globals_.ppn
@@ -113,13 +144,19 @@ def cluster_consensus(infiles, outfile, directory, prefix):
         'options': options,
         'prefix': '{}_hqcs_'.format(label),
         'batch': globals_.config.get('Parameters', 'consensus_batch_size'),
+        'maxiters': globals_.config.get('Parameters', 'consensus_max_iters'),
         'indel_file': indel_file,
+        'reffile': reffile,
+        'refmapfile': refmapfile,
         'pattern': os.path.join(directory, "*.sampled.fastq"),
         'outfile': outfile,
         }
     cmd = ('{julia} {options} {script} --prefix \'{prefix}\''
            ' --keep-unique-name --batch \'{batch}\''
+           ' --max-iters \'{maxiters}\''
            ' --indel-file \'{indel_file}\''
+           ' --reference \'{reffile}\''
+           ' --reference-map \'{refmapfile}\''
            ' \'{pattern}\' {outfile}').format(**kwargs)
     return run_command(cmd, infiles, outfile, ppn=ppn, name="cluster-consensus-{}".format(prefix))
 
@@ -136,7 +173,7 @@ def no_indel_hqcs(infile, outfile):
         for row in reader:
             if (float(row["max_indel_p"]) <= max_base_error_rate and
                 float(row["indel_rate"]) <= max_base_error_rate):
-                to_keep.add(row["label"])
+                to_keep.add(row["name"])
     records = (r for r in SeqIO.parse(infile, 'fastq')
                if r.id in to_keep)
     SeqIO.write(records, outfile, 'fastq')
@@ -179,53 +216,53 @@ def new_record_id(record, new_id):
 @report_wrapper
 def inframe_hqcs(infile, outfile):
     """Filter to in-frame hqcs sequences with no stop codons"""
-    records = SeqIO.parse(infile, 'fasta')
+    records = SeqIO.parse(infile, 'fastq')
     result = list(new_record_id(r, '{}_inframe'.format(r.id))
                   for r in records if is_in_frame(r.seq))
-    SeqIO.write(result, outfile, 'fasta')
+    SeqIO.write(result, outfile, 'fastq')
 
 
-def pause_for_editing_inframe_hqcs():
-    infile = os.path.join(pipeline_dir, 'inframe_hqcs.fasta')
-    outfile = os.path.join(pipeline_dir, 'inframe_hqcs.edited.fasta')
-    if globals_.config.getboolean('Tasks', 'use_inframe_hqcs'):
-        if globals_.config.getboolean('Tasks', 'pause_for_inframe_hqcs'):
-            input('Paused for manual editing of {}'
-                  '\nPress Enter to continue.'.format(outfile))
-        # check that result is not empty
-        n = sum(1 for r in SeqIO.parse(outfile, 'fasta'))
-        if n == 0:
-            raise Exception('{} is empty'.format(outfile))
-    else:
-        # just use global reference file
-        dbfile = globals_.config.get('Parameters', 'reference_db')
-        shutil.copyfile(dbfile, outfile)
+#@must_work(min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
+@must_work()
+@report_wrapper
+def unique_hqcs(infile, outfile):
+    cmd = ('{usearch} -derep_fulllength {infile} -fastqout {outfile}'.format(
+            usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
+    return run_command(cmd, infile, outfiles=outfile, name='unique_hqcs')
+
+
+# def pause_for_editing_inframe_hqcs():
+#     infile = os.path.join(pipeline_dir, 'inframe_hqcs.fasta')
+#     outfile = os.path.join(pipeline_dir, 'inframe_hqcs.edited.fasta')
+#     if globals_.config.getboolean('Tasks', 'use_inframe_hqcs'):
+#         if globals_.config.getboolean('Tasks', 'pause_for_inframe_hqcs'):
+#             input('Paused for manual editing of {}'
+#                   '\nPress Enter to continue.'.format(outfile))
+#         # check that result is not empty
+#         n = sum(1 for r in SeqIO.parse(outfile, 'fasta'))
+#         if n == 0:
+#             raise Exception('{} is empty'.format(outfile))
+#     else:
+#         # just use global reference file
+#         dbfile = globals_.config.get('Parameters', 'reference_db')
+#         shutil.copyfile(dbfile, outfile)
 
 
 @must_work()
 @report_wrapper
 def hqcs_db_search(infiles, outfile):
     infile, dbfile = infiles
-    check_basename(dbfile, 'inframe_hqcs.edited.fasta')
+    check_basename(dbfile, 'inframe-db.fasta')
     identity = globals_.config.get('Parameters', 'reference_identity')
     max_accepts = globals_.config.get('Parameters', 'max_accepts')
     max_rejects = globals_.config.get('Parameters', 'max_rejects')
     cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
-           ' -fastapairs {outfile} -alnout {outfile}.human -userout {outfile}.calns'
-           ' -userfields caln -top_hit_only -strand both'
+           ' -userout {outfile} -userfields query+target -top_hit_only -strand both'
            ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
                      infile=infile, db=dbfile, id=identity, outfile=outfile,
                      max_accepts=max_accepts, max_rejects=max_rejects)
     return run_command(cmd, infile, outfiles=outfile, name='hqcs-db-search')
-
-
-@must_work(min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
-@report_wrapper
-def unique_hqcs(infile, outfile):
-    cmd = ('{usearch} -derep_fulllength {infile} -fastaout {outfile}'.format(
-            usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
-    return run_command(cmd, infile, outfiles=outfile, name='unique_hqcs')
 
 
 # FIXME: this is run with remote job limiter, but part of its task is run locally
@@ -268,6 +305,13 @@ def cat_all_hqcs(infiles, outfile):
         raise Exception('Number of input files does not match number'
                         ' of timepoints')
     cat_files(infiles, outfile)
+
+
+@must_work(seq_ids=True)
+@report_wrapper
+def fastq_to_fasta(infile, outfile):
+    records = SeqIO.parse(infile, 'fastq')
+    SeqIO.write(records, outfile, 'fasta')
 
 
 @must_work()
@@ -314,11 +358,10 @@ def make_consensus_pipeline(name=None):
     cluster_consensus_task = pipeline.collate(cluster_consensus,
                                               input=sample_clusters_task,
                                               filter=formatter(r'(.*)/(?P<NAME>[a-zA-Z0-9-_]*)\.clusters(.*)'),
-                                              output=os.path.join(pipeline_dir, '{NAME[0]}.hqcs.fastq'),
+                                              output=os.path.join(pipeline_dir, '{NAME[0]}.refhqcs.fastq'),
                                               extras=['{path[0]}',
                                                       '{NAME[0]}'])
 
-    # keep in-frame hqcs sequences with low INDEL probability
     no_indel_hqcs_task = pipeline.transform(no_indel_hqcs,
                                            input=cluster_consensus_task,
                                            filter=suffix('.fastq'),
@@ -329,17 +372,56 @@ def make_consensus_pipeline(name=None):
                                            filter=suffix('.fastq'),
                                            output='.inframe.fastq')
 
+    unique_hqcs_ref_task = pipeline.transform(unique_hqcs,
+                                              name="unique_hqcs_ref",
+                                              input=inframe_hqcs_task,
+                                              filter=suffix('.fastq'),
+                                              output='.uniques.fastq')
+
+    cat_all_hqcs_ref_task = pipeline.merge(cat_all_hqcs,
+                                           name="cat_all_hqcs_ref",
+                                           input=unique_hqcs_ref_task,
+                                           output=os.path.join(pipeline_dir, "inframe-db.fastq"))
+
+    hqcs_ref_fasta_task = pipeline.transform(fastq_to_fasta,
+                                             name="hqcs_ref_fasta_task",
+                                             input=cat_all_hqcs_ref_task,
+                                             filter=suffix('.fastq'),
+                                             output='.fasta')
+
+    hqcs_db_search_task = pipeline.transform(hqcs_db_search,
+                                             input=cluster_consensus_task,
+                                             filter=suffix('.refhqcs.fastq'),
+                                             output=".hqcs-ref-id.txt",
+                                             add_inputs=add_inputs(hqcs_ref_fasta_task))
+
+    # 2nd round of consensus algorithm
+    cluster_consensus_ref_task = pipeline.collate(cluster_consensus_with_ref,
+                                                  input=sample_clusters_task,
+                                                  filter=formatter(r'(.*)/(?P<NAME>[a-zA-Z0-9-_]*)\.clusters(.*)'),
+                                                  output=os.path.join(pipeline_dir, '{NAME[0]}.hqcs.fastq'),
+                                                  extras=['{path[0]}',
+                                                          '{NAME[0]}'])
+    cluster_consensus_ref_task.follows(hqcs_db_search_task)
+
     unique_hqcs_task = pipeline.transform(unique_hqcs,
-                                          input=inframe_hqcs_task,
+                                          input=cluster_consensus_ref_task,
                                           filter=suffix('.fastq'),
                                           output='.uniques.fastq')
 
+    hqcs_fasta_task = pipeline.transform(fastq_to_fasta,
+                                         name="hqcs_fasta_task",
+                                         input=unique_hqcs_task,
+                                         filter=suffix('.fastq'),
+                                         output='.fasta')
+
     cat_all_hqcs_task = pipeline.merge(cat_all_hqcs,
-                                       input=unique_hqcs_task,
+                                       name="cat_all_hqcs",
+                                       input=hqcs_fasta_task,
                                        output=os.path.join(pipeline_dir, "hqcs.fasta"))
 
     compute_copynumbers_task = pipeline.transform(compute_copynumbers,
-                                                  input=unique_hqcs_task,
+                                                  input=hqcs_fasta_task,
                                                   filter=formatter(basename_regex),
                                                   add_inputs=add_inputs(ccs_pattern),
                                                   output=os.path.join(pipeline_dir, '{NAME[0]}.copynumbers.tsv'))

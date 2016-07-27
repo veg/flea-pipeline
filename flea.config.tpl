@@ -48,6 +48,7 @@ min_length_ratio: 0.995
 min_n_clusters: 3
 
 consensus_batch_size: 10
+consensus_max_iters: 10
 hqcs_max_err_rate: 1e-6
 hqcs_max_base_err_rate: 1e-3
 
