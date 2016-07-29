@@ -137,7 +137,6 @@ def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
     options = ''
     if ppn > 1:
         options = '-p {}'.format(ppn)
-    indel_file = '{}.indel-probs.txt'.format(remove_suffix(outfile, '.fastq'))
     kwargs = {
         'julia': globals_.config.get('Paths', 'julia'),
         'script': globals_.config.get('Paths', 'consensus_script'),
@@ -145,7 +144,6 @@ def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
         'prefix': '{}_hqcs_'.format(label),
         'batch': globals_.config.get('Parameters', 'consensus_batch_size'),
         'maxiters': globals_.config.get('Parameters', 'consensus_max_iters'),
-        'indel_file': indel_file,
         'reffile': reffile,
         'refmapfile': refmapfile,
         'pattern': os.path.join(directory, "*.sampled.fastq"),
@@ -154,7 +152,6 @@ def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
     cmd = ('{julia} {options} {script} --prefix \'{prefix}\''
            ' --keep-unique-name --batch \'{batch}\''
            ' --max-iters \'{maxiters}\''
-           ' --indel-file \'{indel_file}\''
            ' --reference \'{reffile}\''
            ' --reference-map \'{refmapfile}\''
            ' \'{pattern}\' {outfile}').format(**kwargs)
