@@ -128,7 +128,7 @@ def cluster_consensus(infiles, outfile, directory, prefix):
 def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
     """Alignment-free cluster consensus."""
     # TODO: if reference is this cluster's HQCS, done
-    reffile = output=os.path.join(pipeline_dir, "inframe-db.fastq")
+    reffile = output=os.path.join(pipeline_dir, "refhqcs-inframe-db.fasta")
     refmapfile = os.path.join(pipeline_dir,
                               "{}.hqcs-ref-id.txt".format(prefix))
     seq_id = next(SeqIO.parse(infiles[0], 'fastq')).id
@@ -216,14 +216,14 @@ def inframe_hqcs(infile, outfile):
     records = SeqIO.parse(infile, 'fastq')
     result = list(new_record_id(r, '{}_inframe'.format(r.id))
                   for r in records if is_in_frame(r.seq))
-    SeqIO.write(result, outfile, 'fastq')
+    SeqIO.write(result, outfile, 'fasta')
 
 
 #@must_work(min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
 @must_work()
 @report_wrapper
 def unique_hqcs(infile, outfile):
-    cmd = ('{usearch} -derep_fulllength {infile} -fastqout {outfile}'.format(
+    cmd = ('{usearch} -derep_fulllength {infile} -fastaout {outfile}'.format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
     return run_command(cmd, infile, outfiles=outfile, name='unique_hqcs')
 
@@ -249,7 +249,7 @@ def unique_hqcs(infile, outfile):
 @report_wrapper
 def hqcs_db_search(infiles, outfile):
     infile, dbfile = infiles
-    check_basename(dbfile, 'inframe-db.fasta')
+    check_basename(dbfile, 'refhqcs-inframe-db.fasta')
     identity = globals_.config.get('Parameters', 'reference_identity')
     max_accepts = globals_.config.get('Parameters', 'max_accepts')
     max_rejects = globals_.config.get('Parameters', 'max_rejects')
@@ -367,58 +367,52 @@ def make_consensus_pipeline(name=None):
     inframe_hqcs_task = pipeline.transform(inframe_hqcs,
                                            input=no_indel_hqcs_task,
                                            filter=suffix('.fastq'),
-                                           output='.inframe.fastq')
+                                           output='.inframe.fasta')
 
     unique_hqcs_ref_task = pipeline.transform(unique_hqcs,
                                               name="unique_hqcs_ref",
                                               input=inframe_hqcs_task,
-                                              filter=suffix('.fastq'),
-                                              output='.uniques.fastq')
+                                              filter=suffix('.fasta'),
+                                              output='.uniques.fasta')
 
     cat_all_hqcs_ref_task = pipeline.merge(cat_all_hqcs,
                                            name="cat_all_hqcs_ref",
                                            input=unique_hqcs_ref_task,
-                                           output=os.path.join(pipeline_dir, "inframe-db.fastq"))
-
-    hqcs_ref_fasta_task = pipeline.transform(fastq_to_fasta,
-                                             name="hqcs_ref_fasta_task",
-                                             input=cat_all_hqcs_ref_task,
-                                             filter=suffix('.fastq'),
-                                             output='.fasta')
+                                           output=os.path.join(pipeline_dir, "refhqcs-inframe-db.fasta"))
 
     hqcs_db_search_task = pipeline.transform(hqcs_db_search,
                                              input=cluster_consensus_task,
                                              filter=suffix('.refhqcs.fastq'),
                                              output=".hqcs-ref-id.txt",
-                                             add_inputs=add_inputs(hqcs_ref_fasta_task))
+                                             add_inputs=add_inputs(cat_all_hqcs_ref_task))
 
     # 2nd round of consensus algorithm
-    cluster_consensus_ref_task = pipeline.collate(cluster_consensus_with_ref,
-                                                  input=sample_clusters_task,
-                                                  filter=formatter(r'(.*)/(?P<NAME>[a-zA-Z0-9-_]*)\.clusters(.*)'),
-                                                  output=os.path.join(pipeline_dir, '{NAME[0]}.hqcs.fastq'),
-                                                  extras=['{path[0]}',
-                                                          '{NAME[0]}'])
-    cluster_consensus_ref_task.follows(hqcs_db_search_task)
-
-    unique_hqcs_task = pipeline.transform(unique_hqcs,
-                                          input=cluster_consensus_ref_task,
-                                          filter=suffix('.fastq'),
-                                          output='.uniques.fastq')
+    cluster_consensus_with_ref_task = pipeline.collate(cluster_consensus_with_ref,
+                                                       input=sample_clusters_task,
+                                                       filter=formatter(r'(.*)/(?P<NAME>[a-zA-Z0-9-_]*)\.clusters(.*)'),
+                                                       output=os.path.join(pipeline_dir, '{NAME[0]}.hqcs.fastq'),
+                                                       extras=['{path[0]}',
+                                                               '{NAME[0]}'])
+    cluster_consensus_with_ref_task.follows(hqcs_db_search_task)
 
     hqcs_fasta_task = pipeline.transform(fastq_to_fasta,
                                          name="hqcs_fasta_task",
-                                         input=unique_hqcs_task,
+                                         input=cluster_consensus_with_ref_task,
                                          filter=suffix('.fastq'),
                                          output='.fasta')
 
+    unique_hqcs_task = pipeline.transform(unique_hqcs,
+                                          input=hqcs_fasta_task,
+                                          filter=suffix('.fasta'),
+                                          output='.uniques.fasta')
+
     cat_all_hqcs_task = pipeline.merge(cat_all_hqcs,
                                        name="cat_all_hqcs",
-                                       input=hqcs_fasta_task,
+                                       input=unique_hqcs_task,
                                        output=os.path.join(pipeline_dir, "hqcs.fasta"))
 
     compute_copynumbers_task = pipeline.transform(compute_copynumbers,
-                                                  input=hqcs_fasta_task,
+                                                  input=unique_hqcs_task,
                                                   filter=formatter(basename_regex),
                                                   add_inputs=add_inputs(ccs_pattern),
                                                   output=os.path.join(pipeline_dir, '{NAME[0]}.copynumbers.tsv'))
