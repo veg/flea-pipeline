@@ -131,7 +131,8 @@ def make_alignment_pipeline(name=None):
                                                       input=make_input_task,
                                                       add_inputs=add_inputs(copy_protein_alignment_task),
                                                       filter=formatter(),
-                                                      output=os.path.join(pipeline_dir, 'hqcs.translated.aligned.edited.backtranslated.fasta'))
+                                                      output=os.path.join(pipeline_dir,
+                                                                          'hqcs.translated.aligned.edited.backtranslated.fasta'))
 
     pipeline.set_head_tasks([make_input_task])
     pipeline.set_tail_tasks([backtranslate_alignment_task, copy_protein_alignment_task])
