@@ -146,6 +146,10 @@ def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
         'maxiters': globals_.config.get('Parameters', 'consensus_max_iters'),
         'reffile': reffile,
         'refmapfile': refmapfile,
+        'mismatch_penalty': globals_.config.get('Parameters', 'mismatch_penalty'),
+        'indel_penalty': globals_.config.get('Parameters', 'indel_penalty'),
+        'max_indel_penalty': globals_.config.get('Parameters', 'max_indel_penalty'),
+        'codon_indel_penalty': globals_.config.get('Parameters', 'codon_indel_penalty'),
         'pattern': os.path.join(directory, "*.sampled.fastq"),
         'outfile': outfile,
         }
@@ -154,6 +158,10 @@ def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
            ' --max-iters \'{maxiters}\''
            ' --reference \'{reffile}\''
            ' --reference-map \'{refmapfile}\''
+           ' --mismatch-penalty \'{mismatch_penalty}\''
+           ' --indel-penalty \'{indel_penalty}\''
+           ' --max-indel-penalty \'{max_indel_penalty}\''
+           ' --codon-indel-penalty \'{codon_indel_penalty}\''
            ' \'{pattern}\' {outfile}').format(**kwargs)
     return run_command(cmd, infiles, outfile, ppn=ppn, name="cluster-consensus-{}".format(prefix))
 
