@@ -198,13 +198,13 @@ def cat_wrapper(infiles, outfile):
     cat_files(infiles, outfile)
 
 
-def is_in_frame(seq):
+def is_in_frame(seq, check_stop_codons):
     if len(seq) % 3 != 0:
         return False
     t = seq.translate()
     if len(t) != len(seq) / 3:
         return False
-    if '*' in t:
+    if '*' in t and check_stop_codons:
         return False
     return True
 
@@ -219,12 +219,30 @@ def new_record_id(record, new_id):
 
 @must_work()
 @report_wrapper
-def inframe_hqcs(infile, outfile):
+def inframe_refhqcs(infile, outfile):
     """Filter to in-frame hqcs sequences with no stop codons"""
     records = SeqIO.parse(infile, 'fastq')
     result = list(new_record_id(r, '{}_inframe'.format(r.id))
-                  for r in records if is_in_frame(r.seq))
+                  for r in records if is_in_frame(r.seq, True))
     SeqIO.write(result, outfile, 'fasta')
+
+
+@must_work()
+@report_wrapper
+def inframe_hqcs(infile, outfile):
+    """Filter to in-frame hqcs sequences with no stop codons"""
+    records = SeqIO.parse(infile, 'fastq')
+    result = list(r for r in records if is_in_frame(r.seq, False))
+    SeqIO.write(result, outfile, 'fasta')
+
+
+@must_work()
+@report_wrapper
+def outframe_hqcs(infile, outfile):
+    """Filter to sequences that are not in frame"""
+    records = SeqIO.parse(infile, 'fastq')
+    result = list(r for r in records if not is_in_frame(r.seq, False))
+    SeqIO.write(result, outfile, 'fastq')
 
 
 #@must_work(min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
@@ -312,13 +330,6 @@ def cat_all_hqcs(infiles, outfile):
     cat_files(infiles, outfile)
 
 
-@must_work(seq_ids=True)
-@report_wrapper
-def fastq_to_fasta(infile, outfile):
-    records = SeqIO.parse(infile, 'fastq')
-    SeqIO.write(records, outfile, 'fasta')
-
-
 @must_work()
 @report_wrapper
 def copy_file(infile, outfile):
@@ -372,14 +383,14 @@ def make_consensus_pipeline(name=None):
                                            filter=suffix('.fastq'),
                                            output='.no-indels.fastq')
 
-    inframe_hqcs_task = pipeline.transform(inframe_hqcs,
+    inframe_refhqcs_task = pipeline.transform(inframe_refhqcs,
                                            input=no_indel_hqcs_task,
                                            filter=suffix('.fastq'),
                                            output='.inframe.fasta')
 
     unique_hqcs_ref_task = pipeline.transform(unique_hqcs,
                                               name="unique_hqcs_ref",
-                                              input=inframe_hqcs_task,
+                                              input=inframe_refhqcs_task,
                                               filter=suffix('.fasta'),
                                               output='.uniques.fasta')
 
@@ -403,14 +414,18 @@ def make_consensus_pipeline(name=None):
                                                                '{NAME[0]}'])
     cluster_consensus_with_ref_task.follows(hqcs_db_search_task)
 
-    hqcs_fasta_task = pipeline.transform(fastq_to_fasta,
-                                         name="hqcs_fasta_task",
-                                         input=cluster_consensus_with_ref_task,
-                                         filter=suffix('.fastq'),
-                                         output='.fasta')
+    inframe_hqcs_task = pipeline.transform(inframe_hqcs,
+                                           input=cluster_consensus_with_ref,
+                                           filter=suffix('.fastq'),
+                                           output='.inframe.fasta')
+
+    outframe_hqcs_task = pipeline.transform(outframe_hqcs,
+                                            input=cluster_consensus_with_ref,
+                                            filter=suffix('.fastq'),
+                                            output='.outframe.fastq')
 
     unique_hqcs_task = pipeline.transform(unique_hqcs,
-                                          input=hqcs_fasta_task,
+                                          input=inframe_hqcs_task,
                                           filter=suffix('.fasta'),
                                           output='.uniques.fasta')
 
