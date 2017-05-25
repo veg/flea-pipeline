@@ -227,7 +227,6 @@ def inframe_hqcs(infile, outfile):
     SeqIO.write(result, outfile, 'fasta')
 
 
-@must_work()
 @report_wrapper
 def outframe_hqcs(infile, outfile):
     """Filter to sequences that are not in frame"""
