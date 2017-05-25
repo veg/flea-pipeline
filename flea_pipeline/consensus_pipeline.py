@@ -88,6 +88,7 @@ def iter_sample(iterable, k):
 @must_work()
 @report_wrapper
 def sample_clusters(infile, outfile):
+    # TODO: sample by quality score
     n = sum(1 for r in SeqIO.parse(infile, 'fastq'))
     records = SeqIO.parse(infile, 'fastq')
     maxsize = int(globals_.config.get('Parameters', 'max_cluster_size'))
@@ -102,23 +103,22 @@ def cluster_consensus(infiles, outfile, directory, prefix):
     """Alignment-free cluster consensus."""
     ppn = 1 if globals_.run_locally else globals_.ppn
     options = ''
-    if ppn > 1:
+    if ppn > 1 and globals_.config.getboolean('Parameters', 'consensus_multiprocess'):
         options = '-p {}'.format(ppn)
     indel_file = '{}.indel-probs.txt'.format(remove_suffix(outfile, '.fastq'))
     kwargs = {
         'julia': globals_.config.get('Paths', 'julia'),
         'script': globals_.config.get('Paths', 'consensus_script'),
         'options': options,
-        'batch': globals_.config.get('Parameters', 'consensus_batch_size'),
         'maxiters': globals_.config.get('Parameters', 'consensus_max_iters'),
+        'seq_errors': globals_.config.get('Parameters', 'seq_errors'),
         'indel_file': indel_file,
         'pattern': os.path.join(directory, "*.sampled.fastq"),
         'outfile': outfile,
         }
-    cmd = ('{julia} {options} {script} --batch \'{batch}\''
+    cmd = ('{julia} {options} {script} '
            ' --max-iters \'{maxiters}\''
-           ' --indel-file \'{indel_file}\''
-           ' \'{pattern}\' {outfile}').format(**kwargs)
+           ' \'{seq_errors}\' \'{pattern}\' {outfile}').format(**kwargs)
     return run_command(cmd, infiles, outfile,
                        ppn=ppn, name="cluster-consensus-{}".format(prefix))
 
@@ -135,54 +135,45 @@ def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
     label = re.split("_[0-9]+$", seq_id)[0]
     ppn = 1 if globals_.run_locally else globals_.ppn
     options = ''
-    if ppn > 1:
+    if ppn > 1 and globals_.config.getboolean('Parameters', 'consensus_multiprocess'):
         options = '-p {}'.format(ppn)
     kwargs = {
         'julia': globals_.config.get('Paths', 'julia'),
         'script': globals_.config.get('Paths', 'consensus_script'),
         'options': options,
         'prefix': '{}_hqcs_'.format(label),
-        'batch': globals_.config.get('Parameters', 'consensus_batch_size'),
         'maxiters': globals_.config.get('Parameters', 'consensus_max_iters'),
         'reffile': reffile,
         'refmapfile': refmapfile,
-        'mismatch_penalty': globals_.config.get('Parameters', 'mismatch_penalty'),
-        'indel_penalty': globals_.config.get('Parameters', 'indel_penalty'),
-        'max_indel_penalty': globals_.config.get('Parameters', 'max_indel_penalty'),
-        'codon_indel_penalty': globals_.config.get('Parameters', 'codon_indel_penalty'),
+        'ref_errors': globals_.config.get('Parameters', 'ref_errors'),
+        'seq_errors': globals_.config.get('Parameters', 'seq_errors'),
         'pattern': os.path.join(directory, "*.sampled.fastq"),
         'outfile': outfile,
         }
-    cmd = ('{julia} {options} {script} --prefix \'{prefix}\''
-           ' --keep-unique-name --batch \'{batch}\''
+    cmd = ('{julia} {options} {script} '
+           ' --prefix \'{prefix}\''
+           ' --keep-unique-name'
            ' --max-iters \'{maxiters}\''
            ' --reference \'{reffile}\''
            ' --reference-map \'{refmapfile}\''
-           ' --mismatch-penalty \'{mismatch_penalty}\''
-           ' --indel-penalty \'{indel_penalty}\''
-           ' --max-indel-penalty \'{max_indel_penalty}\''
-           ' --codon-indel-penalty \'{codon_indel_penalty}\''
-           ' \'{pattern}\' {outfile}').format(**kwargs)
+           ' --ref-errors \'{ref_errors}\''
+           ' \'{seq_errors}\' \'{pattern}\' {outfile}').format(**kwargs)
     return run_command(cmd, infiles, outfile, ppn=ppn, name="cluster-consensus-{}".format(prefix))
 
 
 @must_work()
 @report_wrapper
-def no_indel_hqcs(infile, outfile):
-    indel_file = '{}.indel-probs.txt'.format(remove_suffix(infile, '.fastq'))
+def all_hq_hqcs(infile, outfile):
     max_error_rate = globals_.config.getfloat('Parameters', 'hqcs_max_err_rate')
     max_base_error_rate = globals_.config.getfloat('Parameters', 'hqcs_max_base_err_rate')
-    to_keep = set()
-    with open(indel_file) as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            if (float(row["max_indel_p"]) <= max_base_error_rate and
-                float(row["indel_rate"]) <= max_base_error_rate):
-                to_keep.add(row["name"])
-    records = (r for r in SeqIO.parse(infile, 'fastq')
-               if r.id in to_keep)
-    SeqIO.write(records, outfile, 'fastq')
-
+    records = SeqIO.parse(infile, 'fastq')
+    # FIXME: what if none are left after filtering???
+    def filt(r):
+        phreds = np.array(r.letter_annotations["phred_quality"])
+        errors = 10 ** (-phreds / 1.0)
+        return sum(errors) <= max_error_rate and max(errors) <= max_base_error_rate
+    to_keep = (r for r in records if filt(r))
+    SeqIO.write(to_keep, outfile, 'fastq')
 
 # making wrappers like this is necessary because nested function
 # definitions are not picklable.
@@ -378,15 +369,15 @@ def make_consensus_pipeline(name=None):
                                               extras=['{path[0]}',
                                                       '{NAME[0]}'])
 
-    no_indel_hqcs_task = pipeline.transform(no_indel_hqcs,
+    all_hq_hqcs_task = pipeline.transform(all_hq_hqcs,
                                            input=cluster_consensus_task,
                                            filter=suffix('.fastq'),
-                                           output='.no-indels.fastq')
+                                           output='.allhq.fastq')
 
     inframe_refhqcs_task = pipeline.transform(inframe_refhqcs,
-                                           input=no_indel_hqcs_task,
-                                           filter=suffix('.fastq'),
-                                           output='.inframe.fasta')
+                                              input=all_hq_hqcs_task,
+                                              filter=suffix('.fastq'),
+                                              output='.inframe.fasta')
 
     unique_hqcs_ref_task = pipeline.transform(unique_hqcs,
                                               name="unique_hqcs_ref",
