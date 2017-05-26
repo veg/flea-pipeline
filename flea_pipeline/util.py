@@ -31,7 +31,6 @@ def format_walltime(seconds):
     return "{:02}:{:02}:{:02}".format(h, m, s)
 
 
-# TODO: handle stdout and stderr
 def run_command(cmd, infiles, outfiles, ppn=1, walltime=None,
                stdout=None, stderr=None, name=None):
     """Run a command using ruffus's run_job.
@@ -65,6 +64,13 @@ def run_command(cmd, infiles, outfiles, ppn=1, walltime=None,
                                          job_other_options=job_other_options,
                                          job_script_directory=globals_.job_script_dir)
         success = True
+        if stdout is not None:
+            with open(stdout, 'w') as f:
+                f.write(''.join(stdout_res))
+        if stderr is not None:
+            with open(stderr, 'w') as f:
+                f.write(''.join(stderr_res))
+
     except error_drmaa_job as err:
         msg = err.args[0]
 
@@ -463,11 +469,11 @@ def remove_suffix(name, suffix):
     return name[:-len(suffix)]
 
 
-def check_basename(name, bn):
-    exp_bn = os.path.basename(name)
-    if exp_bn != bn:
+def check_basename(filename, pattern):
+    bn = os.path.basename(filename)
+    if not re.match(pattern, bn):
         raise Exception("filename '{}' does not"
-                        " match expected name '{}'".format(bn, exp_bn))
+                        " match expected pattern '{}'".format(bn, pattern))
 
 
 def split_name(name):

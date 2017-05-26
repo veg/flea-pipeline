@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""Write each cluster from a .uc file to a fastq file.
+"""Write each cluster from a .uc file to a FASTQ or FASTA file.
 
 Each output file is put in <outdir> and named "cluster_{}.fastq".
 
@@ -10,6 +10,7 @@ Usage:
 
 Options:
   --minsize <INT>   Minimum cluster size [default: 1]
+  --fasta           Write to FASTA instead of FASTQ
   -v --verbose      Print summary [default: False]
   -h --help         Show this screen
 
@@ -61,9 +62,11 @@ if __name__ == "__main__":
     rdict = dict((r.id, r) for r in records)
     cdict = parse_ucfile(ucfile)
 
+    format = 'fasta' if args["--fasta"] else 'fastq'
+
     for cluster_id, labels in cdict.items():
         cluster_records = list(rdict[label] for label in labels)
         if len(cluster_records) < minsize:
             continue
-        outfile = os.path.join(outdir, "cluster_{}.raw.fastq".format(cluster_id))
-        SeqIO.write(cluster_records, outfile, 'fastq')
+        outfile = os.path.join(outdir, "cluster_{}.raw.{}".format(cluster_id, format))
+        SeqIO.write(cluster_records, outfile, format)

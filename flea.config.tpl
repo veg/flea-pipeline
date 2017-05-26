@@ -47,6 +47,8 @@ min_length_ratio: 0.995
 # consensus sequences per time point.
 min_n_clusters: 3
 
+use_rifraf: True
+# if using rifraf
 consensus_multiprocess: False
 consensus_max_iters: 10
 seq_errors: "1,3,3,0,0"
