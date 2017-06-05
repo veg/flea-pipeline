@@ -259,13 +259,13 @@ def cat_wrapper(infiles, outfile):
     cat_files(infiles, outfile)
 
 
-def is_in_frame(seq, check_stop_codons):
+def is_in_frame(seq, allow_stop_codons):
     if len(seq) % 3 != 0:
         return False
     t = seq.translate()
     if len(t) != len(seq) / 3:
         return False
-    if '*' in t and check_stop_codons:
+    if '*' in t and not allow_stop_codons:
         return False
     return True
 
@@ -284,17 +284,17 @@ def inframe_refhqcs(infile, outfile):
     """Filter to in-frame hqcs sequences with no stop codons"""
     records = SeqIO.parse(infile, 'fastq')
     result = list(new_record_id(r, '{}_inframe'.format(r.id))
-                  for r in records if is_in_frame(r.seq, True))
+                  for r in records if is_in_frame(r.seq, False))
     SeqIO.write(result, outfile, 'fasta')
 
 
 @must_work()
 @report_wrapper
 def inframe_hqcs(infile, outfile):
-    """Filter to in-frame hqcs sequences with no stop codons"""
+    """Filter to in-frame hqcs sequences, allowing stop codons"""
     format = get_format(infile)
     records = SeqIO.parse(infile, format)
-    result = list(r for r in records if is_in_frame(r.seq, False))
+    result = list(r for r in records if is_in_frame(r.seq, True))
     SeqIO.write(result, outfile, 'fasta')
 
 
@@ -446,6 +446,7 @@ def make_consensus_pipeline(name=None):
                                  formatter(r'.*/(?P<NAME>.+).clustered.uc'),
                                  '{path[0]}/{NAME[0]}.clusters')
 
+        # next few tasks: find cluster consensus without reference
         sample_clusters_task = pipeline.transform(sample_clusters,
                                                   input=fastq_clusters_task,
                                                   filter=suffix('.raw.fastq'),
@@ -479,13 +480,14 @@ def make_consensus_pipeline(name=None):
                                                input=unique_hqcs_ref_task,
                                                output=os.path.join(pipeline_dir, "hqcs_refs_inframe_db.fasta"))
 
+        # next few tasks: find cluster consensus with reference, using
+        # previously-found consensus as reference
         hqcs_db_search_task = pipeline.transform(hqcs_db_search_ids,
                                                  input=cluster_consensus_task,
                                                  filter=suffix('.refhqcs.fastq'),
                                                  output=".hqcs-ref-id-map.txt",
                                                  add_inputs=add_inputs(cat_all_hqcs_ref_task))
 
-        # 2nd round of consensus algorithm
         cluster_consensus_with_ref_task = pipeline.collate(cluster_consensus_with_ref,
                                                            input=sample_clusters_task,
                                                            filter=formatter(r'(.*)/(?P<NAME>[a-zA-Z0-9-_]*)\.clusters(.*)'),
@@ -537,9 +539,9 @@ def make_consensus_pipeline(name=None):
                                                    output='.inframe.fasta')
 
         cat_inframe_hqcs_refs_task = pipeline.merge(cat_wrapper_ids,
-                                               input=inframe_hqcs_refs_task,
-                                               output=os.path.join(pipeline_dir,
-                                                                   'hqcs_refs_inframe_db.fasta'))
+                                                    input=inframe_hqcs_refs_task,
+                                                    output=os.path.join(pipeline_dir,
+                                                                        'hqcs_refs_inframe_db.fasta'))
 
         copy_inframe_hqcs_task = pipeline.transform(copy_file,
                                                     input=cat_inframe_hqcs_refs_task,
