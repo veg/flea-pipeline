@@ -198,7 +198,6 @@ def cluster_consensus(infiles, outfile, directory, prefix):
 def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
     """Alignment-free cluster consensus."""
     # TODO: if reference is this cluster's HQCS, done
-    # FIXME: this is where filename mismatch is happening
     reffile = output=os.path.join(pipeline_dir, "hqcs_refs_inframe_db.fasta")
     refmapfile = os.path.join(pipeline_dir,
                               "{}.hqcs-ref-id-map.txt".format(prefix))
@@ -241,7 +240,7 @@ def all_hq_hqcs(infile, outfile):
     # FIXME: what if none are left after filtering???
     def filt(r):
         phreds = np.array(r.letter_annotations["phred_quality"])
-        errors = 10 ** (-phreds / 1.0)
+        errors = 10 ** (-phreds / 10.0)
         return sum(errors) <= max_error_rate and max(errors) <= max_base_error_rate
     to_keep = (r for r in records if filt(r))
     SeqIO.write(to_keep, outfile, 'fastq')
@@ -366,7 +365,6 @@ def hqcs_db_search_ids(infiles, outfile):
     return hqcs_db_search_helper(infiles, outfile, fasta=False)
 
 
-# FIXME: this is run with remote job limiter, but part of its task is run locally
 @must_work()
 @report_wrapper
 def compute_copynumbers(infiles, outfile):
