@@ -12,7 +12,7 @@ from flea_pipeline.util import translate_helper
 import flea_pipeline.pipeline_globals as globals_
 
 
-pipeline_dir = os.path.join(globals_.data_dir, "alignment")
+pipeline_dir = os.path.join(globals_.results_dir, "alignment")
 
 
 @must_work()

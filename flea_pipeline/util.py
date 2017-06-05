@@ -6,13 +6,13 @@ from itertools import tee
 from itertools import filterfalse
 from itertools import islice
 import re
-
 import time
 import datetime
 import os
 from functools import wraps
 from glob import glob
 import sys
+from contextlib import contextmanager
 
 from Bio.Seq import Seq
 from Bio import SeqIO
@@ -699,3 +699,13 @@ def usearch_hqcs_ids(infile, outfile, dbfile, identity, maxqt, name=None):
                      max_accepts=max_accepts, max_rejects=max_rejects,
                      maxqt=maxqt)
     return run_command(cmd, infile, outfiles=outfile, name=name)
+
+
+@contextmanager
+def cd(newdir):
+    prevdir = os.getcwd()
+    os.chdir(os.path.expanduser(newdir))
+    try:
+        yield
+    finally:
+        os.chdir(prevdir)

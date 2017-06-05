@@ -16,7 +16,7 @@ from flea_pipeline.util import report_wrapper
 from flea_pipeline.util import split_name
 
 
-pipeline_dir = os.path.join(globals_.data_dir, "preanalysis")
+pipeline_dir = os.path.join(globals_.results_dir, "preanalysis")
 
 
 def rename_record(record):

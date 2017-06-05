@@ -18,7 +18,7 @@ import flea_pipeline.pipeline_globals as globals_
 from flea_pipeline.consensus_pipeline import cat_wrapper_ids
 
 
-pipeline_dir = os.path.join(globals_.data_dir, "diagnosis")
+pipeline_dir = os.path.join(globals_.results_dir, "diagnosis")
 
 
 @must_work()

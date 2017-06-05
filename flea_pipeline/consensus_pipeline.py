@@ -19,7 +19,7 @@ from flea_pipeline.util import usearch_hqcs_ids
 import flea_pipeline.pipeline_globals as globals_
 
 
-pipeline_dir = os.path.join(globals_.data_dir, "consensus")
+pipeline_dir = os.path.join(globals_.results_dir, "consensus")
 
 
 @must_work()

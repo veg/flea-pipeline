@@ -34,7 +34,7 @@ from flea_pipeline.consensus_pipeline import cat_wrapper_ids
 from flea_pipeline.alignment_pipeline import mafft
 
 
-pipeline_dir = os.path.join(globals_.data_dir, "analysis")
+pipeline_dir = os.path.join(globals_.results_dir, "analysis")
 hyphy_script_dir = globals_.script_dir
 
 

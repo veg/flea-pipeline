@@ -12,7 +12,7 @@ the raw sequences for a timepoint. Otherwise it is the base id for a
 timepoint.
 
 Usage:
-  flea_pipeline.py [options] <file>
+  flea_pipeline.py [options] <input_file> <output_dir>
   flea_pipeline.py -h | --help
 
 """
@@ -36,12 +36,14 @@ from Bio import SeqIO
 from flea_pipeline import __version__
 from flea_pipeline.util import name_key_to_label
 from flea_pipeline.util import str_to_type
+from flea_pipeline.util import cd
 import flea_pipeline.pipeline_globals as globals_
 
 
 parser = cmdline.get_argparse(description='Run complete env pipeline',
                               ignored_args=['jobs', 'use_threads'])
-parser.add_argument('file')
+parser.add_argument('input_file')
+parser.add_argument('output_dir')
 parser.add_argument('--config', type=str,
                     help='Configuration file.')
 parser.add_argument('--align', type=str,
@@ -63,13 +65,14 @@ parser.add_argument('--ppn', type=int, default=-1,
 options = parser.parse_args()
 
 # useful directories
-data_dir = os.path.dirname(os.path.abspath(options.file))
+data_dir = os.path.dirname(os.path.abspath(options.input_file))
 script_dir = os.path.abspath(os.path.split(__file__)[0])
+output_dir = os.path.abspath(os.path.normpath(options.output_dir))
 
 # standard python logger which can be synchronised across concurrent
 # Ruffus tasks
 if options.log_file is None:
-    options.log_file = os.path.join(data_dir, 'flea.log')
+    options.log_file = os.path.join(output_dir, 'flea.log')
 if not options.verbose:
     options.verbose = 1
 logger, logger_mutex = cmdline.setup_logging(__name__,
@@ -80,7 +83,7 @@ do_full = options.align is None and options.analyze is None
 
 # read configuration
 if options.config is None:
-    configfile = os.path.join(data_dir, 'flea.config')
+    configfile = os.path.join(output_dir, 'flea.config')
 else:
     configfile = options.config
 if not os.path.exists(configfile):
@@ -90,7 +93,7 @@ config = ConfigParser(interpolation=ExtendedInterpolation())
 config.read(configfile)
 
 # write a copy of the configuration file
-with open(os.path.join(data_dir, 'run_parameters.config'), 'w') as handle:
+with open(os.path.join(output_dir, 'run_parameters.config'), 'w') as handle:
     config.write(handle)
 
 
@@ -98,7 +101,7 @@ with open(os.path.join(data_dir, 'run_parameters.config'), 'w') as handle:
 # TODO: encapsulate this timepoint business
 Timepoint = namedtuple('Timepoint', ['key', 'label', 'date'])
 
-with open(options.file, newline='') as csvfile:
+with open(options.input_file, newline='') as csvfile:
     reader = csv.reader(csvfile, delimiter=' ')
     keymod = lambda k: k
     if do_full:
@@ -121,7 +124,9 @@ globals_.config = config
 globals_.options = options
 globals_.script_dir = script_dir
 globals_.data_dir = data_dir
-globals_.job_script_dir = os.path.join(data_dir, 'drmaa_job_scripts')
+globals_.output_dir = output_dir
+globals_.results_dir = os.path.join(output_dir, "pipeline_results")
+globals_.job_script_dir = os.path.join(output_dir, 'drmaa_job_scripts')
 globals_.logger = logger
 globals_.logger_mutex = logger_mutex
 globals_.drmaa_session = drmaa_session
@@ -139,6 +144,10 @@ globals_.label_to_date = label_to_date
 
 if not os.path.exists(globals_.job_script_dir):
     os.mkdir(globals_.job_script_dir)
+if not os.path.exists(globals_.output_dir):
+    os.mkdir(globals_.output_dir)
+if not os.path.exists(globals_.results_dir):
+    os.mkdir(globals_.results_dir)
 
 #################################################################################
 
@@ -257,7 +266,7 @@ if __name__ == '__main__':
     run_info = {}
     run_info['version'] = __version__
     run_info['configuration'] = config_to_dict(config)
-    with open(os.path.join(data_dir, 'run_info.json'), 'w') as handle:
+    with open(os.path.join(output_dir, 'run_info.json'), 'w') as handle:
         json.dump(run_info, handle, separators=(",\n", ":"))
 
     checksum_level = config.getint('Misc', 'checksum_level')
@@ -266,7 +275,8 @@ if __name__ == '__main__':
         kwargs['multithread'] = options.jobs
     try:
         logger.info("pipeline start")
-        cmdline.run(options, checksum_level=checksum_level, **kwargs)
+        with cd(globals_.results_dir):
+            cmdline.run(options, checksum_level=checksum_level, **kwargs)
         logger.info("pipeline stop")
     except Exception as e:
         with logger_mutex:
