@@ -180,6 +180,7 @@ def cluster_consensus(infiles, outfile, directory, prefix):
         'julia': globals_.config.get('Paths', 'julia'),
         'script': globals_.config.get('Paths', 'consensus_script'),
         'options': options,
+        'phred_cap': globals_.config.get('Parameters', 'phred_cap'),
         'maxiters': globals_.config.get('Parameters', 'consensus_max_iters'),
         'seq_errors': globals_.config.get('Parameters', 'seq_errors'),
         'indel_file': indel_file,
@@ -187,6 +188,7 @@ def cluster_consensus(infiles, outfile, directory, prefix):
         'outfile': outfile,
         }
     cmd = ('{julia} {options} {script} '
+           ' --phred-cap \'{phred_cap}\''
            ' --max-iters \'{maxiters}\''
            ' \'{seq_errors}\' \'{pattern}\' {outfile}').format(**kwargs)
     return run_command(cmd, infiles, outfile,
@@ -212,6 +214,7 @@ def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
         'script': globals_.config.get('Paths', 'consensus_script'),
         'options': options,
         'prefix': '{}_hqcs_'.format(label),
+        'phred_cap': globals_.config.get('Parameters', 'phred_cap'),
         'maxiters': globals_.config.get('Parameters', 'consensus_max_iters'),
         'reffile': reffile,
         'refmapfile': refmapfile,
@@ -223,6 +226,7 @@ def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
     cmd = ('{julia} {options} {script} '
            ' --prefix \'{prefix}\''
            ' --keep-unique-name'
+           ' --phred-cap \'{phred_cap}\''
            ' --max-iters \'{maxiters}\''
            ' --reference \'{reffile}\''
            ' --reference-map \'{refmapfile}\''
