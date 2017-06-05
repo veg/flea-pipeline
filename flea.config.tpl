@@ -55,6 +55,9 @@ seq_errors: "1,3,3,0,0"
 ref_errors: "8,0.1,0.1,1,1"
 phred_cap: 30
 
+# only used if use_rifraf is false
+do_shift_correction: True
+
 hqcs_max_err_rate: 1e-6
 hqcs_max_base_err_rate: 1e-3
 

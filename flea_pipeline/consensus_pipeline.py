@@ -280,7 +280,7 @@ def new_record_id(record, new_id):
 
 @must_work()
 @report_wrapper
-def inframe_refhqcs(infile, outfile):
+def inframe_nostops(infile, outfile):
     """Filter to in-frame hqcs sequences with no stop codons"""
     records = SeqIO.parse(infile, 'fastq')
     result = list(new_record_id(r, '{}_inframe'.format(r.id))
@@ -290,7 +290,7 @@ def inframe_refhqcs(infile, outfile):
 
 @must_work()
 @report_wrapper
-def inframe_hqcs(infile, outfile):
+def inframe_allow_stops(infile, outfile):
     """Filter to in-frame hqcs sequences, allowing stop codons"""
     format = get_format(infile)
     records = SeqIO.parse(infile, format)
@@ -464,7 +464,7 @@ def make_consensus_pipeline(name=None):
                                                filter=suffix('.fastq'),
                                                output='.allhq.fastq')
 
-        inframe_refhqcs_task = pipeline.transform(inframe_refhqcs,
+        inframe_refhqcs_task = pipeline.transform(inframe_nostops,
                                                   input=all_hq_hqcs_task,
                                                   filter=suffix('.fastq'),
                                                   output='.inframe.fasta')
@@ -532,38 +532,41 @@ def make_consensus_pipeline(name=None):
                                              filter=formatter(),
                                              output='{path[0]}.hqcs.fasta')
 
-        inframe_hqcs_refs_task = pipeline.transform(inframe_hqcs,
-                                                    name="inframe_hqcs_refs",
-                                                   input=cat_clusters_task,
-                                                   filter=suffix('.fasta'),
-                                                   output='.inframe.fasta')
+        if globals_.config.getboolean('Parameters', 'do_shift_correction'):
+            inframe_hqcs_refs_task = pipeline.transform(inframe_nostops,
+                                                        name="inframe_hqcs_refs",
+                                                       input=cat_clusters_task,
+                                                       filter=suffix('.fasta'),
+                                                       output='.inframe.fasta')
 
-        cat_inframe_hqcs_refs_task = pipeline.merge(cat_wrapper_ids,
-                                                    input=inframe_hqcs_refs_task,
-                                                    output=os.path.join(pipeline_dir,
-                                                                        'hqcs_refs_inframe_db.fasta'))
+            cat_inframe_hqcs_refs_task = pipeline.merge(cat_wrapper_ids,
+                                                        input=inframe_hqcs_refs_task,
+                                                        output=os.path.join(pipeline_dir,
+                                                                            'hqcs_refs_inframe_db.fasta'))
 
-        copy_inframe_hqcs_task = pipeline.transform(copy_file,
-                                                    input=cat_inframe_hqcs_refs_task,
-                                                    filter=suffix('.fasta'),
-                                                    output='.edited.fasta')
-        copy_inframe_hqcs_task.posttask(pause_for_editing_inframe_hqcs)
+            copy_inframe_hqcs_task = pipeline.transform(copy_file,
+                                                        input=cat_inframe_hqcs_refs_task,
+                                                        filter=suffix('.fasta'),
+                                                        output='.edited.fasta')
+            copy_inframe_hqcs_task.posttask(pause_for_editing_inframe_hqcs)
 
-        hqcs_db_search_task = pipeline.transform(hqcs_db_search_fasta,
-                                                 input=cat_clusters_task,
-                                                 add_inputs=add_inputs(copy_inframe_hqcs_task),
-                                                 filter=suffix('.fasta'),
-                                                 output='.refpairs.fasta')
+            hqcs_db_search_task = pipeline.transform(hqcs_db_search_fasta,
+                                                     input=cat_clusters_task,
+                                                     add_inputs=add_inputs(copy_inframe_hqcs_task),
+                                                     filter=suffix('.fasta'),
+                                                     output='.refpairs.fasta')
 
-        shift_correction_task = pipeline.transform(shift_correction,
-                                                   input=hqcs_db_search_task,
-                                                   filter=suffix('.fasta'),
-                                                   output='.shifted.fasta')
+            shift_correction_task = pipeline.transform(shift_correction,
+                                                       input=hqcs_db_search_task,
+                                                       filter=suffix('.fasta'),
+                                                       output='.shifted.fasta')
 
-        previous_task = shift_correction_task
+            previous_task = shift_correction_task
+        else:
+            previous_task = cat_clusters_task
     # end
 
-    inframe_hqcs_task = pipeline.transform(inframe_hqcs,
+    inframe_hqcs_task = pipeline.transform(inframe_allow_stops,
                                            input=previous_task,
                                            filter=suffix('.fastq' if use_rifraf else '.fasta'),
                                            output='.inframe.fasta')
