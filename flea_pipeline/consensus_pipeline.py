@@ -304,7 +304,7 @@ def outframe_hqcs(infile, outfile):
     format = get_format(infile)
     records = SeqIO.parse(infile, format)
     result = list(r for r in records if not is_in_frame(r.seq, False))
-    SeqIO.write(result, outfile, 'fastq')
+    SeqIO.write(result, outfile, 'fasta')
 
 
 #@must_work(min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
@@ -574,7 +574,7 @@ def make_consensus_pipeline(name=None):
     outframe_hqcs_task = pipeline.transform(outframe_hqcs,
                                             input=previous_task,
                                             filter=suffix('.fastq' if use_rifraf else '.fasta'),
-                                            output='.outframe.fastq')
+                                            output='.outframe.fasta')
 
     unique_hqcs_task = pipeline.transform(unique_hqcs,
                                           input=inframe_hqcs_task,
