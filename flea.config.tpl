@@ -70,15 +70,23 @@ max_ccs_length_ratio: 1.005
 
 [Tasks]
 quality_pipeline: True
-# if True, use all in-frame HQCS sequences as reference DB for shift
-# correction of HQCSs. Also pause to allow user to edit database.
-use_inframe_hqcs: False
-pause_for_inframe_hqcs: False
 
+# if True, use all in-frame HQCS sequences as reference DB for shift
+# correction or RIFRAF references.
+use_inframe_db: True
+
+# pause to edit the database
+pause_for_inframe_db: False
+
+# pause to correct codon alignment
 pause_after_codon_alignment: False
+
+# generate full CCS alignment
 align_ccs: False
-# if False, stop after generating alignment
+
+# run analysis subpipeline
 analysis: True
+
 # if True, run evolutionary history and FUBAR scripts
 hyphy_analysis: True
 
