@@ -464,9 +464,9 @@ def make_consensus_pipeline(name=None):
                                                           '{NAME[0]}'])
 
         all_hq_hqcs_task = pipeline.transform(all_hq_hqcs,
-                                               input=cluster_consensus_task,
-                                               filter=suffix('.fastq'),
-                                               output='.allhq.fastq')
+                                              input=cluster_consensus_task,
+                                              filter=suffix('.fastq'),
+                                              output='.allhq.fastq')
 
         inframe_refhqcs_task = pipeline.transform(inframe_nostops,
                                                   input=all_hq_hqcs_task,
