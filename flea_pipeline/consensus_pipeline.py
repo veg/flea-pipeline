@@ -61,7 +61,7 @@ def mafft(infile, outfile):
 @report_wrapper
 def alignment_consensus(infile, outfile):
     n = re.search("cluster_([0-9]+)", infile).group(1)
-    seq_id = next(SeqIO.parse(infile, 'fasta')).id
+    seq_id = next(SeqIO.parse(infile, get_format(infile))).id
     label = re.split("_[0-9]+$", seq_id)[0]
     kwargs = {
         'python': globals_.config.get('Paths', 'python'),
@@ -203,7 +203,7 @@ def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
     reffile = output=os.path.join(pipeline_dir, "hqcs_refs_inframe_db.fasta")
     refmapfile = os.path.join(pipeline_dir,
                               "{}.hqcs-ref-id-map.txt".format(prefix))
-    seq_id = next(SeqIO.parse(infiles[0], 'fastq')).id
+    seq_id = next(SeqIO.parse(infiles[0], get_format(infiles[0]))).id
     label = re.split("_[0-9]+$", seq_id)[0]
     ppn = 1 if globals_.run_locally else globals_.ppn
     options = ''
@@ -240,14 +240,14 @@ def cluster_consensus_with_ref(infiles, outfile, directory, prefix):
 def all_hq_hqcs(infile, outfile):
     max_error_rate = globals_.config.getfloat('Parameters', 'hqcs_max_err_rate')
     max_base_error_rate = globals_.config.getfloat('Parameters', 'hqcs_max_base_err_rate')
-    records = SeqIO.parse(infile, 'fastq')
+    records = SeqIO.parse(infile, get_format(infile))
     # FIXME: what if none are left after filtering???
     def filt(r):
         phreds = np.array(r.letter_annotations["phred_quality"])
         errors = 10 ** (-phreds / 10.0)
         return sum(errors) <= max_error_rate and max(errors) <= max_base_error_rate
     to_keep = (r for r in records if filt(r))
-    SeqIO.write(to_keep, outfile, 'fastq')
+    SeqIO.write(to_keep, outfile, 'fasta')
 
 # making wrappers like this is necessary because nested function
 # definitions are not picklable.
@@ -286,9 +286,10 @@ def new_record_id(record, new_id):
 @report_wrapper
 def inframe_nostops(infile, outfile):
     """Filter to in-frame hqcs sequences with no stop codons"""
-    records = SeqIO.parse(infile, 'fastq')
-    result = list(new_record_id(r, '{}_inframe'.format(r.id))
-                  for r in records if is_in_frame(r.seq, False))
+    format = get_format(infile)
+    records = SeqIO.parse(infile, format)
+    result = (new_record_id(r, '{}_inframe'.format(r.id))
+              for r in records if is_in_frame(r.seq, False))
     SeqIO.write(result, outfile, 'fasta')
 
 
