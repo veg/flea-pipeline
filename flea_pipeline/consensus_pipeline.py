@@ -4,7 +4,6 @@ import random
 from collections import defaultdict
 import warnings
 import shutil
-import csv
 
 import numpy as np
 from ruffus import Pipeline, suffix, formatter, add_inputs
@@ -187,7 +186,7 @@ def rifraf(infiles, outfile, directory, name):
         'julia': globals_.config.get('Paths', 'julia'),
         'script': globals_.config.get('Paths', 'consensus_script'),
         'options': options,
-        'prefix': '{}_consensus_'.format(timepoint),
+        'prefix': '{}_consensus|'.format(timepoint),
         'phred_cap': globals_.config.get('Parameters', 'phred_cap'),
         'maxiters': globals_.config.get('Parameters', 'consensus_max_iters'),
         'seq_errors': globals_.config.get('Parameters', 'seq_errors'),
@@ -196,7 +195,6 @@ def rifraf(infiles, outfile, directory, name):
         }
     cmd = ('{julia} {options} {script} '
            ' --prefix \'{prefix}\''
-           ' --keep-unique-name'
            ' --phred-cap \'{phred_cap}\''
            ' --max-iters \'{maxiters}\''
            ' \'{seq_errors}\' \'{pattern}\' {outfile}').format(**kwargs)
@@ -211,7 +209,7 @@ def rifraf_with_ref(infiles, outfile, directory, name):
     # TODO: if reference is this cluster's HQCS, done
     dbfile = os.path.join(pipeline_dir, "inframe_db.fasta")
     refmapfile = os.path.join(pipeline_dir,
-                              "{}.db-map.txt".format(prefix))
+                              "{}.db-map.renamed.txt".format(name))
 
     # FIXME: do not get timepoint from sequence id
     seq_id = next(SeqIO.parse(infiles[0], get_format(infiles[0]))).id
@@ -302,8 +300,7 @@ def inframe_nostops(infile, outfile):
     """Filter to in-frame sequences with no stop codons"""
     format = get_format(infile)
     records = SeqIO.parse(infile, format)
-    result = (new_record_id(r, '{}_inframe'.format(r.id))
-              for r in records if is_in_frame(r.seq, False))
+    result = (r for r in records if is_in_frame(r.seq, False))
     SeqIO.write(result, outfile, 'fasta')
 
 
@@ -382,6 +379,21 @@ def db_search_fasta(infiles, outfile):
 @report_wrapper
 def db_search_ids(infiles, outfile):
     return db_search_helper(infiles, outfile, fasta=False)
+
+
+@must_work()
+@report_wrapper
+def ids_to_filenames(infile, outfile):
+    """map file contains sequence names, but rifraf needs the path to the fasta file.
+
+    eg: 'V06_consensus|filename' becomes just 'filename'
+
+    """
+    with open(infile) as f:
+        items = list(line.split() for line in f.read().strip().split('\n'))
+    result = list((seq.split('|')[1], ref) for seq, ref in items)
+    with open(outfile, 'w') as f:
+        f.write('\n'.join('\t'.join(line) for line in result))
 
 
 @must_work()
@@ -512,6 +524,11 @@ def make_consensus_pipeline(name=None):
                                             output=".db-map.txt",
                                             add_inputs=add_inputs(copy_inframe_db_task))
 
+        ids_to_filenames_task = pipeline.transform(ids_to_filenames,
+                                                   input=db_search_task,
+                                                   filter=suffix('.txt'),
+                                                   output=".renamed.txt")
+
         # TODO: use consensus without reference as init
         rifraf_with_ref_task = pipeline.collate(rifraf_with_ref,
                                                 input=sample_clusters_task,
@@ -519,7 +536,7 @@ def make_consensus_pipeline(name=None):
                                                 output=os.path.join(pipeline_dir, '{NAME[0]}.hqcs.fastq'),
                                                 extras=['{path[0]}',
                                                         '{NAME[0]}'])
-        rifraf_with_ref_task.follows(db_search_task)
+        rifraf_with_ref_task.follows(ids_to_filenames_task)
 
         previous_task = rifraf_with_ref_task
     else:
