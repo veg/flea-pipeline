@@ -49,8 +49,10 @@ def cluster(infile, outfile):
 @must_work(maybe=True)
 @report_wrapper
 def mafft(infile, outfile):
+    binary = globals_.config.get('Paths', 'mafft')
     stderr = '{}.stderr'.format(outfile)
-    cmd = '/usr/local/bin/mafft-fftns --ep 0.5 --quiet --preservecase {}'.format(infile)
+    cmd = ('{mafft} --ep 0.5 --quiet --preservecase '
+           ' {infile}'.format(mafft=binary, infile=infile))
     result = run_command(cmd, infile, outfile, stdout=outfile,
                          stderr=stderr, name="mafft")
     return result
