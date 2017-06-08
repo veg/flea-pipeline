@@ -204,6 +204,14 @@ def rifraf(infiles, outfile, directory, name):
                        ppn=ppn, name="rifraf-{}".format(name))
 
 
+@must_work()
+@report_wrapper
+def initial_consensus(infile, outfile):
+    records = SeqIO.parse(infile, 'fastq')
+    result = (new_record_id(r, r.id.split('|')[1]) for r in records)
+    SeqIO.write(result, outfile, 'fasta')
+
+
 @must_work(illegal_chars='-', min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
 @report_wrapper
 def rifraf_with_ref(infiles, outfile, directory, name):
@@ -216,6 +224,11 @@ def rifraf_with_ref(infiles, outfile, directory, name):
     # FIXME: do not get timepoint from sequence id
     seq_id = next(SeqIO.parse(infiles[0], get_format(infiles[0]))).id
     timepoint = seq_id.split("_ccs_")[0]
+
+    # FIXME: not `timepoint`
+    basename = os.path.basename(os.path.dirname(infiles[0])).split('.')[0]
+    initialfile = os.path.join(pipeline_dir,
+                               '{}.consensus.initial.fasta'.format(basename))
 
     ppn = 1 if globals_.run_locally else globals_.ppn
     options = ''
@@ -230,6 +243,7 @@ def rifraf_with_ref(infiles, outfile, directory, name):
         'maxiters': globals_.config.get('Parameters', 'consensus_max_iters'),
         'dbfile': dbfile,
         'refmapfile': refmapfile,
+        'initialfile': initialfile,
         'ref_errors': globals_.config.get('Parameters', 'ref_errors'),
         'seq_errors': globals_.config.get('Parameters', 'seq_errors'),
         'pattern': os.path.join(directory, "*.sampled.fastq"),
@@ -240,6 +254,7 @@ def rifraf_with_ref(infiles, outfile, directory, name):
            ' --keep-unique-name'
            ' --phred-cap \'{phred_cap}\''
            ' --max-iters \'{maxiters}\''
+           ' --consensuses \'{initialfile}\''
            ' --reference \'{dbfile}\''
            ' --reference-map \'{refmapfile}\''
            ' --ref-errors \'{ref_errors}\''
@@ -491,6 +506,11 @@ def make_consensus_pipeline(name=None):
                                        extras=['{path[0]}',
                                                '{NAME[0]}'])
 
+        initial_consensus_task = pipeline.transform(initial_consensus,
+                                                    input=rifraf_task,
+                                                    filter=suffix('.fastq'),
+                                                    output='.initial.fasta')
+
         consensus_quality_task = pipeline.transform(filter_quality,
                                                     input=rifraf_task,
                                                     filter=suffix('.fastq'),
@@ -538,7 +558,8 @@ def make_consensus_pipeline(name=None):
                                                 output=os.path.join(pipeline_dir, '{NAME[0]}.hqcs.fastq'),
                                                 extras=['{path[0]}',
                                                         '{NAME[0]}'])
-        rifraf_with_ref_task.follows(ids_to_filenames_task)
+        rifraf_with_ref_task.follows(ids_to_filenames_task,
+                                     initial_consensus_task)
 
         previous_task = rifraf_with_ref_task
     else:
