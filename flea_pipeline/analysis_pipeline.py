@@ -131,13 +131,13 @@ def run_fasttree(infile, outfile):
 @report_wrapper
 def reroot_at_mrca(infile, outfile):
     tree = next(Phylo.parse(infile, 'newick'))
-    clade = next(tree.find_clades('mrca'))
+    clade = next(tree.find_clades('MRCA'))
     tree.root_with_outgroup(clade)
 
     # also rename for HyPhy
     for i, node in enumerate(tree.get_nonterminals()):
         node.confidence = None
-        if node.name != 'mrca':
+        if node.name != 'MRCA':
             node.name = "ancestor_{}".format(i)
     Phylo.write([tree], outfile, 'newick')
 
@@ -163,7 +163,7 @@ def mrca(infile, copynumber_file, outfile):
         'outfile': outfile,
         'copynumber_file': copynumber_file,
         'ambifile': "{}.ambi".format(outfile),
-        'id_str': 'mrca',
+        'id_str': 'MRCA',
         }
     cmd = ("{python} {script} --keep-gaps --codon -o {outfile}"
            " --copynumbers {copynumber_file} --ambifile {ambifile}"
@@ -500,7 +500,10 @@ def make_analysis_pipeline(name=None):
                                                 output=os.path.join(pipeline_dir, 'region_coords.json'))
 
         evo_history_task = pipeline.merge(evo_history,
-                                          input=[replace_stop_codons_task, dates_task, region_coords_task, mrca_task],
+                                          input=[replace_stop_codons_task,
+                                                 dates_task,
+                                                 region_coords_task,
+                                                 mrca_task],
                                           output=os.path.join(pipeline_dir, 'rates_pheno.tsv'))
 
         rates_pheno_json_task = pipeline.transform(rates_pheno_json,
