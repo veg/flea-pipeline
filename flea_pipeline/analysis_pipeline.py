@@ -30,7 +30,7 @@ from flea_pipeline.util import grouper
 from flea_pipeline.util import column_count, prob, js_divergence
 from flea_pipeline.util import translate_helper
 
-from flea_pipeline.consensus_pipeline import cat_wrapper_ids
+from flea_pipeline.consensus_pipeline import cat_wrapper, cat_wrapper_ids
 from flea_pipeline.alignment_pipeline import mafft
 
 
@@ -50,7 +50,7 @@ def hyphy_call(script_file, infiles, outfiles,  name, args):
     infile = os.path.join(globals_.job_script_dir, '{}.stdin'.format(name))
     with open(infile, 'w') as handle:
         handle.write(in_str)
-    cmd = '{} {} < {}'.format(globals_.config.get('Paths', 'hyphy'), script_file, infile)
+    cmd = 'LD_LIBRARY_PATH=/opt/gcc/6.1.0/lib64/:$LD_LIBRARY_PATH {} {} < {}'.format(globals_.config.get('Paths', 'hyphy'), script_file, infile)
     return run_command(cmd, infiles, outfiles, name=name,
                       walltime=globals_.config.getint('Jobs', 'hyphy_walltime'))
 
@@ -133,7 +133,21 @@ def reroot_at_mrca(infile, outfile):
     tree = next(Phylo.parse(infile, 'newick'))
     clade = next(tree.find_clades('mrca'))
     tree.root_with_outgroup(clade)
+
+    # also rename for HyPhy
+    for i, node in enumerate(tree.get_nonterminals()):
+        node.confidence = None
+        if node.name != 'mrca':
+            node.name = "ancestor_{}".format(i)
     Phylo.write([tree], outfile, 'newick')
+
+
+@must_work()
+@report_wrapper
+def reconstruct_ancestors(infiles, outfile):
+    params = infiles + [outfile] + ['MG94CUSTOMCF3X4', '1', '010010']
+    return hyphy_call(hyphy_script("reconstructAncestors.bf"),
+                      infiles, outfile, 'ancestor-reconstruction', params)
 
 
 def mrca(infile, copynumber_file, outfile):
@@ -179,12 +193,20 @@ def make_sequences_json(infiles, outfile):
     alignment_file, mrca_file, coords_file = infiles
     result = {}
 
-    # add observed sequences
+    # add sequences
+    # TODO: check if MRCA differs from our inferred MRCA
     for r in SeqIO.parse(alignment_file, "fasta"):
-        date = name_to_date(r.name)
-        if date not in result:
-            result[date] = {"Observed": {}}
-        result[date]["Observed"][r.id] = str(r.seq)
+        if r.name == "Node0":
+            r.name = 'MRCA'
+        if 'ancestor' in r.name or r.name == 'MRCA':
+            if 'Ancestors' not in result:
+                result['Ancestors'] = {}
+            result['Ancestors'][r.id] = str(r.seq)
+        else:
+            date = name_to_date(r.name)
+            if date not in result:
+                result[date] = {}
+            result[date][r.id] = str(r.seq)
 
     # add MRCA
     mrca = read_single_record(mrca_file, 'fasta', True)
@@ -355,6 +377,17 @@ def run_fubar(infiles, outfile):
     return hyphy_call(hyphy_script('runFUBAR.bf'), infiles, outfile, 'fubar', params)
 
 
+@must_work()
+@report_wrapper
+def mafft_add_new(infiles, outfile):
+    existing_file, new_file = infiles
+    binary = globals_.config.get('Paths', 'mafft')
+    stderr = '{}.stderr'.format(outfile)
+    cmd = ('{} --add {} --ep 0.5 --quiet --preservecase {} > {} '
+           '2>{}'.format(binary, exsting_file, new_file, outfile, stderr))
+    return run_command(cmd, infiles, outfiles=outfile)
+
+
 def make_analysis_pipeline(name=None):
     """Factory for the analysis sub-pipeline."""
     if name is None:
@@ -370,7 +403,7 @@ def make_analysis_pipeline(name=None):
     add_copynumbers_task = pipeline.merge(add_copynumbers,
                                           name="add_copynumbers",
                                           input=None,
-                                          output=os.path.join(pipeline_dir, "msa.copynumber-ids.fasta"))
+                                          output=os.path.join(pipeline_dir, "msa.with_cn.fasta"))
 
     copynumber_json_task = pipeline.merge(copynumber_json,
                                           input=None,
@@ -384,7 +417,7 @@ def make_analysis_pipeline(name=None):
     add_mrca_task = pipeline.merge(cat_wrapper_ids,
                                    name='add_mrca',
                                    input=[mrca_task, add_copynumbers_task],
-                                   output=os.path.join(pipeline_dir, 'msa.with-mrca.fasta'))
+                                   output=os.path.join(pipeline_dir, 'msa.with_cn.with_mrca.fasta'))
 
     fasttree_task = pipeline.transform(run_fasttree,
                                        input=add_mrca_task,
@@ -418,10 +451,6 @@ def make_analysis_pipeline(name=None):
                                                filter=formatter(),
                                                output=os.path.join(pipeline_dir, 'coordinates.json'))
 
-    sequences_json_task = pipeline.merge(make_sequences_json,
-                                         input=[translate_task, translate_mrca_task, make_coordinates_json],
-                                         output=os.path.join(pipeline_dir, 'sequences.json'))
-
     js_divergence_task = pipeline.transform(js_divergence_json,
                                             input=translate_task,
                                             filter=formatter(),
@@ -433,10 +462,35 @@ def make_analysis_pipeline(name=None):
                                     output=os.path.join(pipeline_dir, 'merged.dates'))
 
     if globals_.config.getboolean('Tasks', 'hyphy_analysis'):
+        reconstruct_ancestors_task = pipeline.merge(reconstruct_ancestors,
+                                                    input=[add_mrca_task, reroot_task],
+                                                    output=os.path.join(pipeline_dir, 'ancestors.fasta'))
+
+        translate_ancestors_task = pipeline.transform(gapped_translate_wrapper,
+                                                      name='translate_ancestors',
+                                                      input=reconstruct_ancestors_task,
+                                                      filter=suffix('.fasta'),
+                                                      output='.translated.fasta')
+
+        cat_translated_task = pipeline.merge(cat_wrapper,
+                                             name='cat_translated',
+                                             input=[translate_task,
+                                                    translate_mrca_task,
+                                                    translate_ancestors_task],
+                                             output=os.path.join(pipeline_dir,
+                                                                 ('msa.with_cn.with_mrca'
+                                                                  '.with_ancestors.translated.fasta')))
+
+        sequences_json_task = pipeline.merge(make_sequences_json,
+                                             input=[cat_translated_task,
+                                                    translate_mrca_task,
+                                                    make_coordinates_json],
+                                             output=os.path.join(pipeline_dir, 'sequences.json'))
+
         replace_stop_codons_task = pipeline.transform(replace_stop_codons_file,
                                                       input=add_copynumbers_task,
                                                       filter=suffix('.fasta'),
-                                                      output='.no-stops.fasta')
+                                                      output='.no_stops.fasta')
 
         region_coords_task = pipeline.transform(compute_hxb2_regions,
                                                 input=mrca_task,
@@ -455,6 +509,12 @@ def make_analysis_pipeline(name=None):
         fubar_task = pipeline.merge(run_fubar,
                                     input=[replace_stop_codons_task, dates_task, mrca_task],
                                     output=os.path.join(pipeline_dir, 'rates.json'))
+    else:
+        sequences_json_task = pipeline.merge(make_sequences_json,
+                                             input=[translate_task,
+                                                    translate_mrca_task,
+                                                    make_coordinates_json],
+                                             output=os.path.join(pipeline_dir, 'sequences.json'))
 
     pipeline.set_head_tasks([add_copynumbers_task, copynumber_json_task, mrca_task, dates_json_task])
     for task in pipeline.head_tasks:
