@@ -391,6 +391,29 @@ def mafft_add_new(infiles, outfile):
     return run_command(cmd, infiles, outfiles=outfile)
 
 
+@must_work()
+@report_wrapper
+def calc_dmatrix(infile, outfile):
+    cmd = ("{usearch} -calc_distmx {infile} -distmxout {outfile}"
+           " -format tabbed_pairs")
+    cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
+                     infile=infile, outfile=outfile)
+    return run_command(cmd, infile, outfiles=outfile, name='calc-dmatrix')
+
+
+@must_work()
+@report_wrapper
+def mds_clustering(infile, outfile):
+    kwargs = {
+        'python': globals_.config.get('Paths', 'python'),
+        'script': os.path.join(globals_.script_dir, "mds_cluster.py"),
+        'infile': infile,
+        'outfile': outfile,
+        }
+    cmd = ("{python} {script} {infile} {outfile}".format(**kwargs))
+    return run_command(cmd, infile, outfile, name="mds-cluster")
+
+
 def make_analysis_pipeline(name=None):
     """Factory for the analysis sub-pipeline."""
     if name is None:
@@ -464,6 +487,16 @@ def make_analysis_pipeline(name=None):
                                     filter=formatter(),
                                     output=os.path.join(pipeline_dir, 'merged.dates'))
 
+    dmatrix_task = pipeline.transform(calc_dmatrix,
+                                      input=add_copynumbers_task,
+                                      filter=formatter(),
+                                      output=os.path.join(pipeline_dir, 'dmatrix.txt'))
+
+    mds_task = pipeline.transform(mds_clustering,
+                                  input=dmatrix_task,
+                                  filter=formatter(),
+                                  output=os.path.join(pipeline_dir, 'mds.json'))
+
     if globals_.config.getboolean('Tasks', 'hyphy_analysis'):
         reconstruct_ancestors_task = pipeline.merge(reconstruct_ancestors,
                                                     input=[add_mrca_task, reroot_task],
@@ -499,21 +532,22 @@ def make_analysis_pipeline(name=None):
                                                 filter=formatter(),
                                                 output=os.path.join(pipeline_dir, 'region_coords.json'))
 
-        evo_history_task = pipeline.merge(evo_history,
-                                          input=[replace_stop_codons_task,
-                                                 dates_task,
-                                                 region_coords_task,
-                                                 mrca_task],
-                                          output=os.path.join(pipeline_dir, 'rates_pheno.tsv'))
+        if globals_.config.getboolean('Tasks', 'hyphy_analysis_slow'):
+            evo_history_task = pipeline.merge(evo_history,
+                                              input=[replace_stop_codons_task,
+                                                     dates_task,
+                                                     region_coords_task,
+                                                     mrca_task],
+                                              output=os.path.join(pipeline_dir, 'rates_pheno.tsv'))
 
-        rates_pheno_json_task = pipeline.transform(rates_pheno_json,
-                                                   input=evo_history_task,
-                                                   filter=suffix('.tsv'),
-                                                   output='.json')
+            rates_pheno_json_task = pipeline.transform(rates_pheno_json,
+                                                       input=evo_history_task,
+                                                       filter=suffix('.tsv'),
+                                                       output='.json')
 
-        fubar_task = pipeline.merge(run_fubar,
-                                    input=[replace_stop_codons_task, dates_task, mrca_task],
-                                    output=os.path.join(pipeline_dir, 'rates.json'))
+            fubar_task = pipeline.merge(run_fubar,
+                                        input=[replace_stop_codons_task, dates_task, mrca_task],
+                                        output=os.path.join(pipeline_dir, 'rates.json'))
     else:
         sequences_json_task = pipeline.merge(make_sequences_json,
                                              input=[translate_task,

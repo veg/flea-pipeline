@@ -4,10 +4,9 @@
 #
 #    pip-compile --output-file requirements.txt requirements.in
 #
-
 biopython==1.65
 cycler==0.10.0            # via matplotlib
-Cython==0.23.1
+cython==0.23.1
 docopt==0.6.2
 drmaa==0.7.6
 matplotlib==1.5.1
@@ -16,4 +15,5 @@ pyparsing==2.1.1          # via matplotlib
 python-dateutil==2.5.3    # via matplotlib
 pytz==2016.4              # via matplotlib
 ruffus==2.6.3
+scikit-learn==0.18.2
 six==1.10.0               # via cycler, python-dateutil
