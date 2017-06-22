@@ -145,7 +145,10 @@ def reroot_at_mrca(infile, outfile):
 @must_work()
 @report_wrapper
 def reconstruct_ancestors(infiles, outfile):
-    params = infiles + [outfile] + ['MG94CUSTOMCF3X4', '1', '010010']
+    # # codon parameters
+    # params = infiles + [outfile] + ['MG94CUSTOMCF3X4', '1', '010010']
+    # nucleotide parameters
+    params = infiles + [outfile] + ['HKY85', '1']
     return hyphy_call(hyphy_script("reconstructAncestors.bf"),
                       infiles, outfile, 'ancestor-reconstruction', params)
 
