@@ -410,7 +410,7 @@ def mds_clustering(infile, outfile):
         'infile': infile,
         'outfile': outfile,
         }
-    cmd = ("{python} {script} {infile} {outfile}".format(**kwargs))
+    cmd = ("{python} {script} --flip {infile} {outfile}".format(**kwargs))
     return run_command(cmd, infile, outfile, name="mds-cluster")
 
 

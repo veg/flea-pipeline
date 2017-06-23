@@ -3,10 +3,11 @@
 MDS clustering based on precomputed distances.
 
 Usage:
-  mds_cluster.py <infile> <outfile>
+  mds_cluster.py [options] <infile> <outfile>
   mds_cluster.py -h | --help
 
 Options:
+  --flip        Flip values.
   -h --help     Show this screen.
 
 """
@@ -35,8 +36,11 @@ def parse_file(infile):
     return labels, X
 
 
-def mds_cluster_file(infile, outfile):
+def mds_cluster_file(infile, outfile, do_flip):
     labels, X = parse_file(infile)
+    if do_flip:
+        # max value should correspond to totally similar items
+        X = X.max() - X
     model = MDS(dissimilarity='precomputed')
     coords = model.fit_transform(X)
     data = dict((label, list(c)) for label, c in zip(labels, coords))
@@ -48,4 +52,5 @@ if __name__ == '__main__':
     args = docopt(__doc__)
     infile = args["<infile>"]
     outfile = args["<outfile>"]
-    mds_cluster_file(infile, outfile)
+    do_flip = args['--flip']
+    mds_cluster_file(infile, outfile, do_flip)
