@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-MDS clustering based on precomputed distances.
+Embedding based on precomputed distances.
 
 Usage:
   mds_cluster.py [options] <infile> <outfile>
@@ -8,6 +8,7 @@ Usage:
 
 Options:
   --flip        Flip values.
+  --n-jobs <N>  Number of jobs [default: 1]
   -h --help     Show this screen.
 
 """
@@ -36,12 +37,13 @@ def parse_file(infile):
     return labels, X
 
 
-def mds_cluster_file(infile, outfile, do_flip):
+def mds_cluster_file(infile, outfile, do_flip, n_jobs):
     labels, X = parse_file(infile)
     if do_flip:
         # max value should correspond to totally similar items
         X = X.max() - X
-    model = MDS(dissimilarity='precomputed')
+    model = MDS(dissimilarity='precomputed',
+                n_init=16, max_iter=1000, n_jobs=n_jobs)
     coords = model.fit_transform(X)
     data = dict((label, list(c)) for label, c in zip(labels, coords))
     with open(outfile, 'w') as f:
@@ -53,4 +55,5 @@ if __name__ == '__main__':
     infile = args["<infile>"]
     outfile = args["<outfile>"]
     do_flip = args['--flip']
-    mds_cluster_file(infile, outfile, do_flip)
+    n_jobs = int(args['--n-jobs'])
+    mds_cluster_file(infile, outfile, do_flip, n_jobs)

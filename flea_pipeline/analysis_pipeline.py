@@ -403,15 +403,19 @@ def calc_dmatrix(infile, outfile):
 
 @must_work()
 @report_wrapper
-def mds_clustering(infile, outfile):
+def manifold_embedding(infile, outfile):
+    ppn = 1 if globals_.run_locally else globals_.ppn
     kwargs = {
         'python': globals_.config.get('Paths', 'python'),
-        'script': os.path.join(globals_.script_dir, "mds_cluster.py"),
+        'script': os.path.join(globals_.script_dir, "manifold_embed.py"),
+        "n_jobs": ppn,
         'infile': infile,
         'outfile': outfile,
         }
-    cmd = ("{python} {script} --flip {infile} {outfile}".format(**kwargs))
-    return run_command(cmd, infile, outfile, name="mds-cluster")
+    cmd = ("{python} {script} --n-jobs {n_jobs} "
+           " --flip {infile} {outfile}".format(**kwargs))
+    return run_command(cmd, infile, outfile, ppn=ppn,
+                       name="manifold-embed")
 
 
 def make_analysis_pipeline(name=None):
@@ -492,10 +496,10 @@ def make_analysis_pipeline(name=None):
                                       filter=formatter(),
                                       output=os.path.join(pipeline_dir, 'dmatrix.txt'))
 
-    mds_task = pipeline.transform(mds_clustering,
-                                  input=dmatrix_task,
-                                  filter=formatter(),
-                                  output=os.path.join(pipeline_dir, 'mds.json'))
+    manifold_task = pipeline.transform(manifold_embedding,
+                                       input=dmatrix_task,
+                                       filter=formatter(),
+                                       output=os.path.join(pipeline_dir, 'manifold.json'))
 
     if globals_.config.getboolean('Tasks', 'hyphy_analysis'):
         reconstruct_ancestors_task = pipeline.merge(reconstruct_ancestors,
