@@ -195,6 +195,7 @@ def compute_mrca(infiles, outfile):
 def make_sequences_json(infiles, outfile):
     alignment_file, mrca_file, coords_file = infiles
     result = {}
+    observed = {}
 
     # add sequences
     # TODO: check if MRCA differs from our inferred MRCA
@@ -207,9 +208,10 @@ def make_sequences_json(infiles, outfile):
             result['Ancestors'][r.id] = str(r.seq)
         else:
             date = name_to_date(r.name)
-            if date not in result:
-                result[date] = {}
-            result[date][r.id] = str(r.seq)
+            if date not in observed:
+                observed[date] = {}
+            observed[date][r.id] = str(r.seq)
+    result['Observed'] = observed
 
     # add MRCA
     mrca = read_single_record(mrca_file, 'fasta', True)
@@ -234,9 +236,7 @@ def make_sequences_json(infiles, outfile):
 def make_trees_json(infile, outfile):
     with open(infile) as handle:
         newick_string = handle.read()
-    result = {'Combined':
-                  {'all':
-                       {'Maximum Likelihood': newick_string}}}
+    result = {'tree': newick_string}}}
     with open(outfile, 'w') as handle:
         json.dump(result, handle, separators=(",\n", ":"))
 
