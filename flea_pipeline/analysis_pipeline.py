@@ -236,7 +236,7 @@ def make_sequences_json(infiles, outfile):
 def make_trees_json(infile, outfile):
     with open(infile) as handle:
         newick_string = handle.read()
-    result = {'tree': newick_string}}}
+    result = {'tree': newick_string}
     with open(outfile, 'w') as handle:
         json.dump(result, handle, separators=(",\n", ":"))
 
