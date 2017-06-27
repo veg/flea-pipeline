@@ -22,6 +22,13 @@ def min_len():
     return 3 * int(min_len_fraction * len(read_single_record(ref_file, 'fasta').seq))
 
 
+def max_len():
+    max_len_fraction = 1.0 + (1.0 - globals_.config.getfloat('Parameters', 'min_sequence_length'))
+    ref_file = globals_.config.get('Parameters', 'reference_protein')
+    # multiple by 3 because reference sequence is translated.
+    return 3 * int(max_len_fraction * len(read_single_record(ref_file, 'fasta').seq))
+
+
 @must_work()
 @report_wrapper
 def filter_fastq(infile, outfile):
@@ -126,9 +133,10 @@ def trim_terminal_gaps(infile, outfile):
 @must_work()
 @report_wrapper
 def filter_length(infile, outfile):
-    cutoff = min_len()
+    low = min_len()
+    high = max_len()
     records = SeqIO.parse(infile, 'fastq')
-    result = (r for r in records if len(r.seq) >= cutoff)
+    result = (r for r in records if low <= len(r.seq) <= high)
     SeqIO.write(result, outfile, 'fastq')
 
 

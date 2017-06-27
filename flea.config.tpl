@@ -29,7 +29,7 @@ reference_db: ${reference_dir}/reference.database.fasta
 contaminants_db: ${reference_dir}/contaminants.database.fasta
 
 # quality pipeline
-min_sequence_length: .8
+min_sequence_length: .7
 max_err_rate: 0.01
 qmax: 55
 max_accepts: 300
