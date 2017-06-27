@@ -42,15 +42,20 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
     with open(copynumbers_file, 'r') as handle:
         parsed = csv.reader(handle, delimiter='\t')
         cns = list(sorted(parsed))
-        copynumber_array = np.array(list(int(n) for elem, n in cns))
+        copynumber_array = np.array(list(int(n) for _, n in cns))
+        copynumber_ids = np.array(list(elem for elem, _ in cns))
 
     #Getting and sorting HQCS seqs
     hqcs = list(sorted(SeqIO.parse(filename, format), key=lambda r: r.id))
     hqcs_array = np.array(list(list(str(rec.seq)) for rec in hqcs))
     hqcs_labels = np.array(list(rec.id.split("_")[0] for rec in hqcs))
+    hqcs_ids = np.array(list(rec.id for rec in hqcs))
 
     if len(copynumber_array) != len(hqcs_array):
         raise Exception('number of HQCS sequence does not match copy numbers')
+
+    if not np.all(copynumber_ids == hqcs_ids):
+        raise Exception('HQCS ids do not match copy number ids')
 
     # import ccs seqs
     ccs = list(SeqIO.parse(filename_ccs, format))
@@ -70,7 +75,6 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
     for label in labels:
         bools = hqcs_labels == label
         hqcs_counts = column_count(hqcs_array[bools], keys, weights=copynumber_array[bools])
-
         ccs_counts = column_count(ccs_array[ccs_labels == label], keys)
 
         np.savetxt(out("hqcs_counts_{}.csv".format(label)), hqcs_counts.T,
@@ -103,13 +107,16 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
         plt.savefig(out("freq_agreement_no_x_{}.png".format(label)))
         plt.close()
 
-        divs = np.array(list(js_divergence(a, b)
-                             for a, b in zip(hqcs_no_x_freqs.T, ccs_no_x_freqs.T)))
+        js_divs = np.array(list(js_divergence(a, b)
+                                for a, b in zip(hqcs_no_x_freqs.T, ccs_no_x_freqs.T)))
+        # save divergences
+        np.savetxt(out("js_divergence_{}.csv".format(label)), js_divs,
+                   fmt="%u", delimiter=",")
 
-        bad_columns = np.where(divs > cutoff)[0]
+        bad_columns = np.where(js_divs > cutoff)[0]
 
         # plot column-wise JS divergence
-        plt.plot(divs)
+        plt.plot(js_divs)
         if len(bad_columns) > 0:
             plt.axhline(y=cutoff, color='r')
         plt.xlabel('column')
@@ -119,10 +126,9 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
         plt.close()
 
         # compute bad locations which have extreme JS divergence
-
         if len(bad_columns) > 0:
             cols = [bad_columns,
-                    divs[bad_columns],
+                    js_divs[bad_columns],
                     keys[hqcs_no_x_freqs[:, bad_columns].argmax(axis=0)],
                     hqcs_no_x_freqs[:, bad_columns].max(axis=0),
                     keys[ccs_no_x_freqs[:, bad_columns].argmax(axis=0)],

@@ -102,7 +102,7 @@ def combine_pairs(infiles, outfiles, outdir):
 @must_work()
 @report_wrapper
 def codon_align(infile, outfile):
-    cmd = "{} -R -a codon {} {}".format(
+    cmd = "{} -a codon {} {}".format(
         globals_.config.get('Paths', 'bealign'), infile, outfile)
     stdout = os.path.join(globals_.job_script_dir, '{}.stdout'.format(outfile))
     stderr = os.path.join(globals_.job_script_dir, '{}.stderr'.format(outfile))
@@ -240,6 +240,7 @@ def make_diagnosis_pipeline(name=None):
                                                    filter=suffix('.bam'),
                                                    output='.fasta')
 
+    # FIXME: summarize number of removed insertions
     insert_gaps_task = pipeline.transform(insert_gaps_wrapper,
                                           name='insert_gaps',
                                           input=convert_bam_to_fasta_task,

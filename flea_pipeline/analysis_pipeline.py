@@ -246,6 +246,7 @@ def make_trees_json(infile, outfile):
 def make_coordinates_json(infile, outfile):
     # FIXME: degap MRCA before running?
     # FIXME: split up so mafft can run remotely
+    # FIXME: run mafft with --add
     combined = os.path.join(pipeline_dir, 'combined.fasta')
     aligned = os.path.join(pipeline_dir, 'combined.aligned.fasta')
     cat_files([infile, globals_.config.get('Parameters', 'reference_protein')], combined)
