@@ -38,6 +38,8 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
 
     format = "fasta"
 
+    plt.style.use('seaborn-deep')
+
     #Getting and sorting copynumbers
     with open(copynumbers_file, 'r') as handle:
         parsed = csv.reader(handle, delimiter='\t')
@@ -72,10 +74,15 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
     # Relying on "_" to separate timepoint ID
     labels = sorted(set(hqcs_labels))
 
-    for label in labels:
-        bools = hqcs_labels == label
-        hqcs_counts = column_count(hqcs_array[bools], keys, weights=copynumber_array[bools])
-        ccs_counts = column_count(ccs_array[ccs_labels == label], keys)
+    for label in labels + ['overall']:
+        if label == 'overall':
+            hqcs_bools = np.array([True] * len(hqcs_array))
+            ccs_bools = np.array([True] * len(ccs_array))
+        else:
+            hqcs_bools = hqcs_labels == label
+            ccs_bools = ccs_labels == label
+        hqcs_counts = column_count(hqcs_array[hqcs_bools], keys, weights=copynumber_array[hqcs_bools])
+        ccs_counts = column_count(ccs_array[ccs_bools], keys)
 
         np.savetxt(out("hqcs_counts_{}.csv".format(label)), hqcs_counts.T,
                    fmt="%1.1u", delimiter=",", header=",".join(aas))
@@ -89,7 +96,7 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
         plt.xlabel('HQCS frequency')
         plt.ylabel('CCS frequency')
         plt.title(label)
-        plt.savefig(out("freq_agreement_{}.png".format(label)))
+        plt.savefig(out("freq_agreement_{}.pdf".format(label)))
         plt.close()
 
         # strip X and normalize
@@ -104,40 +111,44 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
         plt.xlabel('HQCS frequency')
         plt.ylabel('CCS frequency')
         plt.title("{} no X".format(label))
-        plt.savefig(out("freq_agreement_no_x_{}.png".format(label)))
+        plt.savefig(out("freq_agreement_no_x_{}.pdf".format(label)))
         plt.close()
 
         js_divs = np.array(list(js_divergence(a, b)
                                 for a, b in zip(hqcs_no_x_freqs.T, ccs_no_x_freqs.T)))
-        # save divergences
-        np.savetxt(out("js_divergence_{}.csv".format(label)), js_divs,
-                   fmt="%u", delimiter=",")
 
         bad_columns = np.where(js_divs > cutoff)[0]
 
         # plot column-wise JS divergence
+        plt.figure(figsize=(8, 5))
         plt.plot(js_divs)
         if len(bad_columns) > 0:
             plt.axhline(y=cutoff, color='r')
         plt.xlabel('column')
         plt.ylabel('JS divergence')
-        plt.title("{} no X".format(label))
-        plt.savefig(out("js_div_no_x_{}.png".format(label)))
+        plt.savefig(out("js_div_vals_{}.pdf".format(label)), )
         plt.close()
 
-        # compute bad locations which have extreme JS divergence
-        if len(bad_columns) > 0:
-            cols = [bad_columns,
-                    js_divs[bad_columns],
-                    keys[hqcs_no_x_freqs[:, bad_columns].argmax(axis=0)],
-                    hqcs_no_x_freqs[:, bad_columns].max(axis=0),
-                    keys[ccs_no_x_freqs[:, bad_columns].argmax(axis=0)],
-                    ccs_no_x_freqs[:, bad_columns].max(axis=0)]
-            rows = list(zip(*cols))
-            with open(out("bad_sites_{}.csv".format(label)), "w") as f:
-                writer = csv.writer(f)
-                writer.writerow(['column', 'js_divergence', 'hqcs_aa', 'hqcs_freq', 'ccs_aa', 'ccs_freq'])
-                writer.writerows(rows)
+        # plot histogram of JS divergence
+        plt.figure(figsize=(8, 5))
+        plt.hist(js_divs)
+        plt.xlabel('JS divergence')
+        plt.ylabel('number of columns')
+        plt.savefig(out("js_div_hist_{}.pdf".format(label)))
+        plt.close()
+
+        # compute JS divergence and frequence of top base
+        cols = [np.arange(len(js_divs)),
+                js_divs,
+                keys[hqcs_no_x_freqs.argmax(axis=0)],
+                hqcs_no_x_freqs.max(axis=0),
+                keys[ccs_no_x_freqs.argmax(axis=0)],
+                ccs_no_x_freqs.max(axis=0)]
+        rows = list(zip(*cols))
+        with open(out("js_divergence_{}.csv".format(label)), "w") as f:
+            writer = csv.writer(f)
+            writer.writerow(['column', 'js_divergence', 'hqcs_aa', 'hqcs_freq', 'ccs_aa', 'ccs_freq'])
+            writer.writerows(rows)
 
 
 if __name__ == "__main__":

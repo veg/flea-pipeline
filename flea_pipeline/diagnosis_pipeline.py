@@ -118,6 +118,12 @@ def convert_bam_to_fasta(infile, outfile):
     return run_command(cmd, infile, outfiles=outfile, stdout=stdout, stderr=stderr)
 
 
+@must_work()
+@report_wrapper
+def convert_fastq_to_fasta(infile, outfile):
+    SeqIO.write(SeqIO.parse(infile, 'fastq'), outfile, 'fasta')
+
+
 def handle_gap_codon(codon):
     codon = ''.join(codon)
     if '-' in codon and codon != '---':
@@ -183,6 +189,23 @@ def diagnose_alignment(infiles, outfiles):
                       name="diagnose-alignment")
 
 
+@must_work()
+@report_wrapper
+def smd_metrics(infiles, outfile):
+    true_fasta, fasta, cn = infiles
+    kwargs = {
+        'julia': globals_.config.get('Paths', 'julia'),
+        'script': os.path.join(globals_.script_dir, "smd_metrics.jl"),
+        'true_fasta_file': true_fasta,
+        'inf_fasta_file': fasta,
+        'copynumbers': cn,
+        'outfile': outfile,
+        }
+    cmd = ('{julia} {script} {true_fasta_file} {inf_fasta_file}'
+           ' {copynumbers} {outfile}').format(**kwargs)
+    return run_command(cmd, infiles, outfile, name="smd_metrics")
+
+
 def make_diagnosis_pipeline(name=None):
     if name is None:
         name = "diagnosis_pipeline"
@@ -209,8 +232,25 @@ def make_diagnosis_pipeline(name=None):
                                                              name='degap_backtranslated',
                                                              input=indict['codon_alignment.fasta'],
                                                              filter=formatter('.*/(?P<LABEL>.+).fasta'),
-                                                             output=os.path.join(pipeline_dir, '{LABEL[0]}.degapped.fasta'))
+                                                             output=os.path.join(pipeline_dir,
+                                                                                 '{LABEL[0]}.degapped.fasta'))
     degap_backtranslated_alignment_task.follows(make_inputs_task)
+
+    ccs_to_fasta_task = pipeline.transform(convert_fastq_to_fasta,
+                                           name='ccs_to_fasta',
+                                           input=indict['ccs_sequences'],
+                                           filter=suffix('.fastq'),
+                                           output='.fasta')
+
+    cat_ccs_task = pipeline.merge(cat_wrapper_ids,
+                                  input=ccs_to_fasta_task,
+                                  output=os.path.join(pipeline_dir, 'ccs.fasta'))
+
+    smd_task = pipeline.merge(smd_metrics,
+                              input=[cat_ccs_task,
+                                     degap_backtranslated_alignment_task,
+                                     indict['copynumbers.tsv']],
+                              output=os.path.join(pipeline_dir, 'smd.tsv'))
 
     hqcs_ccs_pairs_task = pipeline.transform(hqcs_ccs_pairs,
                                              input=indict['ccs_sequences'],
@@ -265,10 +305,9 @@ def make_diagnosis_pipeline(name=None):
                                             filter=suffix('.fasta'),
                                             output='.translated.fasta')
 
-    diagnosis_output = list(os.path.join(pipeline_dir,
-                                         'results',
-                                         "freq_agreement_no_x_{}.png".format(t.label))
-                            for t in globals_.timepoints)
+    diagnosis_output = os.path.join(pipeline_dir,
+                                    'results',
+                                    "js_divergence_overall.csv")
     diagnose_alignment_task = pipeline.transform(diagnose_alignment,
                                                  name='diagnose_alignment',
                                                  input=translate_ccs_task,

@@ -41,35 +41,37 @@ function run_metric(true_seqs, true_cn, inf_seqs, inf_cn)
     return distmat, emd1, emd2, emd3
 end
 
-function run_all(timepoint, true_fasta_file, inf_fasta_file, inf_cn_file)
+function run_all(true_fasta_file, inf_fasta_file, inf_cn_file)
     true_df = read_files(true_fasta_file)
     inf_df = read_files(inf_fasta_file, inf_cn_file)
+    results = []
+    for timepoint in unique(true_df[:timepoint])
+        true_df_sub = true_df[true_df[:timepoint] .== timepoint, :]
+        true_seqs = true_df_sub[:sequence]
+        true_cn = convert(Array{Float64}, true_df_sub[:copynumber])
 
-    true_df_sub = true_df[true_df[:timepoint] .== timepoint, :]
-    true_seqs = true_df_sub[:sequence]
-    true_cn = convert(Array{Float64}, true_df_sub[:copynumber])
-    
-    inf_df_sub = inf_df[inf_df[:timepoint] .== timepoint, :]
-    inf_seqs = inf_df_sub[:sequence]
-    inf_cn = convert(Array{Float64}, inf_df_sub[:copynumber])
+        inf_df_sub = inf_df[inf_df[:timepoint] .== timepoint, :]
+        inf_seqs = inf_df_sub[:sequence]
+        inf_cn = convert(Array{Float64}, inf_df_sub[:copynumber])
 
-    distmatrix, smd1, smd2, smd3 = run_metric(true_seqs, true_cn, inf_seqs, inf_cn)
-    return [timepoint, smd1, smd2, smd3]
+        distmatrix, smd1, smd2, smd3 = run_metric(true_seqs, true_cn, inf_seqs, inf_cn)
+        push!(results, [timepoint, smd1, smd2, smd3])
+    end
+    return results
 end
 
 function main()
-    timepoint = Symbol(ARGS[1])
-    true_fasta_file = ARGS[2]
-    inf_fasta_file = ARGS[3]
-    inf_cn_file = ARGS[4]
-    outfile = ARGS[5]
+    true_fasta_file = ARGS[1]
+    inf_fasta_file = ARGS[2]
+    inf_cn_file = ARGS[3]
+    outfile = ARGS[4]
 
-    result = run_all(timepoint, true_fasta_file, inf_fasta_file, inf_cn_file)
+    results = run_all(true_fasta_file, inf_fasta_file, inf_cn_file)
     final_df = DataFrame()
-    final_df[:timepoint] = [result[1]]
-    final_df[:smd] = [result[2]]
-    final_df[:false_positive] = [result[3]]
-    final_df[:false_negative] = [result[4]]
+    final_df[:timepoint] = [r[1] for r in results]
+    final_df[:smd] = [r[2] for r in results]
+    final_df[:false_positive] = [r[3] for r in results]
+    final_df[:false_negative] = [r[4] for r in results]
 
     writetable(outfile, final_df)
 end
