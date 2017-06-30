@@ -1,14 +1,16 @@
 /* UNCOMMENT FOR CODON MODEL */
 /* LoadFunctionLibrary("chooseGeneticCode", {"0" : "Universal"}); */
 
-fprintf(stdout, "MSA file:");
+fprintf(stdout, "\nMSA file:");
 fscanf(stdin, "String", _msaFile);
 
-fprintf(stdout, "Tree file:");
+fprintf(stdout, "\nTree file:");
 fscanf(stdin, "String", _treeFile);
 
-fprintf(stdout, "Result file:");
+fprintf(stdout, "\nResult file:");
 fscanf(stdin, "String", _ancestorsFile);
+
+fprintf(stdout, "\nRunning\n");
 
 DataSet msa = ReadDataFile(_msaFile);
 

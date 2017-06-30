@@ -39,6 +39,8 @@ fscanf  (stdin, "String", _ancestralTo);
 fprintf(stdout,"\nEnter the sequences file:");
 fscanf  (stdin, "String", _sequenceInfo);
 
+fprintf(stdout,"\nRunning\n");
+
 DataSet allData  = ReadDataFile (_nucSequences);
 HarvestFrequencies (positionalFrequencies, allData,3,1,1);
 _blStencils = ComputeScalingStencils(0);

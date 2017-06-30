@@ -7,20 +7,22 @@ LoadFunctionLibrary ("ReadDelimitedFiles");
 LoadFunctionLibrary ("tools.bf");
 
 /* important -- specify as absolute paths, otherwise FUBAR breaks */
-fprintf(stdout,"\Enter the alignment file:");
+fprintf(stdout,"\nEnter the alignment file:");
 fscanf  (stdin, "String", _nucSequences);
 
-fprintf(stdout,"\Enter the dates file:");
+fprintf(stdout,"\nEnter the dates file:");
 fscanf  (stdin, "String", _dates);
 
-fprintf(stdout,"\Enter the mrca file:");
+fprintf(stdout,"\nEnter the mrca file:");
 fscanf  (stdin, "String", _mrca_from);
 
-fprintf(stdout,"\Enter the working directory:");
+fprintf(stdout,"\nEnter the working directory:");
 fscanf  (stdin, "String", _fubar_directory);
 
-fprintf(stdout,"\Enter the rates output file:");
+fprintf(stdout,"\nEnter the rates output file:");
 fscanf  (stdin, "String", _rates_to);
+
+fprintf(stdout,"\nRunning\n");
 
 _c2p_mapping = defineCodonToAA ();
 COUNT_GAPS_IN_FREQUENCIES = 0;

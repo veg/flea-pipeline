@@ -11,6 +11,7 @@ import json
 from datetime import datetime
 import shutil
 import csv
+import zipfile
 
 from ruffus import Pipeline, formatter, suffix
 
@@ -419,6 +420,17 @@ def manifold_embedding(infile, outfile):
                        name="manifold-embed")
 
 
+@must_work()
+@report_wrapper
+def make_zip_file(infiles, outfile):
+    zf = zipfile.ZipFile(outfile, mode='w')
+    try:
+        for f in infiles:
+            zf.write(f)
+    finally:
+        zf.close()
+
+
 def make_analysis_pipeline(name=None):
     """Factory for the analysis sub-pipeline."""
     if name is None:
@@ -559,6 +571,15 @@ def make_analysis_pipeline(name=None):
                                                     translate_mrca_task,
                                                     make_coordinates_json],
                                              output=os.path.join(pipeline_dir, 'sequences.json'))
+
+    zip_inputs = [add_copynumbers_task,
+                  mrca_task,
+                  reroot_task]
+    if globals_.config.getboolean('Tasks', 'hyphy_analysis'):
+        zip_inputs.append(reconstruct_ancestors_task)
+    zip_results_task = pipeline.merge(make_zip_file,
+                                      input=zip_inputs,
+                                      output=os.path.join(pipeline_dir, 'results.zip'))
 
     pipeline.set_head_tasks([add_copynumbers_task, copynumber_json_task, mrca_task, dates_json_task])
     for task in pipeline.head_tasks:
