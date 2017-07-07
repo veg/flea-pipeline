@@ -7,6 +7,7 @@ copynumber file.
 """
 
 import os
+import glob
 import json
 from datetime import datetime
 import shutil
@@ -378,6 +379,10 @@ def rates_pheno_json(infile, outfile):
 @must_work()
 @report_wrapper
 def run_fubar(infiles, outfile):
+    # remove intermediate results
+    intermediate_files = glob.glob(os.path.join(pipeline_dir, "*.nex*")):
+    for f in intermediate_files:
+        os.unlink(f)
     params = infiles + ["{}/".format(pipeline_dir), outfile]
     return hyphy_call(hyphy_script('runFUBAR.bf'), infiles, outfile, 'fubar', params)
 

@@ -10,7 +10,7 @@ bam2msa: /opt/python-3.4.3/bin/bam2msa
 mafft: mafft
 usearch: usearch8
 hyphy: HYPHYMP
-FastTree: FastTree
+fasttree: FastTree
 
 [Jobs]
 queue: fast
@@ -48,16 +48,16 @@ min_length_ratio: 0.995
 min_n_clusters: 3
 
 use_rifraf: True
+
+# only used if use_rifraf is false
+do_shift_correction: True
+
 # if using rifraf
 consensus_multiprocess: False
 consensus_max_iters: 10
 seq_errors: "1,3,3,0,0"
 ref_errors: "8,0.1,0.1,1,1"
 phred_cap: 30
-
-# only used if use_rifraf is false
-do_shift_correction: True
-
 hqcs_max_err_rate: 1e-6
 hqcs_max_base_err_rate: 1e-3
 
