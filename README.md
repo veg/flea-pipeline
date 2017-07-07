@@ -13,7 +13,7 @@ because BioExt needs NumPy to be present.
 - usearch (version >= 8.1.1861)
 - mafft
 - Julia
-- pbs-drmaa
+- pbs-drmaa (https://sourceforge.net/projects/pbspro-drmaa/)
 
 To install Julia dependencies:
 
