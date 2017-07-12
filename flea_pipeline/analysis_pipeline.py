@@ -380,7 +380,7 @@ def rates_pheno_json(infile, outfile):
 @report_wrapper
 def run_fubar(infiles, outfile):
     # remove intermediate results
-    intermediate_files = glob.glob(os.path.join(pipeline_dir, "*.nex*")):
+    intermediate_files = glob.glob(os.path.join(pipeline_dir, "*.nex*"))
     for f in intermediate_files:
         os.unlink(f)
     params = infiles + ["{}/".format(pipeline_dir), outfile]
