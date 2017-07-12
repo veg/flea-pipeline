@@ -241,6 +241,7 @@ def make_diagnosis_pipeline(name=None):
                                            input=indict['ccs_sequences'],
                                            filter=suffix('.fastq'),
                                            output='.fasta')
+    ccs_to_fasta_task.follows(make_inputs_task)
 
     cat_ccs_task = pipeline.merge(cat_wrapper_ids,
                                   input=ccs_to_fasta_task,
