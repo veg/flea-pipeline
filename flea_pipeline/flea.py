@@ -69,6 +69,9 @@ data_dir = os.path.dirname(os.path.abspath(options.input_file))
 script_dir = os.path.abspath(os.path.split(__file__)[0])
 output_dir = os.path.abspath(os.path.normpath(options.output_dir))
 
+if not os.path.exists(output_dir):
+    os.mkdir(output_dir)
+
 # standard python logger which can be synchronised across concurrent
 # Ruffus tasks
 if options.log_file is None:
@@ -144,8 +147,6 @@ globals_.label_to_date = label_to_date
 
 if not os.path.exists(globals_.job_script_dir):
     os.mkdir(globals_.job_script_dir)
-if not os.path.exists(globals_.output_dir):
-    os.mkdir(globals_.output_dir)
 if not os.path.exists(globals_.results_dir):
     os.mkdir(globals_.results_dir)
 
