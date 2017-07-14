@@ -5,4 +5,5 @@ matplotlib
 numpy
 ruffus
 drmaa
+scipy
 scikit-learn

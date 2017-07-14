@@ -16,4 +16,5 @@ python-dateutil==2.5.3    # via matplotlib
 pytz==2016.4              # via matplotlib
 ruffus==2.6.3
 scikit-learn==0.18.2
+scipy==0.19.1
 six==1.10.0               # via cycler, python-dateutil
