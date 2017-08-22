@@ -115,6 +115,8 @@ def decode(obs, transmat, emissionprob, startprob):
         trellis[:, t] = logprobs.max(axis=0)
         backpt[:, t] = logprobs.argmax(axis=0)
     result = [trellis[:, -1].argmax()]
+    # this looks wrong, but it is right.
+    # backpt[i] contains the state at i-1, so i ranges from n to 1.
     for i in range(len(obs)-1, 0, -1):
         result.append(backpt[result[-1], i])
     result = result[::-1]

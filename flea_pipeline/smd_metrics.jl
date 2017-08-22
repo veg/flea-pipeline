@@ -19,8 +19,10 @@ function read_files(fasta_file, copynumber_file="")
         template_df
     end
 
-    if !all(completecases(fulldf))
-        error("sequences do not match copynumbers")
+    incomplete = ~completecases(fulldf)
+    if any(incomplete)
+        missing_seqnames = fulldf[incomplete, :name]
+        error("different sequences in fasta and copynumber files: $(missing_seqnames)")
     end
 
     nrows, _ = size(fulldf)

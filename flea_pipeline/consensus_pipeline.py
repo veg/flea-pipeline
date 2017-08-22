@@ -464,6 +464,16 @@ def copy_file(infile, outfile):
     shutil.copyfile(infile, outfile)
 
 
+def check_copynumbers():
+    hqcsfile = os.path.join(pipeline_dir, 'hqcs.fasta')
+    cnfile = os.path.join(pipeline_dir, 'copynumbers.tsv')
+    hqcs_ids = set(r.name for r in SeqIO.parse(hqcsfile, 'fasta'))
+    cn_lines = open(cnfile).read().strip().split('\n')
+    cn_ids = set(line.split()[0] for line in cn_lines)
+    if hqcs_ids != cn_ids:
+        raise Exception('hqcs and copynumber sequence names do not match')
+
+
 def make_consensus_pipeline(name=None):
     if name is None:
         name = "consensus_pipeline"
@@ -672,6 +682,7 @@ def make_consensus_pipeline(name=None):
                                             name='cat_copynumbers',
                                             input=compute_copynumbers_task,
                                             output=os.path.join(pipeline_dir, 'copynumbers.tsv'))
+    merge_copynumbers_task.posttask(check_copynumbers)
 
     pipeline.set_head_tasks([make_inputs_task])
     pipeline.set_tail_tasks([cat_all_hqcs_task, merge_copynumbers_task])
