@@ -81,8 +81,15 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
         else:
             hqcs_bools = hqcs_labels == label
             ccs_bools = ccs_labels == label
+
         hqcs_counts = column_count(hqcs_array[hqcs_bools], keys, weights=copynumber_array[hqcs_bools])
         ccs_counts = column_count(ccs_array[ccs_bools], keys)
+
+        if np.all(hqcs_counts.sum(axis=0) != copynumber_array[hqcs_bools].sum()):
+            raise Exception('bad hqcs counts')
+
+        if np.all(ccs_counts.sum(axis=0) != ccs_bools.sum()):
+            raise Exception('bad ccs counts')
 
         np.savetxt(out("hqcs_counts_{}.csv".format(label)), hqcs_counts.T,
                    fmt="%1.1u", delimiter=",", header=",".join(aas))
