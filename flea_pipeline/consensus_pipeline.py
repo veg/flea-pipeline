@@ -80,21 +80,23 @@ def consensus(infile, outfile):
                        run_locally=True)
 
 
-def shift_correction_helper(infile, outfile, keep, correct, name=None):
+def shift_correction_helper(infile, outfile, keep=False, deletion_strategy=None, name=None):
     if name is None:
         name = 'shift_correction_helper'
+    if deletion_strategy is None:
+        deletion_strategy = 'n'
     python = globals_.config.get('Paths', 'python')
     script = os.path.join(globals_.script_dir, 'correct_shifts.py')
     keep_option = "--keep" if keep else ""
-    correct_option = "--correct-dels" if correct else ""
     calns_file = "{}.calns".format(infile)
     discard_file = "{}.discarded".format(outfile)
     summary_file = "{}.summary".format(outfile)
-    cmd = ("{python} {script} {keep_option} {correct_option} --calns={calns_file}"
+    cmd = ("{python} {script} {keep_option} --del-strategy={deletion_strategy}"
+           " --calns={calns_file}"
            " --discard={discard_file} --summary={summary_file}"
            " {infile} {outfile}")
     cmd = cmd.format(python=python, script=script, keep_option=keep_option,
-                     correct_option=correct_option,
+                     deletion_strategy=deletion_strategy,
                      calns_file=calns_file, discard_file=discard_file,
                      summary_file=summary_file, infile=infile, outfile=outfile)
     return run_command(cmd, infile, outfile, name=name)
@@ -103,7 +105,8 @@ def shift_correction_helper(infile, outfile, keep, correct, name=None):
 @must_work(in_frame=True, illegal_chars='-')
 @report_wrapper
 def shift_correction(infile, outfile):
-    return shift_correction_helper(infile, outfile, keep=False, correct=True,
+    return shift_correction_helper(infile, outfile, keep=False,
+                                   deletion_strategy='n',
                                    name="shift-correction")
 
 

@@ -13,13 +13,13 @@ Usage:
   correct_shifts.py -h
 
 Options:
-  --keep            Do not discard sequences, even with bad inserts [default: True]
-  --correct-dels    Correct single deletion w/ reference base [default: True]
-  --calns=<FILE>    File with run-length encoded alignment summaries
-  --discard=<FILE>  File to print discarded alignments
-  --summary=<FILE>  File to print correction summaries
-  -v --verbose      Print summary [default: False]
-  -h --help         Show this screen
+  --keep              Do not discard sequences, even with bad inserts [default: True]
+  --del-strategy=<X>  Correct single deletions [default: 'reference']
+  --calns=<FILE>      File with run-length encoded alignment summaries
+  --discard=<FILE>    File to print discarded alignments
+  --summary=<FILE>    File to print correction summaries
+  -v --verbose        Print summary [default: False]
+  -h --help           Show this screen
 
 """
 
@@ -118,18 +118,20 @@ def alignment_slice(caln):
     return start, stop
 
 
-def correct_shifts(seq, ref, caln=None, gap_char=None, keep=True, correct=True):
+def correct_shifts(seq, ref, caln=None, gap_char=None, keep=True, deletion_strategy=None):
     """Correct frameshifts relative to a reference.
 
     keep: bool
         If True, keep sequences even if they could not be totally
         corrected. Otherwise, discard the whole sequence.
 
-    correct: bool
-        If True, replace single delections with the base from the
-        reference.
-
     """
+    if deletion_strategy is None:
+        deletion_strategy = 'reference'
+    strategies = ['reference', 'n', 'discard']
+    if deletion_strategy not in strategies:
+        raise Exception('unknown strategy')
+
     # FIXME: make this codon-aware
     if gap_char is None:
         gap_char = '-'
@@ -154,8 +156,14 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=True, correct=True):
             if len(subseq) % 3 == 0:
                 index += len(subseq)
                 continue  # keep codon deletions
-            elif len(subseq) == 1 and correct:
-                result.append(subref)
+            elif len(subseq) == 1:
+                if deletion_strategy == 'reference':
+                    result.append(subref)
+                elif deletion_strategy == 'n':
+                    result.append('N')
+                else:
+                    # give up
+                    return '', index
             elif keep:
                 result.append('N' * (len(subseq) % 3))
             else:
@@ -184,7 +192,7 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=True, correct=True):
 
 def correct_shifts_fasta(infile, outfile, calnfile=None,
                          discardfile=None,
-                         alphabet=None, keep=True, correct=True):
+                         alphabet=None, keep=True, deletion_strategy=None):
     """Correct all the pairs in a fasta file.
 
     Returns (n_seqs, n_fixed)
@@ -197,7 +205,7 @@ def correct_shifts_fasta(infile, outfile, calnfile=None,
         with open(calnfile) as handle:
             calns = handle.read().strip().split()
     results = list(correct_shifts(seq.seq, ref.seq, caln,
-                                  keep=keep, correct=correct)
+                                  keep=keep, deletion_strategy=deletion_strategy)
                    for (seq, ref), caln in zip(pairs, calns))
 
     keep = list(new_record_seq_str(seq, result)
@@ -230,11 +238,11 @@ if __name__ == "__main__":
     infile = args["<infile>"]
     outfile = args["<outfile>"]
     keep = args['--keep']
-    correct = args['--correct-dels']
+    deletion_strategy = args['--del-strategy']
     calnfile = args['--calns']
     discardfile = args['--discard']
     n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, discardfile=discardfile,
                                            calnfile=calnfile, keep=keep,
-                                           correct=correct)
+                                           deletion_strategy=deletion_strategy)
     if args['--summary']:
         write_correction_result(n_seqs, n_fixed, args['--summary'])
