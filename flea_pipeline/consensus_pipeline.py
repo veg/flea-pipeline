@@ -76,7 +76,8 @@ def consensus(infile, outfile):
         }
     cmd = ("{python} {script} -o {outfile} --ambifile {ambifile}"
            " --id {id_str} {infile}".format(**kwargs))
-    return run_command(cmd, infile, outfile, name="cluster-consensus")
+    return run_command(cmd, infile, outfile, name="cluster-consensus",
+                       run_locally=True)
 
 
 def shift_correction_helper(infile, outfile, keep, correct, name=None):

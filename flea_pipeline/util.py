@@ -32,13 +32,15 @@ def format_walltime(seconds):
 
 
 def run_command(cmd, infiles, outfiles, ppn=1, walltime=None,
-               stdout=None, stderr=None, name=None):
+               stdout=None, stderr=None, name=None, run_locally=None):
     """Run a command using ruffus's run_job.
 
     Command may be submitted to the cluster or run locally, depending
     on the value of `globals_.run_locally`.
 
     """
+    if run_locally is None:
+        run_locally = globals_.run_locally
     from uuid import uuid4  # because this hangs on silverback compute nodes
     if walltime is None:
         walltime = globals_.config.getint('Jobs', 'walltime')
@@ -60,7 +62,7 @@ def run_command(cmd, infiles, outfiles, ppn=1, walltime=None,
                                          job_name=name,
                                          logger=globals_.logger,
                                          drmaa_session = globals_.drmaa_session,
-                                         run_locally=globals_.run_locally,
+                                         run_locally=run_locally,
                                          job_other_options=job_other_options,
                                          job_script_directory=globals_.job_script_dir)
         success = True
