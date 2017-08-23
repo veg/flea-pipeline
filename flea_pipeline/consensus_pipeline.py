@@ -84,11 +84,12 @@ def consensus(infile, outfile):
                        run_locally=True)
 
 
-def shift_correction_helper(infile, outfile, keep=False, deletion_strategy=None, name=None):
+def shift_correction_helper(infile, outfile, keep=False,
+                            deletion_strategy=None, name=None):
     if name is None:
         name = 'shift_correction_helper'
     if deletion_strategy is None:
-        deletion_strategy = 'n'
+        deletion_strategy = 'reference'
     python = globals_.config.get('Paths', 'python')
     script = os.path.join(globals_.script_dir, 'correct_shifts.py')
     keep_option = "--keep" if keep else ""
@@ -103,14 +104,15 @@ def shift_correction_helper(infile, outfile, keep=False, deletion_strategy=None,
                      deletion_strategy=deletion_strategy,
                      calns_file=calns_file, discard_file=discard_file,
                      summary_file=summary_file, infile=infile, outfile=outfile)
-    return run_command(cmd, infile, outfile, name=name)
+    # same about run_locally here too
+    return run_command(cmd, infile, outfile, name=name, run_locally=True)
 
 
 @must_work(in_frame=True, illegal_chars='-')
 @report_wrapper
 def shift_correction(infile, outfile):
     return shift_correction_helper(infile, outfile, keep=False,
-                                   deletion_strategy='n',
+                                   deletion_strategy='reference',
                                    name="shift-correction")
 
 
@@ -348,13 +350,13 @@ def outframe(infile, outfile):
     SeqIO.write(result, outfile, 'fasta')
 
 
-#@must_work(min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
+@must_work(min_seqs=int(globals_.config.get('Parameters', 'min_n_clusters')))
 @must_work()
 @report_wrapper
 def filter_unique(infile, outfile):
     cmd = ('{usearch} -derep_fulllength {infile} -fastaout {outfile}'.format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
-    return run_command(cmd, infile, outfiles=outfile, name='filter-unique')
+    return run_command(cmd, infile, outfiles=outfile, name='filter-unique', run_locally=True)
 
 
 def pause_for_editing_inframe_db():
