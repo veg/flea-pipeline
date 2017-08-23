@@ -53,8 +53,11 @@ def mafft(infile, outfile):
     stderr = '{}.stderr'.format(outfile)
     cmd = ('{mafft} --ep 0.5 --quiet --preservecase '
            ' {infile}'.format(mafft=binary, infile=infile))
+    # TODO: we run this locally because otherwise it spawns thousands
+    # of jobs and some get deferred forever. Instead make a single job
+    # per timepoint.
     result = run_command(cmd, infile, outfile, stdout=outfile,
-                         stderr=stderr, name="mafft")
+                         stderr=stderr, run_locally=True, name="mafft")
     return result
 
 
@@ -76,6 +79,7 @@ def consensus(infile, outfile):
         }
     cmd = ("{python} {script} -o {outfile} --ambifile {ambifile}"
            " --id {id_str} {infile}".format(**kwargs))
+    # TODO: this is also run locally for the same reason.
     return run_command(cmd, infile, outfile, name="cluster-consensus",
                        run_locally=True)
 
