@@ -170,7 +170,7 @@ def mrca(infile, copynumber_file, outfile):
     cmd = ("{python} {script} --keep-gaps --codon -o {outfile}"
            " --copynumbers {copynumber_file} --ambifile {ambifile}"
            " --id {id_str} {infile}".format(**kwargs))
-    return run_command(cmd, infile, outfile, name="mrca")
+    return run_command(cmd, infile, outfile, name="mrca", run_locally=True)
 
 
 @must_work(in_frame=True)
@@ -554,7 +554,7 @@ def make_analysis_pipeline(name=None):
                                                 filter=formatter(),
                                                 output=os.path.join(pipeline_dir, 'region_coords.json'))
 
-        if globals_.config.getboolean('Tasks', 'hyphy_analysis_slow'):
+        if globals_.config.getboolean('Tasks', 'evo_history'):
             evo_history_task = pipeline.merge(evo_history,
                                               input=[replace_stop_codons_task,
                                                      dates_task,
@@ -567,6 +567,7 @@ def make_analysis_pipeline(name=None):
                                                        filter=suffix('.tsv'),
                                                        output='.json')
 
+        if globals_.config.getboolean('Tasks', 'fubar'):
             fubar_task = pipeline.merge(run_fubar,
                                         input=[replace_stop_codons_task, dates_task, mrca_task],
                                         output=os.path.join(pipeline_dir, 'rates.json'))

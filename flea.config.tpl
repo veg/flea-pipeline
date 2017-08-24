@@ -81,14 +81,17 @@ pause_for_inframe_db: False
 # pause to correct codon alignment
 pause_after_codon_alignment: False
 
-# generate full CCS alignment
-align_ccs: False
-
 # run analysis subpipeline
 analysis: True
 
-# if True, run evolutionary history and FUBAR scripts
+# hyphy scripts
 hyphy_analysis: True
+evo_hisotry: True
+fubar: True
+
+# full CCS alignment, SMD metrics
+diagnose: False
+
 
 [Misc]
 # when a task gets re-run

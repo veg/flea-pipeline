@@ -434,7 +434,7 @@ def compute_copynumbers(infiles, outfile):
     identity = globals_.config.get('Parameters', 'copynumber_identity')
     maxqt = globals_.config.get('Parameters', 'cn_max_length_ratio')
     result = usearch_hqcs_ids(ccsfile, pairfile, hqcsfile,
-                              identity, maxqt, name='compute-copynumber')
+                              identity, maxqt, name='usearch-copynumber')
     with open(pairfile) as f:
         pairs = list(line.strip().split("\t") for line in f.readlines())
     hqcs_counts = defaultdict(lambda: 0)
@@ -471,13 +471,37 @@ def copy_file(infile, outfile):
 
 
 def check_copynumbers():
-    hqcsfile = os.path.join(pipeline_dir, 'hqcs.fasta')
-    cnfile = os.path.join(pipeline_dir, 'copynumbers.tsv')
+    hqcsfile = os.path.join(pipeline_dir, 'hqcs.nonempty.fasta')
+    cnfile = os.path.join(pipeline_dir, 'copynumbers.nonempty.tsv')
     hqcs_ids = set(r.name for r in SeqIO.parse(hqcsfile, 'fasta'))
     cn_lines = open(cnfile).read().strip().split('\n')
     cn_ids = set(line.split()[0] for line in cn_lines)
     if hqcs_ids != cn_ids:
         raise Exception('hqcs and copynumber sequence names do not match')
+
+
+def remove_empty_helper():
+    cnfile = os.path.join(pipeline_dir, 'copynumbers.tsv')
+    cn_lines = open(cnfile).read().strip().split('\n')
+    cn_pairs = list(line.split() for line in cn_lines)
+    cn_dict = dict((k, int(v)) for k, v in cn_pairs)
+
+    hqcsfile = os.path.join(pipeline_dir, 'hqcs.fasta')
+    hqcs_recs = (r for r in SeqIO.parse(hqcsfile, 'fasta') if cn_dict[r.id] > 0)
+    final_cns = dict((k, v) for k, v in cn_dict.items() if v > 0)
+    return hqcs_recs, final_cns
+
+
+def remove_empty_hqcs(infile, outfile):
+    result, _ = remove_empty_helper()
+    SeqIO.write(result, outfile, 'fasta')
+
+
+def remove_empty_cns(infile, outfile):
+    _, cn_dict = remove_empty_helper()
+    with open(outfile, 'w') as handle:
+        for id_, count in cn_dict.items():
+            handle.write('{}\t{}\n'.format(id_, count))
 
 
 def make_consensus_pipeline(name=None):
@@ -688,9 +712,23 @@ def make_consensus_pipeline(name=None):
                                             name='cat_copynumbers',
                                             input=compute_copynumbers_task,
                                             output=os.path.join(pipeline_dir, 'copynumbers.tsv'))
-    merge_copynumbers_task.posttask(check_copynumbers)
+
+    remove_empty_hqcs_task = pipeline.transform(remove_empty_hqcs,
+                                                name='final_hqcs',
+                                                input=cat_all_hqcs_task,
+                                                filter=suffix('.fasta'),
+                                                output='.nonempty.fasta')
+    remove_empty_hqcs_task.follows(merge_copynumbers_task)
+
+    remove_empty_cn_task = pipeline.transform(remove_empty_cns,
+                                              name='final_copynumbers',
+                                              input=merge_copynumbers_task,
+                                              filter=suffix('.tsv'),
+                                              output='.nonempty.tsv')
+    remove_empty_hqcs_task.follows(cat_all_hqcs_task)
+    remove_empty_cn_task.posttask(check_copynumbers)
 
     pipeline.set_head_tasks([make_inputs_task])
-    pipeline.set_tail_tasks([cat_all_hqcs_task, merge_copynumbers_task])
+    pipeline.set_tail_tasks([remove_empty_hqcs_task, remove_empty_cn_task])
 
     return pipeline

@@ -220,19 +220,23 @@ if do_full:
     p_cons['make_input'].set_input(input=high_qual_inputs)
 
     p_aln = make_alignment_pipeline()
-    p_aln.set_input(input=p_cons['cat_all_hqcs'])
+    p_aln.set_input(input=p_cons['final_hqcs'])
 
     if globals_.config.getboolean('Tasks', 'analysis'):
         p_anl = make_analysis_pipeline()
         p_anl.set_input(input=[p_aln['backtranslate_alignment'],
-                               p_cons['cat_copynumbers']])
+                               p_cons['final_copynumbers']])
 
-    if globals_.config.getboolean('Tasks', 'align_ccs'):
+    if globals_.config.getboolean('Tasks', 'diagnose'):
         p_diag = make_diagnosis_pipeline()
         p_diag.set_input(input=[p_aln['copy_protein_alignment'],
                                 p_aln['backtranslate_alignment'],
-                                p_cons['cat_copynumbers'],
+                                p_cons['final_copynumbers'],
                                 high_qual_inputs])
+        if globals_.config.getboolean('Tasks', 'analysis'):
+            # make diagnosis follow analysis, if both are running
+            p_diag['diagnose_alignment'].follows(p_anl['make_zip_file'])
+
 else:
     p_pre = make_preanalysis_pipeline()
     if options.analyze is None:
