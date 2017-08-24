@@ -587,8 +587,23 @@ def make_analysis_pipeline(name=None):
                                       input=zip_inputs,
                                       output=os.path.join(pipeline_dir, 'results.zip'))
 
-    pipeline.set_head_tasks([add_copynumbers_task, copynumber_json_task, mrca_task, dates_json_task])
+    pipeline.set_head_tasks([add_copynumbers_task,
+                             copynumber_json_task,
+                             mrca_task,
+                             dates_json_task])
     for task in pipeline.head_tasks:
         task.mkdir(pipeline_dir)
+
+    tail_tasks = [dates_json_task,
+                  copynumber_json_task,
+                  coordinates_json_task,
+                  sequences_json_task,
+                  trees_json_task,
+                  zip_results_task]
+    if globals_.config.getboolean('Tasks', 'evo_history'):
+        tail_tasks.append(rates_pheno_json_task)
+    if globals_.config.getboolean('Tasks', 'fubar'):
+        tail_tasks.append(fubar_task)
+    pipeline.set_tail_tasks(tail_tasks)
 
     return pipeline

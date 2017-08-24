@@ -729,6 +729,7 @@ def make_consensus_pipeline(name=None):
     remove_empty_cn_task.posttask(check_copynumbers)
 
     pipeline.set_head_tasks([make_inputs_task])
-    pipeline.set_tail_tasks([remove_empty_hqcs_task, remove_empty_cn_task])
+    pipeline.set_tail_tasks([remove_empty_hqcs_task,
+                             remove_empty_cn_task])
 
     return pipeline

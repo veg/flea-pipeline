@@ -319,5 +319,6 @@ def make_diagnosis_pipeline(name=None):
     diagnose_alignment_task.mkdir(os.path.join(pipeline_dir, 'results'))
 
     pipeline.set_head_tasks([make_inputs_task])
+    pipeline.set_tail_tasks([smd_task, diagnose_alignment_task])
 
     return pipeline

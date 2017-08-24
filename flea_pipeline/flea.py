@@ -235,7 +235,7 @@ if do_full:
                                 high_qual_inputs])
         if globals_.config.getboolean('Tasks', 'analysis'):
             # make diagnosis follow analysis, if both are running
-            p_diag['diagnose_alignment'].follows(p_anl['make_zip_file'])
+            p_diag['make_inputs'].follows(p_anl)
 
 else:
     p_pre = make_preanalysis_pipeline()

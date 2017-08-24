@@ -135,6 +135,7 @@ def make_alignment_pipeline(name=None):
                                                                           'hqcs.translated.aligned.edited.backtranslated.fasta'))
 
     pipeline.set_head_tasks([make_input_task])
-    pipeline.set_tail_tasks([backtranslate_alignment_task, copy_protein_alignment_task])
+    pipeline.set_tail_tasks([backtranslate_alignment_task,
+                             copy_protein_alignment_task])
 
     return pipeline
