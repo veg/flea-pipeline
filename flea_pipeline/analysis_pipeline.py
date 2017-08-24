@@ -54,7 +54,7 @@ def hyphy_call(script_file, infiles, outfiles,  name, args):
         handle.write(in_str)
     cmd = '{} {} < {}'.format(globals_.config.get('Paths', 'hyphy'), script_file, infile)
     return run_command(cmd, infiles, outfiles, name=name,
-                      walltime=globals_.config.getint('Jobs', 'hyphy_walltime'))
+                      walltime=globals_.config.getint('Jobs', 'long_walltime'))
 
 
 def replace_id(record, id_):

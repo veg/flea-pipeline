@@ -21,6 +21,8 @@ from flea_pipeline.consensus_pipeline import cat_wrapper_ids
 pipeline_dir = os.path.join(globals_.results_dir, "diagnosis")
 
 
+# TODO: rename CCS to QCS
+
 @must_work()
 @report_wrapper
 def make_inputs(infiles, outfiles):
@@ -106,7 +108,9 @@ def codon_align(infile, outfile):
         globals_.config.get('Paths', 'bealign'), infile, outfile)
     stdout = os.path.join(globals_.job_script_dir, '{}.stdout'.format(outfile))
     stderr = os.path.join(globals_.job_script_dir, '{}.stderr'.format(outfile))
-    return run_command(cmd, infile, outfiles=outfile, stdout=stdout, stderr=stderr)
+    # run locally because this spawns so many jobs
+    return run_command(cmd, infile, outfiles=outfile,
+                       stdout=stdout, stderr=stderr, run_locally=True)
 
 
 @must_work()
@@ -203,7 +207,9 @@ def smd_metrics(infiles, outfile):
         }
     cmd = ('{julia} {script} {true_fasta_file} {inf_fasta_file}'
            ' {copynumbers} {outfile}').format(**kwargs)
-    return run_command(cmd, infiles, outfile, name="smd_metrics")
+    walltime = globals_.config.getint('Jobs', 'long_walltime'),
+    return run_command(cmd, infiles, outfile, name="smd_metrics",
+                       walltime=walltime)
 
 
 def make_diagnosis_pipeline(name=None):
