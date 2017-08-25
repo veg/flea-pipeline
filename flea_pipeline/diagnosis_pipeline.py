@@ -76,9 +76,9 @@ def combine_pairs(infiles, outfiles):
     for f in outfiles:
         os.unlink(f)
     qcsfile, hqcsfile, pairfile  = infiles
-    check_suffix(qcsfile, 'qcs.fastq')
+    check_suffix(qcsfile, 'qcs.fasta')
     check_suffix(hqcsfile, '.degapped.fasta')
-    check_suffix(pairfile, '.hqcs-qcs-pairs.txt')
+    check_suffix(pairfile, 'hqcs-qcs-pairs.txt')
 
     with open(pairfile) as handle:
         pairs = list(line.strip().split("\t") for line in handle.readlines())
@@ -90,7 +90,7 @@ def combine_pairs(infiles, outfiles):
         qcs, hqcs = pair
         match_dict[hqcs].append(qcs)
     hqcs_records = list(SeqIO.parse(hqcsfile, "fasta"))
-    qcs_records = list(SeqIO.parse(qcsfile, "fastq"))
+    qcs_records = list(SeqIO.parse(qcsfile, "fasta"))
     hqcs_dict = {r.id : r for r in hqcs_records}
     qcs_dict = {r.id : r for r in qcs_records}
 
