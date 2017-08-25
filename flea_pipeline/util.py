@@ -247,7 +247,7 @@ def check_seq_ids(inputs, output):
     unmatched = a_ids.symmetric_difference(b_ids)
     if unmatched:
         raise Exception('IDs from "{}" do not match "{}".'
-                        ' Unmatched ids: {}'.format(inputs, output, sorted(unmatched)))
+                        ' Number of unmatched ids: {}'.format(inputs, output, len(unmatched)))
 
 
 def check_unique_ids(f):

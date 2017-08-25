@@ -21,14 +21,12 @@ from flea_pipeline.consensus_pipeline import cat_wrapper_ids
 pipeline_dir = os.path.join(globals_.results_dir, "diagnosis")
 
 
-# TODO: rename CCS to QCS
-
 @must_work()
 @report_wrapper
 def make_inputs(infiles, outfiles):
     if not len(infiles) == len(outfiles):
         raise Exception('infiles did not match outfiles')
-    # ensure ccs files match. assumes first part of the name is the label.
+    # ensure qcs files match. assumes first part of the name is the label.
     # FIXME: code duplication
     infiles[3:] = list(sorted(infiles[3:]))
     outfiles[3:] = list(sorted(outfiles[3:]))
@@ -57,16 +55,16 @@ def gapped_translate_wrapper(infile, outfile):
 
 @must_work()
 @report_wrapper
-def hqcs_ccs_pairs(infiles, outfile):
+def hqcs_qcs_pairs(infiles, outfile):
     # FIXME: this does basically the same thing as the copynumber task,
-    # except it allows CCSs to map to HQCSs in different timepoints
+    # except it allows QCSs to map to HQCSs in different timepoints
     infile, dbfile = infiles
-    check_suffix(infile, '.ccs.fastq')
+    check_suffix(infile, 'qcs.fasta')
     check_suffix(dbfile, '.degapped.fasta')
-    identity = globals_.config.get('Parameters', 'ccs_to_hqcs_identity')
-    maxqt = globals_.config.get('Parameters', 'max_ccs_length_ratio')
+    identity = globals_.config.get('Parameters', 'qcs_to_hqcs_identity')
+    maxqt = globals_.config.get('Parameters', 'max_qcs_length_ratio')
     usearch_hqcs_ids(infile, outfile, dbfile, identity,
-                     maxqt, name='hqcs_ccs_ids')
+                     maxqt, name='hqcs_qcs_ids')
 
 
 @must_work()
@@ -75,29 +73,29 @@ def combine_pairs(infiles, outfiles, outdir):
     # FIXME: code duplication with compute_copynumbers
     for f in outfiles:
         os.unlink(f)
-    ccsfile, hqcsfile, pairfile  = infiles
-    check_suffix(ccsfile, '.ccs.fastq')
+    qcsfile, hqcsfile, pairfile  = infiles
+    check_suffix(qcsfile, 'qcs.fastq')
     check_suffix(hqcsfile, '.degapped.fasta')
-    check_suffix(pairfile, '.hqcs-ccs-pairs.txt')
+    check_suffix(pairfile, '.hqcs-qcs-pairs.txt')
 
     with open(pairfile) as handle:
         pairs = list(line.strip().split("\t") for line in handle.readlines())
     match_dict = defaultdict(list)
     for pair in pairs:
         if len(pair) != 2:
-            warnings.warn('CCS {} did not match any HQCS'.format(pair))
+            warnings.warn('QCS {} did not match any HQCS'.format(pair))
             continue
-        ccs, hqcs = pair
-        match_dict[hqcs].append(ccs)
+        qcs, hqcs = pair
+        match_dict[hqcs].append(qcs)
     hqcs_records = list(SeqIO.parse(hqcsfile, "fasta"))
-    ccs_records = list(SeqIO.parse(ccsfile, "fastq"))
+    qcs_records = list(SeqIO.parse(qcsfile, "fastq"))
     hqcs_dict = {r.id : r for r in hqcs_records}
-    ccs_dict = {r.id : r for r in ccs_records}
+    qcs_dict = {r.id : r for r in qcs_records}
 
-    for hqcs_id, ccs_ids in match_dict.items():
-        outfile = os.path.join(outdir, 'combined.{}.unaligned.fasta'.format(hqcs_id))
+    for hqcs_id, qcs_ids in match_dict.items():
+        outfile = os.path.join(outdir, '{}.unaligned.fasta'.format(hqcs_id))
         records = [hqcs_dict[hqcs_id]]
-        records.extend(list(ccs_dict[i] for i in ccs_ids))
+        records.extend(list(qcs_dict[i] for i in qcs_ids))
         SeqIO.write(records, outfile, "fasta")
 
 
@@ -110,7 +108,8 @@ def codon_align(infile, outfile):
     stderr = os.path.join(globals_.job_script_dir, '{}.stderr'.format(outfile))
     # run locally because this spawns so many jobs
     return run_command(cmd, infile, outfiles=outfile,
-                       stdout=stdout, stderr=stderr, run_locally=True)
+                       stdout=stdout, stderr=stderr,
+                       run_locally=True)
 
 
 @must_work()
@@ -173,19 +172,19 @@ def insert_gaps_wrapper(infiles, outfile):
 @must_work()
 @report_wrapper
 def diagnose_alignment(infiles, outfiles):
-    ccs, hqcs, cn = infiles
-    check_suffix(ccs, '.no-partial-gaps.translated.fasta')
+    qcs, hqcs, cn = infiles
+    check_suffix(qcs, '.no-partial-gaps.translated.fasta')
     check_suffix(hqcs, 'protein_alignment.fasta')
     check_suffix(cn, 'copynumbers.tsv')
     kwargs = {
         'python': globals_.config.get('Paths', 'python'),
         'script': os.path.join(globals_.script_dir, "diagnose.py"),
         'hqcs': hqcs,
-        'ccs': ccs,
+        'qcs': qcs,
         'cn': cn,
         'd': os.path.join(pipeline_dir, 'results'),
         }
-    cmd = "{python} {script} {hqcs} {ccs} {cn} {d}".format(**kwargs)
+    cmd = "{python} {script} {hqcs} {qcs} {cn} {d}".format(**kwargs)
     stdout = os.path.join(globals_.job_script_dir, 'diagnose.stdout')
     stderr = os.path.join(globals_.job_script_dir, 'diagnose.stderr')
     return run_command(cmd, infiles, outfiles=outfiles,
@@ -207,7 +206,7 @@ def smd_metrics(infiles, outfile):
         }
     cmd = ('{julia} {script} {true_fasta_file} {inf_fasta_file}'
            ' {copynumbers} {outfile}').format(**kwargs)
-    walltime = globals_.config.getint('Jobs', 'long_walltime'),
+    walltime = globals_.config.getint('Jobs', 'long_walltime')
     return run_command(cmd, infiles, outfile, name="smd_metrics",
                        walltime=walltime)
 
@@ -225,9 +224,9 @@ def make_diagnosis_pipeline(name=None):
     inputs = list(os.path.join(pipeline_dir, f) for f in innames)
     indict = dict((k, v) for k, v in zip(innames, inputs))
 
-    indict['ccs_sequences'] = list(os.path.join(pipeline_dir, '{}.ccs.fastq'.format(t.label))
+    indict['qcs_sequences'] = list(os.path.join(pipeline_dir, '{}.qcs.fastq'.format(t.label))
                                    for t in globals_.timepoints)
-    inputs.extend(indict['ccs_sequences'])
+    inputs.extend(indict['qcs_sequences'])
 
     make_inputs_task = pipeline.merge(make_inputs,
                                       input=None,
@@ -242,40 +241,29 @@ def make_diagnosis_pipeline(name=None):
                                                                                  '{LABEL[0]}.degapped.fasta'))
     degap_backtranslated_alignment_task.follows(make_inputs_task)
 
-    ccs_to_fasta_task = pipeline.transform(convert_fastq_to_fasta,
-                                           name='ccs_to_fasta',
-                                           input=indict['ccs_sequences'],
+    cat_qcs_task = pipeline.merge(cat_wrapper_ids,
+                                  input=indict['qcs_sequences'],
+                                  output=os.path.join(pipeline_dir, 'qcs.fastq'))
+    cat_qcs_task.follows(make_inputs_task)
+
+    qcs_to_fasta_task = pipeline.transform(convert_fastq_to_fasta,
+                                           name='qcs_to_fasta',
+                                           input=cat_qcs_task,
                                            filter=suffix('.fastq'),
                                            output='.fasta')
-    ccs_to_fasta_task.follows(make_inputs_task)
 
-    cat_ccs_task = pipeline.merge(cat_wrapper_ids,
-                                  input=ccs_to_fasta_task,
-                                  output=os.path.join(pipeline_dir, 'ccs.fasta'))
-
-    smd_task = pipeline.merge(smd_metrics,
-                              input=[cat_ccs_task,
-                                     degap_backtranslated_alignment_task,
-                                     indict['copynumbers.tsv']],
-                              output=os.path.join(pipeline_dir, 'smd.tsv'))
-
-    hqcs_ccs_pairs_task = pipeline.transform(hqcs_ccs_pairs,
-                                             input=indict['ccs_sequences'],
-                                             add_inputs=add_inputs(degap_backtranslated_alignment_task),
-                                             filter=formatter('.*/(?P<LABEL>.+).ccs'),
-                                             output=os.path.join(pipeline_dir, '{LABEL[0]}.hqcs-ccs-pairs.txt'))
+    hqcs_qcs_pairs_task = pipeline.merge(hqcs_qcs_pairs,
+                                         input=[qcs_to_fasta_task, degap_backtranslated_alignment_task],
+                                         output=os.path.join(pipeline_dir, 'hqcs-qcs-pairs.txt'))
 
     combine_pairs_task = pipeline.subdivide(combine_pairs,
-                                            input=indict['ccs_sequences'],
-                                            filter=formatter('.*/(?P<LABEL>.+).ccs'),
+                                            input=qcs_to_fasta_task,
                                             add_inputs=add_inputs(degap_backtranslated_alignment_task,
-                                                                  os.path.join(pipeline_dir, '{LABEL[0]}.hqcs-ccs-pairs.txt')),
+                                                                  hqcs_qcs_pairs_task),
+                                            filter=formatter(),
                                             output=os.path.join(pipeline_dir,
-                                                                '{LABEL[0]}.ccs-alignments/combined.*.unaligned.fasta'),
-                                            extras=[os.path.join(pipeline_dir, '{LABEL[0]}.ccs-alignments')])
-    combine_pairs_task.mkdir(hqcs_ccs_pairs_task,
-                             formatter('.*/(?P<LABEL>.+).hqcs-ccs-pairs.txt'),
-                             '{path[0]}/{LABEL[0]}.ccs-alignments')
+                                                                'codon-alignments/*.unaligned.fasta'))
+    combine_pairs_task.mkdir(os.path.join(pipeline_dir, 'codon-alignments'))
 
     codon_align_task = pipeline.transform(codon_align,
                                           input=combine_pairs_task,
@@ -292,13 +280,13 @@ def make_diagnosis_pipeline(name=None):
                                           name='insert_gaps',
                                           input=convert_bam_to_fasta_task,
                                           add_inputs=add_inputs(indict['codon_alignment.fasta']),
-                                          filter=formatter('.*/(?P<LABEL>.+).fasta'),
-                                          output='{path[0]}/{LABEL[0]}.gapped.fasta')
+                                          filter=suffix('.fasta'),
+                                          output='.gapped.fasta')
 
     merge_all_timepoints_task = pipeline.merge(cat_wrapper_ids,
                                                name='merge_all_timepoints',
                                                input=insert_gaps_task,
-                                               output=os.path.join(pipeline_dir, 'ccs.aligned.fasta'))
+                                               output=os.path.join(pipeline_dir, 'qcs.aligned.fasta'))
 
     replace_gapped_codons_task = pipeline.transform(replace_gapped_codons_file,
                                                     name='replace_gapped_codons',
@@ -306,8 +294,8 @@ def make_diagnosis_pipeline(name=None):
                                                     filter=suffix('.fasta'),
                                                     output='.no-partial-gaps.fasta')
 
-    translate_ccs_task = pipeline.transform(gapped_translate_wrapper,
-                                            name='translate_ccs',
+    translate_qcs_task = pipeline.transform(gapped_translate_wrapper,
+                                            name='translate_qcs',
                                             input=replace_gapped_codons_task,
                                             filter=suffix('.fasta'),
                                             output='.translated.fasta')
@@ -317,14 +305,25 @@ def make_diagnosis_pipeline(name=None):
                                     "js_divergence_overall.csv")
     diagnose_alignment_task = pipeline.transform(diagnose_alignment,
                                                  name='diagnose_alignment',
-                                                 input=translate_ccs_task,
+                                                 input=translate_qcs_task,
                                                  add_inputs=add_inputs(indict['protein_alignment.fasta'],
                                                                        indict['copynumbers.tsv']),
                                                  filter=formatter(),
                                                  output=diagnosis_output)
     diagnose_alignment_task.mkdir(os.path.join(pipeline_dir, 'results'))
 
+    if globals_.config.getboolean('Tasks', 'smd_metrics'):
+        smd_task = pipeline.merge(smd_metrics,
+                                  input=[qcs_to_fasta_task,
+                                         degap_backtranslated_alignment_task,
+                                         indict['copynumbers.tsv']],
+                                  output=os.path.join(pipeline_dir, 'smd.tsv'))
+
     pipeline.set_head_tasks([make_inputs_task])
-    pipeline.set_tail_tasks([smd_task, diagnose_alignment_task])
+
+    tail_tasks = [diagnose_alignment_task]
+    if globals_.config.getboolean('Tasks', 'smd_metrics'):
+        tail_tasks.append(smd_task)
+    pipeline.set_tail_tasks(tail_tasks)
 
     return pipeline

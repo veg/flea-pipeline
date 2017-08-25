@@ -118,10 +118,6 @@ if len(set(t.label for t in timepoints)) != len(timepoints):
     raise Exception('non-unique timepoint labels')
 
 
-import drmaa
-drmaa_session = drmaa.Session()
-drmaa_session.initialize()
-
 # set globals
 globals_.config = config
 globals_.options = options
@@ -132,7 +128,6 @@ globals_.results_dir = os.path.join(output_dir, "pipeline_results")
 globals_.job_script_dir = os.path.join(output_dir, 'drmaa_job_scripts')
 globals_.logger = logger
 globals_.logger_mutex = logger_mutex
-globals_.drmaa_session = drmaa_session
 globals_.run_locally = options.local
 if options.jobs <= 0:
     options.jobs = config.getint('Jobs', 'jobs')
@@ -276,8 +271,18 @@ if __name__ == '__main__':
 
     checksum_level = config.getint('Misc', 'checksum_level')
     kwargs = {}
-    if options.jobs > 1 and not options.local:
-        kwargs['multithread'] = options.jobs
+
+    if not options.local:
+        import drmaa
+        drmaa_session = drmaa.Session()
+        drmaa_session.initialize()
+        globals_.drmaa_session = drmaa_session
+
+    if options.jobs > 1:
+        if options.local:
+            kwargs['multiprocess'] = options.jobs
+        else:
+            kwargs['multithread'] = options.jobs
     try:
         logger.info("pipeline start")
         with cd(globals_.results_dir):

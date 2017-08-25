@@ -65,8 +65,8 @@ copynumber_identity: 0.95
 cn_max_length_ratio: 1.005
 
 # diagnosis pipeline
-ccs_to_hqcs_identity: 0.95
-max_ccs_length_ratio: 1.005
+qcs_to_hqcs_identity: 0.95
+max_qcs_length_ratio: 1.005
 
 [Tasks]
 quality_pipeline: True
@@ -89,9 +89,11 @@ hyphy_analysis: True
 evo_hisotry: True
 fubar: True
 
-# full CCS alignment, SMD metrics
+# full QCS alignment
 diagnose: False
 
+# compute QCS-HQCS SMD metrics
+smd_metrics = False
 
 [Misc]
 # when a task gets re-run
