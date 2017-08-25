@@ -69,7 +69,9 @@ def hqcs_qcs_pairs(infiles, outfile):
 
 @must_work()
 @report_wrapper
-def combine_pairs(infiles, outfiles, outdir):
+def combine_pairs(infiles, outfiles):
+    outdir = os.path.join(pipeline_dir,
+                          'codon-alignments')
     # FIXME: code duplication with compute_copynumbers
     for f in outfiles:
         os.unlink(f)
