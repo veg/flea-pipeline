@@ -190,7 +190,7 @@ def rifraf(infiles, outfile, directory, name):
     seq_id = next(SeqIO.parse(infiles[0], get_format(infiles[0]))).id
     timepoint = seq_id.split("_ccs_")[0]
 
-    ppn = 1 if globals_.run_locally else globals_.ppn
+    ppn = globals_.ppn
     options = ''
     if ppn > 1 and globals_.config.getboolean('Parameters', 'consensus_multiprocess'):
         options = '-p {}'.format(ppn)
@@ -240,7 +240,7 @@ def rifraf_with_ref(infiles, outfile, directory, name):
     initialfile = os.path.join(pipeline_dir,
                                '{}.consensus.initial.fasta'.format(basename))
 
-    ppn = 1 if globals_.run_locally else globals_.ppn
+    ppn = globals_.ppn
     options = ''
     if ppn > 1 and globals_.config.getboolean('Parameters', 'consensus_multiprocess'):
         options = '-p {}'.format(ppn)

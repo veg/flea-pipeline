@@ -60,6 +60,9 @@ parser.add_argument('--jobs', type=int, default=-1,
 parser.add_argument('--ppn', type=int, default=-1,
                     help=('Processors to use on cluster nodes.'
                           ' If negative, use config value.'))
+parser.add_argument('--ppn-large', type=int, default=-1,
+                    help=('Processors to use on cluster nodes.'
+                          ' If negative, use config value.'))
 
 
 options = parser.parse_args()
@@ -135,6 +138,10 @@ if options.ppn > 0:
     globals_.ppn = options.ppn
 else:
     globals_.ppn = config.getint('Jobs', 'ppn')
+if options.ppn_large > 0:
+    globals_.ppn_large = options.ppn
+else:
+    globals_.ppn_large = config.getint('Jobs', 'ppn_large')
 
 globals_.timepoints = timepoints
 globals_.key_to_label = key_to_label

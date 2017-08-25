@@ -411,17 +411,16 @@ def calc_dmatrix(infile, outfile):
 @must_work()
 @report_wrapper
 def manifold_embedding(infile, outfile):
-    ppn = 1 if globals_.run_locally else globals_.ppn
     kwargs = {
         'python': globals_.config.get('Paths', 'python'),
         'script': os.path.join(globals_.script_dir, "manifold_embed.py"),
-        "n_jobs": ppn,
+        "n_jobs": globals_.ppn,
         'infile': infile,
         'outfile': outfile,
         }
     cmd = ("{python} {script} --n-jobs {n_jobs} "
            " --flip {infile} {outfile}".format(**kwargs))
-    return run_command(cmd, infile, outfile, ppn=ppn,
+    return run_command(cmd, infile, outfile, ppn=globals_.ppn,
                        name="manifold-embed")
 
 

@@ -18,3 +18,4 @@ logger_mutex = None
 drmaa_session = None
 run_locally = False
 ppn = 1
+ppn_large = 1
