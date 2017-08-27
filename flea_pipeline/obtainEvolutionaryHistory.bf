@@ -21,23 +21,8 @@ fscanf  (stdin, "String", _dates);
 fprintf(stdout,"\nEnter the regions file:");
 fscanf  (stdin, "String", _regions);
 
-fprintf(stdout,"\nEnter the earlyCons file:");
-fscanf  (stdin, "String", _earlyCons);
-
-fprintf(stdout,"\nEnter the MRCA file:");
-fscanf  (stdin, "String", _mrcaTo);
-
 fprintf(stdout,"\nEnter the rates file:");
 fscanf  (stdin, "String", _ratesTo);
-
-fprintf(stdout,"\nEnter the trees file:");
-fscanf  (stdin, "String", _treesTo);
-
-fprintf(stdout,"\nEnter the ancestral file:");
-fscanf  (stdin, "String", _ancestralTo);
-
-fprintf(stdout,"\nEnter the sequences file:");
-fscanf  (stdin, "String", _sequenceInfo);
 
 fprintf(stdout,"\nRunning\n");
 
@@ -79,14 +64,8 @@ _c2p_mapping = defineCodonToAA ();
 
 rootSeq = None;
 
-treeArrayJSON = {};
-seqArrayJSON = {};
-
 for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
     thisDate = uniqueDates["INDEXORDER"][date_index];
-
-        tools.addKeyIfMissing (treeArrayJSON, thisDate, {});
-        tools.addKeyIfMissing (seqArrayJSON, thisDate, {});
 
     for (region = 0; region < Abs (all_segments); region += 1) {
         thisRegion = all_segments [region];
@@ -101,39 +80,27 @@ for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
 
         call_count += 1;
 
-                (treeArrayJSON[thisDate])[thisRegion[0]] = timepoint_info["trees"];
-
-        fprintf (_treesTo, CLEAR_FILE, treeArrayJSON);
 
         if (date_index == 0 && region == 0) {
 
-                fprintf (stdout, "[COMPUTING COT SEQUENCE]\n");
+            fprintf (stdout, "[COMPUTING COT SEQUENCE]\n");
 
             UseModel (USE_NO_MODEL);
-
             treeString                  = Eval("Format (sampled`thisDate`_tree,1,1)");
-
             Tree                                cot_tree_unscaled = treeString;
-            cot_data            = ComputeCOT ("cot_tree_unscaled", 0);
-
+            cot_data            = ComputeCOT ("cot_tree_unscaled", 0); // this is the offending line
             Topology            cot_tree_unscaled = treeString;
-
             cot_node_name = "_COT_NODE_";
                     cot_tree_unscaled + {"WHERE": cot_data["Branch"], "PARENT" : cot_node_name, "LENGTH" : cot_data["Split"], "PARENT_LENGTH": cot_data["Split"]};
 
-
             UseModel (MGLocal);
-
             Tree cot_tree  = cot_tree_unscaled;
-
             ExecuteCommands ("LikelihoodFunction cot_lf = (sampled`thisDate`_filter, cot_tree)");
-
             Optimize           (cot_lf_res, cot_lf);
 
             DataSet                        ds_a = ReconstructAncestors (cot_lf);
             DataSetFilter          dsf_a = CreateFilter (ds_a,1);
             ACCEPT_ROOTED_TREES = 0;
-
 
             for (sid = 0; sid < dsf_a.species; sid += 1) {
                 GetString (seq_name, dsf_a, sid);
@@ -142,30 +109,11 @@ for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
                     break;
                 }
             }
-
             assert (sid < dsf_a.species);
             DeleteObject (cot_lf);
 
             fprintf (_ratesTo, CLEAR_FILE, Join ("\t", headers), "\n");
-
-            //BM: IMPORTING OUR PIPELINE MRCA AND USING THAT INSTEAD
-            DataSet earlyCons = ReadDataFile (_earlyCons);
-            DataSetFilter dsfEarlyCons = CreateFilter(earlyCons,1);
-            GetDataInfo (earlyConsSeq, dsfEarlyCons, 0);
-
-            fprintf (_mrcaTo, CLEAR_FILE, ">mrca\n", earlyConsSeq);
-            seqArrayJSON["MRCA"] =  translateCodonToAA (earlyConsSeq, _c2p_mapping, 0);
-            //BM: DONE
-            //fprintf (_mrcaTo, CLEAR_FILE, ">mrca\n", rootSeq);
-            //seqArrayJSON["MRCA"] =  translateCodonToAA (rootSeq, _c2p_mapping, 0);
-
         }
-
-        if (region == 0) {
-                seqArrayJSON[thisDate] = timepoint_info["seqs"];
-                fprintf (_sequenceInfo, CLEAR_FILE, seqArrayJSON);
-        }
-
 
         fprintf     (_ratesTo, thisDate, "\t", thisRegion[0], "\t", Join("\t", timepoint_info["div"]), "\t", Join ("\t", timepoint_info["pheno"]),
             "\t", Join ("\t", divergenceForFilter ("sampled`thisDate`_filter", rootSeq)), "\n");
@@ -176,48 +124,6 @@ for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
 
     }
 }
-
-//BM: ARRANGING TO ROOT ON SEQUENCE CLOSEST TO CONSENSUS FROM EARLIEST TIMEPOINT
-//DataSet earlyCons = ReadDataFile (_earlyCons);
-//DataSet allWithEarlyCons = Combine(earlyCons,allData);
-//DataSetFilter dsfAllWithEarlyCons = CreateFilter(allWithEarlyCons,1);
-//currentDist = 1;
-//bestInd=-1;
-//for(i=1;i<dsfAllWithEarlyCons.species;i=i+1)
-//{
-//      GetDataInfo (siteDifferenceCount, dsfAllWithEarlyCons, 0, i, 0);
-        //fprintf(stdout,"siteDiff:",siteDifferenceCount,"\n");
-//      tot=1-(+({1,4}["siteDifferenceCount[_MATRIX_ELEMENT_COLUMN_][_MATRIX_ELEMENT_COLUMN_]"]))/(+siteDifferenceCount);
-//      //fprintf(stdout,"tot:",tot,"\n");
-//      if(tot<currentDist){bestInd=i; currentDist=tot;}
-//}
-//fprintf(stdout,"bestInd:",bestInd,"\n");
-//GetString(closestForRoot,dsfAllWithEarlyCons,bestInd);
-//fprintf(stdout,"closestForRoot:",closestForRoot,"\n");
-//BM: OVER
-
-thisDate = "Combined";
-tools.addKeyIfMissing (treeArrayJSON, thisDate, {});
-tools.addKeyIfMissing (seqArrayJSON, thisDate, {});
-
-fprintf (stdout, "[WORKING ON `thisDate`]\n");
-
-//BM: CHANGING THIS LINE TO POINT TO ROOT
-//OK, IT APPEARS THAT WE CAN'T ACTUALLY DO THAT WITHOUT EVERYTHNG BREAKING. BLEAK.
-//OK, TRYING TO PASS IT A SEQUENCE INSTEAD OF AN ID
-timepoint_info = makePartitionBuiltTreeFitMG ("allData", "", "","everything", earlyConsSeq, 1);
-//timepoint_info = makePartitionBuiltTreeFitMG ("allData", "", "","everything", rootSeq, 1);
-//timepoint_info = makePartitionBuiltTreeFitMG ("allData", "", "","everything", closestForRoot, 1);
-
-thisRegion = all_segments [0];
-
-(treeArrayJSON[thisDate])[thisRegion[0]] = timepoint_info["trees"];
-fprintf (_treesTo, CLEAR_FILE, treeArrayJSON);
-seqArrayJSON[thisDate] = (timepoint_info["seqs"])["Ancestral"];
-fprintf (_sequenceInfo, CLEAR_FILE, seqArrayJSON);
-
-fprintf (_ancestralTo, CLEAR_FILE, everything_ancestral_filter);
-
 
 //----------------------------------------------------------------------------------------
 

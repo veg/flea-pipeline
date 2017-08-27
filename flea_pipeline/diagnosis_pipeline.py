@@ -120,7 +120,8 @@ def convert_bam_to_fasta(infile, outfile):
     cmd = "{} {} {}".format(globals_.config.get('Paths', 'bam2msa'), infile, outfile)
     stdout = os.path.join(globals_.job_script_dir, '{}.stdout'.format(outfile))
     stderr = os.path.join(globals_.job_script_dir, '{}.stderr'.format(outfile))
-    return run_command(cmd, infile, outfiles=outfile, stdout=stdout, stderr=stderr)
+    return run_command(cmd, infile, outfiles=outfile, stdout=stdout, stderr=stderr,
+                       run_locally=True)
 
 
 @must_work()
