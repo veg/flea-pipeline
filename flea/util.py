@@ -19,68 +19,6 @@ from Bio import SeqIO
 
 import numpy as np
 
-from ruffus.drmaa_wrapper import run_job, error_drmaa_job
-
-import flea_pipeline.pipeline_globals as globals_
-
-
-def format_walltime(seconds):
-    seconds = int(seconds)
-    m, s = divmod(seconds, 60)
-    h, m = divmod(m, 60)
-    return "{:02}:{:02}:{:02}".format(h, m, s)
-
-
-def run_command(cmd, infiles, outfiles, ppn=1, walltime=None,
-               stdout=None, stderr=None, name=None, run_locally=None):
-    """Run a command using ruffus's run_job.
-
-    Command may be submitted to the cluster or run locally, depending
-    on the value of `globals_.run_locally`.
-
-    """
-    if run_locally is None:
-        run_locally = globals_.run_locally
-    from uuid import uuid4  # because this hangs on silverback compute nodes
-    if walltime is None:
-        walltime = globals_.config.getint('Jobs', 'walltime')
-    if name is None:
-        name = 'job-{}'.format(os.path.basename(cmd.split()[0]))
-    name = "{}-{}".format(name, uuid4())
-
-    queue_name = globals_.config.get('Jobs', 'queue')
-    fwalltime = format_walltime(walltime)
-    nodes = 1
-    job_other_options = ('-q {} -l walltime={},nodes={}:'
-                         'ppn={}'.format(queue_name, fwalltime, nodes, ppn))
-
-    success = False
-    msg = ''
-    stdout_res, stderr_res = "", ""
-    try:
-        stdout_res, stderr_res = run_job(cmd_str=cmd,
-                                         job_name=name,
-                                         logger=globals_.logger,
-                                         drmaa_session = globals_.drmaa_session,
-                                         run_locally=run_locally,
-                                         job_other_options=job_other_options,
-                                         job_script_directory=globals_.job_script_dir)
-        success = True
-        if stdout is not None:
-            with open(stdout, 'w') as f:
-                f.write(''.join(stdout_res))
-        if stderr is not None:
-            with open(stderr, 'w') as f:
-                f.write(''.join(stderr_res))
-
-    except error_drmaa_job as err:
-        msg = err.args[0]
-
-    return Result(infiles, outfiles, stdout=stdout_res, stderr=stderr_res,
-                  desc=name, failed=(not success),
-                  msg=msg, cmds=cmd)
-
-
 
 def insert_gaps(source, target, src_gap, target_gap, gap_char=None):
     """Inserts `target_gap` into target string at same positions as
@@ -369,22 +307,6 @@ def nicetime(seconds):
     h, m = divmod(m, 60)
     elapsed = "%dh%02dm%02.2fs" % (h, m, s)
     return elapsed
-
-
-def report_wrapper(function):
-    @wraps(function)  # necessary because ruffus uses function name internally
-    def wrapped(infiles, outfiles, *args, **kwargs):
-        # TODO: log start, infiles, outfiles, cmd
-        t0 = time.time()
-        result = function(infiles, outfiles, *args, **kwargs)
-        t1 = time.time()
-        if result is None:
-            result = Result(infiles=infiles, outfiles=outfiles)
-        result.elapsed = (t1 - t0)
-        if not result.desc:
-            result.desc = function.__name__
-        result.report(globals_.logger, globals_.logger_mutex)
-    return wrapped
 
 
 def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
