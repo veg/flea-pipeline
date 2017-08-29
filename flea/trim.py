@@ -23,7 +23,7 @@ import numpy as np
 from Bio import SeqIO
 from docopt import docopt
 
-from flea_pipeline.util import new_record_seq_str
+from flea.util import new_record_seq_str
 
 # FIXME: do not hardcode these values
 

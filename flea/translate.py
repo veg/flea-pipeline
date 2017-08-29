@@ -18,7 +18,7 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC, Gapped
 
-from flea_pipeline.util import insert_gaps
+from flea.util import insert_gaps
 
 
 def _translate(record, gapped=False):

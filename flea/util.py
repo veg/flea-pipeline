@@ -634,3 +634,37 @@ def cd(newdir):
         yield
     finally:
         os.chdir(prevdir)
+
+
+def iter_sample(iterable, k):
+    """Sample `k` items from an iterable.
+
+    Adapted from http://stackoverflow.com/a/12581484
+
+    """
+    results = []
+    for i, v in enumerate(iterable):
+        r = random.randint(0, i)
+        if r < k:
+            if i < k:
+                results.insert(r, v) # add first `n` items in random order
+            else:
+                results[r] = v # at a decreasing rate, replace random items
+    if len(results) < k:
+        raise ValueError("Sample larger than population.")
+    return results
+
+
+def get_format(f):
+    return os.path.splitext(f)[1][1:]
+
+
+def is_in_frame(seq, allow_stop_codons):
+    if len(seq) % 3 != 0:
+        return False
+    t = seq.translate()
+    if len(t) != len(seq) / 3:
+        return False
+    if '*' in t and not allow_stop_codons:
+        return False
+    return True

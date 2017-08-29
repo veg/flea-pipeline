@@ -33,7 +33,7 @@ from Bio.SeqIO.FastaIO import FastaWriter
 from Bio import AlignIO
 from Bio.Alphabet import IUPAC
 
-from flea_pipeline.util import grouper
+from flea.util import grouper
 
 
 def _column_consensus(counter, seed=None, codon=False):

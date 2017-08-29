@@ -26,7 +26,7 @@ matplotlib.use('Agg')
 
 import matplotlib.pyplot as plt
 
-from flea_pipeline.util import column_count, prob, js_divergence
+from flea.util import column_count, prob, js_divergence
 
 
 np.set_printoptions(suppress=True)

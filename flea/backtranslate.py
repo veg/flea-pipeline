@@ -18,7 +18,6 @@ Options:
 """
 
 import sys
-from flea_pipeline.util import grouper
 
 from docopt import docopt
 
@@ -27,7 +26,8 @@ from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC
 from Bio.Alphabet import Gapped
 
-from flea_pipeline.util import insert_gaps
+from flea.util import grouper
+from flea.util import insert_gaps
 
 
 def preprocess(protein, dna):

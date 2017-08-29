@@ -32,9 +32,9 @@ from docopt import docopt
 
 from Bio import SeqIO
 
-from flea_pipeline.util import grouper
-from flea_pipeline.util import new_record_seq_str
-from flea_pipeline.util import nth
+from flea.util import grouper
+from flea.util import new_record_seq_str
+from flea.util import nth
 
 
 def first_index(target, it):
