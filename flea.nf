@@ -5,11 +5,12 @@
  *
  */
 
-// TODO: get it to run on multiple inputs in parallel
 // TODO: run on TORQUE
 // TODO: write consensus, alignment, analysis, diagnosis pipelines
 // TODO: allow starting from aligned inputs
 // TODO: do not hardcode min/max lengths
+// TODO: sub-pipelines
+// TODO: nextflow repo format
 
 params.infile = "$HOME/flea/data/P018/data/metadata"
 
@@ -57,7 +58,9 @@ process trim_ends {
     output:
     set 'trimmed', label into trim_ends_outs
 
-    "${params.python} ${params.script_dir}/trim.py --jobs ${params.threads} --fastq qfiltered trimmed"
+    """${params.python} ${params.script_dir}/trim.py \
+      --jobs ${params.threads} --fastq qfiltered trimmed
+    """
 }
 
 process filter_runs {
@@ -116,12 +119,14 @@ process filter_length {
 /* ************************************************************************** */
 /* CONSENSUS SUB-PIPELINE */
 
+filter_length_outs.into { qcs_outs_for_cluster; qcs_outs_for_copynumber }
+
 process cluster {
     input:
-    set 'lenfiltered', label from filter_length_outs
+    set 'lenfiltered', label from qcs_outs_for_cluster
 
     output:
-    set "raw_cluster_*", label into cluster_outs
+    set 'raw_cluster_*', label into cluster_outs
 
     """
     ${params.usearch} -cluster_fast lenfiltered -id ${params.cluster_identity} \
@@ -163,12 +168,15 @@ process consensus {
     '''
 }
 
+/*
+ * Shift-corrected, inframe, unique HQCS sequences.
+ */
 process shift_correction {
     input:
     file all_consensus
 
     output:
-    file shift_corrected
+    file shifted_uniques
 
     """
     # compute inframe
@@ -183,7 +191,7 @@ process shift_correction {
     ${params.usearch} -usearch_global all_consensus -db uniques \
       -id ${params.reference_identity} \
       -top_hit_only -strand both \
-      -maxaccepts {params.max_accepts} -maxrejects {params.max_rejects} \
+      -maxaccepts ${params.max_accepts} -maxrejects ${params.max_rejects} \
       -threads ${params.threads} \
       -fastapairs pairfile -userout calnfile -userfields caln
 
@@ -192,42 +200,247 @@ process shift_correction {
       --del-strategy=reference \
       --calns=calnfile \
       pairfile shift_corrected
-    """
-}
 
-// TODO: duplicate qcs file after quality sub-pipeline, so it can be used here.
-/*
- * Get inframe, unique HQCS sequences.
- * Compute pairs for copynumbers.
- */
-process finalize_hqcs {
-    input:
-    file shift_corrected
-
-    output:
-    file final_hqcs
-
-    """
     # compute inframe
     ${params.python} ${params.script_dir}/filter_fastx.py \
       inframe fasta fasta true < shift_corrected > inframe
 
     # unique seqs
-    ${params.usearch} -fastx_uniques inframe -fastaout uniques \
+    ${params.usearch} -fastx_uniques inframe -fastaout shifted_uniques \
       -threads ${params.threads}
-
-    # usearch for pairs
-    ${params.usearch} -usearch_global qcsfile -db uniques \
-      -userout pairfile -userfields query+target \
-      -id ${params.copynumber_identity} \
-      -top_hit_only -strand both \
-      -maxaccepts {params.max_accepts} -maxrejects {params.max_rejects}
-      -maxqt ${params.cn_max_length_ratio} \
-      -threads {ppn}
-
+      
     """
 }
 
-// TODO: combine pairs to make copynumbers
-// TODO: only keep HQCSs with nonzero copynumber.
-// TODO: merge all files
+// get hqcs and qcs sequences for this time point
+shifted_uniques
+    .merge( qcs_outs_for_copynumber.map { it[0] } ) { hqcs, ccs -> [hqcs, ccs] }
+    .set { hqcs_qcs_pairs }
+
+/*
+ * Compute pairs for copynumbers.
+ */
+process copynumbers {
+    input:
+    set 'hqcs', 'qcs' from hqcs_qcs_pairs
+
+    output:
+    set 'final_hqcs', 'cnfile' into hqcs_copynumber_pairs
+
+    """
+    # usearch for pairs
+    ${params.usearch} -usearch_global qcs -db hqcs \
+      -userout pairfile -userfields query+target \
+      -id ${params.copynumber_identity} \
+      -top_hit_only -strand both \
+      -maxaccepts ${params.max_accepts} -maxrejects ${params.max_rejects} \
+      -maxqt ${params.cn_max_length_ratio} \
+      -threads ${params.threads}
+
+    # write copynumber file
+    ${params.python} ${params.script_dir}/write_copynumbers.py \
+      < pairfile > cnfile
+
+    # filter out HQCS with 0 copynumber
+    ${params.python} ${params.script_dir}/filter_fastx.py \
+      copynumber fasta fasta cnfile \
+      < hqcs > final_hqcs
+    """
+}
+
+hqcs_files = Channel.create()
+cn_files = Channel.create()
+
+hqcs_copynumber_pairs
+    .separate( hqcs_files, cn_files ) { x -> [x[0], x[1]] }
+
+process merge_hqcs {
+    input:
+    file 'hqcs*' from hqcs_files.collect()
+
+    output:
+    file all_hqcs
+
+    """
+    cat hqcs* > all_hqcs
+    """
+}
+
+process merge_copynumbers {
+    input:
+    file 'cn*' from cn_files.collect()
+
+    output:
+    file all_cns
+
+    """
+    cat cn* > all_cns
+    """
+}
+
+/* ************************************************************************** */
+/* ALIGNMENT SUB-PIPELINE */
+
+all_hqcs.into { hqcs_for_translate; hqcs_for_backtranslate }
+
+process translate_hqcs {
+    input:
+    file hqcs_for_translate
+
+    output:
+    file hqcs_translated
+
+    """
+    ${params.python} ${params.script_dir}/translate.py \
+      < all_hqcs > hqcs_translated
+    """
+}
+
+process align_hqcs {
+    input:
+    file hqcs_translated
+
+    output:
+    file hqcs_aligned
+
+    """
+    ${params.mafft} --ep 0.5 --quiet --preservecase \
+      hqcs_translated > hqcs_aligned
+    """
+}
+
+hqcs_for_backtranslate
+    .merge ( hqcs_aligned ) { dna, aa -> [dna, aa] }
+    .set { dna_aa_pairs }
+
+// TODO: threaded backtranslate
+process backtranslate_hqcs {
+    input:
+    set 'dna', 'aa' from dna_aa_pairs
+
+    output:
+    file backtranslated
+
+    """
+    ${params.python} ${params.script_dir}/backtranslate.py \
+      aa dna backtranslated
+    """
+}
+
+// FIXME: why does the pipeline hang here???
+
+/* ************************************************************************** */
+/* ANALYSIS SUB-PIPELINE */
+
+// TODO: combine into fewest possible tasks
+// TODO: thread as many as possible
+// TODO: all .json files
+// TODO: .zip file
+
+// duplicate all the inputs needed by this part of the pipeline
+
+/*
+ * evo history needs copynumbers in the names
+ */
+process add_cn_to_ids {
+    input:
+    set 'msa', 'cns' from XXX
+
+    output:
+    msa_with_cn
+
+    """
+    #!${params.python}
+    from Bio import SeqIO
+    from flea.util import parse_copynumbers, replace_id
+    
+    id_to_cn = parse_copynumbers('cns')
+    records = SeqIO.parse('msa', 'fasta')
+    result = (replace_id(r, id_with_cn(r.id, id_to_cn[r.id]))
+              for r in records)
+    SeqIO.write(result, 'msa_with_cn', "fasta")
+    """
+}
+
+process mrca {
+    input:
+
+    output:
+
+    """
+    #!${params.python}
+
+    alignment_file, copynumber_file = infiles
+    strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
+    oldest_timepoint = min(globals_.timepoints, key=strptime)
+    oldest_records_filename = os.path.join(pipeline_dir, 'oldest_sequences.fasta')
+
+    records = SeqIO.parse(alignment_file, "fasta")
+    oldest_records = (r for r in records if r.id.startswith(oldest_timepoint.label))
+    SeqIO.write(oldest_records, oldest_records_filename, "fasta")
+
+    return mrca(oldest_records_filename, copynumber_file, outfile)
+    """
+}
+
+process add_mrca {
+
+}
+
+process fasttree {
+
+}
+
+process reroot {
+
+}
+
+process translate_mrca {
+
+}
+
+process translate_msa {
+
+}
+
+process js_divergence {
+
+}
+
+process distance_matrix {
+
+}
+
+process manifold_embedding {
+
+}
+
+process reconstruct_ancestors {
+
+}
+
+process translate_ancestors {
+
+}
+
+process replace_stop_codons {
+
+}
+
+process dates_for_evo_history {
+
+}
+
+process evo_history {
+
+}
+
+process fubar {
+
+}
+
+
+/* ************************************************************************** */
+/* DIAGNOSIS SUB-PIPELINE */
+
+// TODO: make this optional

@@ -3,7 +3,7 @@
 Translate DNA reads from a fasta file.
 
 Usage:
-  translate.py [options] <infile> <outfile>
+  translate.py [options] < infile  > outfile
   translate.py -h | --help
 
 Options:
@@ -12,7 +12,8 @@ Options:
 
 """
 
-from docopt import docopt
+import sys
+import argparse
 
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -42,7 +43,12 @@ def translate(infile, outfile, gapped=False):
 
 
 if __name__ == "__main__":
-    args = docopt(__doc__)
-    infile = args["<infile>"]
-    outfile = args["<outfile>"]
-    translate(infile, outfile, args['--gapped'])
+    parser = argparse.ArgumentParser(description="My parser")
+
+    parser.add_argument('--gapped', dest='gapped', action='store_true')
+    parser.add_argument('--no-gapped', dest='gapped', action='store_false')
+    parser.set_defaults(feature=False)
+
+    parsed = parser.parse_args()
+    
+    translate(sys.stdin, sys.stdout, parsed.gapped)

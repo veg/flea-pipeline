@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
 import sys
+
 from Bio import SeqIO
+
 from flea.util import run_regexp, iter_sample, is_in_frame
+from flea.util import parse_copynumbers
 
 
 def main(mode, informat, outformat, params):
@@ -26,6 +29,10 @@ def main(mode, informat, outformat, params):
     elif mode == "inframe":
         allow_stops = True if params[0] == 'true' else False
         result = (r for r in records if is_in_frame(r.seq, allow_stops))
+    elif mode == "copynumber":
+        cnfile = params[0]
+        cndict = parse_copynumbers(cnfile)
+        result = (r for r in records if r.id in cndict and cndict[r.id] > 0)
     SeqIO.write(result, sys.stdout, outformat)
     
 

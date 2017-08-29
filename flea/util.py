@@ -13,6 +13,7 @@ from functools import wraps
 from glob import glob
 import sys
 from contextlib import contextmanager
+import csv
 
 from Bio.Seq import Seq
 from Bio import SeqIO
@@ -225,180 +226,6 @@ def check_in_frame(f):
             raise Exception('Sequence "{}" in file "{}" has length={} not multiple'
                             ' of 3'.format(r.id, f, len_))
 
-class Result(object):
-    # borrowed from https://github.com/daler/pipeline-example
-    def __init__(self, infiles, outfiles, log=None, stdout=None, stderr=None,
-                 desc=None, failed=False, msg=None, cmds=None):
-        """
-        A Result object encapsulates the information going to and from a task.
-        Each task is responsible for determining the following arguments, based
-        on the idiosyncracies of that particular task:
-            `infiles`: Required list of input files to the task
-            `outfiles`: Required list of output files to the task
-            `failed`: Optional (but recommended) boolean indicating whether the
-                      task failed or not. Default is False, implying that the
-                      task will always work
-            `log`: Optional log file from running the task's commands
-            `stdout`: Optional stdout that will be printed in the report if the
-                      task failed
-            `stderr`: Optional stderr that will be printed in the report if the
-                      task failed
-            `desc`: Optional description of the task
-            `cmds`: Optional string of commands used by the task. Can be very
-                    useful for debugging.
-        """
-        if isinstance(infiles, str):
-            infiles = [infiles]
-        if isinstance(outfiles, str):
-            outfiles = [outfiles]
-        self.infiles = infiles
-        self.outfiles = outfiles
-        self.log = log
-        self.stdout = stdout
-        self.stderr = stderr
-        self.elapsed = None
-        self.failed = failed
-        self.msg = msg
-        self.desc = desc
-        self.cmds = cmds
-
-    def report(self, logger_proxy, logging_mutex):
-        """Prints a nice report."""
-        with logging_mutex:
-            if not self.desc:
-                self.desc = ""
-            logger_proxy.info('Finish task: {}'.format(self.desc))
-            logger_proxy.info('    Time: {}'.format(datetime.datetime.now()))
-            if self.elapsed is not None:
-                logger_proxy.info('    Elapsed: {}'.format(nicetime(self.elapsed)))
-            if self.cmds is not None:
-                logger_proxy.info('    Commands: {}'.format(str(self.cmds)))
-            for input_fn in self.infiles:
-                input_fn = os.path.normpath(os.path.relpath(input_fn))
-                logger_proxy.info('    Input: {}'.format(input_fn))
-            for output_fn in self.outfiles:
-                output_fn = os.path.normpath(os.path.relpath(output_fn))
-                logger_proxy.info('    Output: {}'.format(output_fn))
-            if self.log is not None:
-                logger_proxy.info('    Log: {}'.format(self.log))
-            if self.failed:
-                logger_proxy.error('=' * 80)
-                logger_proxy.error('Error in {}'.format(self.desc))
-                if self.msg:
-                    logger_proxy.error('message: {}'.format(self.msg))
-                if self.log is not None:
-                    logger_proxy.error('log: {}'.format(self.log))
-                if self.stderr:
-                    logger_proxy.error('====STDERR====')
-                    logger_proxy.error(self.stderr)
-                if self.stdout:
-                    logger_proxy.error('====STDOUT====')
-                    logger_proxy.error(self.stdout)
-                logger_proxy.error('=' * 80)
-            logger_proxy.info('')
-            if self.failed:
-                sys.exit(1)
-
-
-def nicetime(seconds):
-    """Convert seconds to hours-minutes-seconds"""
-    # borrowed from https://github.com/daler/pipeline-example
-    m, s = divmod(seconds, 60)
-    h, m = divmod(m, 60)
-    elapsed = "%dh%02dm%02.2fs" % (h, m, s)
-    return elapsed
-
-
-def must_work(maybe=False, seq_ratio=None, seq_ids=False, min_seqs=None,
-              unique_ids=False, many=False,
-              illegal_chars=None, pattern=None, in_frame=False):
-    """Fail if any output is empty.
-
-    seq_ratio: (int, int): ensure numbers of sequences match
-    seq_ids: ensure all ids present in input files are in output file
-    min_seqs: minimum number of sequences in the output file
-    unique_ids: sequence ids must be unique
-    many: produces an unknown number of output files. Search with a pattern.
-    pattern: pattern for determining input files to consider
-
-    """
-    if pattern is None:
-        pattern = '*'
-
-    def wrap(function):
-        if globals_.options.touch_files_only or globals_.options.just_print:
-            return function
-
-        @wraps(function)  # necessary because ruffus uses function name internally
-        def wrapped(infiles, outfiles, *args, **kwargs):
-            function(infiles, outfiles, *args, **kwargs)
-            if seq_ids or seq_ratio:
-                infiles = list(traverse(strlist(infiles)))
-                infiles = list(f for f in infiles if fnmatch(f, pattern))
-            if many:
-                outdir, outpattern = args[-2:]
-                outfiles = list(os.path.join(outdir, f)
-                                for f in os.listdir(outdir) if re.search(outpattern, f))
-                if not outfiles:
-                    raise Exception('Task produced no output')
-            outfiles = strlist(outfiles)
-            ensure_not_empty(outfiles)
-            if min_seqs is not None:
-                check_seq_number(outfiles[0], min_seqs)
-            if seq_ids:
-                if len(outfiles) != 1:
-                    raise Exception('cannot check seq_ids for'
-                                    ' more than one outfile')
-                check_seq_ids(infiles, outfiles[0])
-            if unique_ids:
-                for o in outfiles:
-                    check_unique_ids(o)
-            if seq_ratio is not None:
-                if len(outfiles) != 1:
-                    raise Exception('cannot check seq_ratio for'
-                                    ' more than one outfile')
-                check_seq_ratio(infiles, outfiles[0], seq_ratio)
-            if illegal_chars:
-                for f in outfiles:
-                    check_illegal_chars(f, illegal_chars)
-            if in_frame:
-                for f in outfiles:
-                    check_in_frame(f)
-        return wrapped
-    return wrap
-
-
-def must_produce(n):
-    """Check that at least `n` files match the pathname glob"""
-    def wrap(function):
-        @wraps(function)
-        def wrapped(infiles, outfiles, pathname, *args, **kwargs):
-            function(infiles, outfiles, pathname, *args, **kwargs)
-            n_produced = len(glob(pathname))
-            if n_produced < n:
-                raise Exception('Task was supposed to produce at least {}'
-                                ' outputs, but it produced {}'.format(n, n_produced))
-        return wrapped
-    return wrap
-
-
-def check_suffix(name, suffix):
-    if not name.endswith(suffix):
-        raise Exception("filename '{}' does not "
-                        " end with '{}'".format(name, suffix))
-
-
-def remove_suffix(name, suffix):
-    check_suffix(name, suffix)
-    return name[:-len(suffix)]
-
-
-def check_basename(filename, pattern):
-    bn = os.path.basename(filename)
-    if not re.match(pattern, bn):
-        raise Exception("filename '{}' does not"
-                        " match expected pattern '{}'".format(bn, pattern))
-
 
 def split_name(name):
     # TODO: duplicate code with name_to_label
@@ -596,46 +423,6 @@ def run_regexp(runlen, targets=None):
     return re.compile(pattern)
 
 
-def translate_helper(infile, outfile, gapped, name):
-    kwargs = {
-        'python': globals_.config.get('Paths', 'python'),
-        'script': os.path.join(globals_.script_dir, "translate.py"),
-        'infile': infile,
-        'outfile': outfile,
-        'gap_option': '--gapped' if gapped else '',
-        }
-    cmd = "{python} {script} {gap_option} {infile} {outfile}".format(**kwargs)
-    return run_command(cmd, infile, outfile, name=name)
-
-
-def usearch_hqcs_ids(infile, outfile, dbfile, identity, maxqt, name=None):
-    """run usearch_global against a hqcs database and print pairs of ids"""
-    max_accepts = globals_.config.get('Parameters', 'max_accepts')
-    max_rejects = globals_.config.get('Parameters', 'max_rejects')
-    ppn = globals_.ppn if globals_.run_locally else globals_.ppn_large
-    cmd = ("{usearch} -usearch_global {infile} -db {db} -id {id}"
-           " -userout {outfile} -top_hit_only -userfields query+target -strand both"
-           " -maxaccepts {max_accepts} -maxrejects {max_rejects}"
-           " -maxqt {maxqt} -threads {ppn}")
-    if name is None:
-        name = 'usearch-hqcs-ids'
-    cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
-                     infile=infile, db=dbfile, id=identity, outfile=outfile,
-                     max_accepts=max_accepts, max_rejects=max_rejects,
-                     maxqt=maxqt, ppn=ppn)
-    return run_command(cmd, infile, outfiles=outfile, name=name, ppn=ppn)
-
-
-@contextmanager
-def cd(newdir):
-    prevdir = os.getcwd()
-    os.chdir(os.path.expanduser(newdir))
-    try:
-        yield
-    finally:
-        os.chdir(prevdir)
-
-
 def iter_sample(iterable, k):
     """Sample `k` items from an iterable.
 
@@ -668,3 +455,9 @@ def is_in_frame(seq, allow_stop_codons):
     if '*' in t and not allow_stop_codons:
         return False
     return True
+
+
+def parse_copynumbers(infile):
+    with open(infile) as handle:
+        parsed = csv.reader(handle, delimiter='\t')
+        return dict((i, int(n)) for i, n in parsed)

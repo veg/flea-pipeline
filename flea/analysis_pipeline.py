@@ -497,11 +497,6 @@ def make_analysis_pipeline(name=None):
                                             filter=formatter(),
                                             output=os.path.join(pipeline_dir, 'js_divergence.json'))
 
-    dates_task = pipeline.transform(write_dates,
-                                    input=add_copynumbers_task,
-                                    filter=formatter(),
-                                    output=os.path.join(pipeline_dir, 'merged.dates'))
-
     dmatrix_task = pipeline.transform(calc_dmatrix,
                                       input=add_copynumbers_task,
                                       filter=formatter(),
@@ -548,6 +543,11 @@ def make_analysis_pipeline(name=None):
                                                 output=os.path.join(pipeline_dir, 'region_coords.json'))
 
         if globals_.config.getboolean('Tasks', 'evo_history'):
+            dates_task = pipeline.transform(write_dates,
+                                            input=add_copynumbers_task,
+                                            filter=formatter(),
+                                            output=os.path.join(pipeline_dir, 'merged.dates'))
+            
             evo_history_task = pipeline.merge(evo_history,
                                               input=[replace_stop_codons_task,
                                                      dates_task,

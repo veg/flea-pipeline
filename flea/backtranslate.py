@@ -94,7 +94,7 @@ def backtranslate(protein_filename, dna_filename, outfile, inorder=False):
                             ' dna sequence'.format(len(missing_dna)))
         result_iter = (back_translate_gapped(protein_dict[_id],
                                              dna_dict[_id])
-                       for _id in shared)
+                       for _id in sorted(shared))
     SeqIO.write(result_iter, outfile, "fasta")
 
 
