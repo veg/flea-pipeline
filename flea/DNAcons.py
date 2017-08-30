@@ -34,6 +34,7 @@ from Bio import AlignIO
 from Bio.Alphabet import IUPAC
 
 from flea.util import grouper
+from flea.util import id_to_con
 
 
 def _column_consensus(counter, seed=None, codon=False):
@@ -89,7 +90,7 @@ def consfile(filename, outfile=None, ambifile=None, do_copynumber=False,
     alignment = list(AlignIO.read(filename, "fasta"))
     seqs = list(r.seq for r in alignment)
     if do_copynumber:
-        copies = list(int(r.id.split('_')[-1]) for r in alignment)
+        copies = list(id_to_cn(r.id) for r in alignment)
     else:
         copies = None
     _consensus, ambiguous = consensus(seqs, copies, codon=codon, seed=seed)

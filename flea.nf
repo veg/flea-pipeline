@@ -257,26 +257,26 @@ process dates_json_task {
     """
 }
 
-// processs copynumber_json {
-//     input:
-//     file 'cns' from merged_cns_out
+process copynumbers_json {
+    input:
+    file 'msa' from msa_out
 
-//     output:
-//     file 'copynumbers.json' into copynumbers_json_out
+    output:
+    file 'copynumbers.json' into copynumbers_json_out
 
-//     """
-//     #!${params.python}
+    """
+    #!${params.python}
 
-//     from flea.utils import id_with_cn
+    import json
+    from Bio import SeqIO
+    from flea.util import id_to_cn
 
-//     d = parse_copynumbers('cns')
-//     # add copynumber to name, to match rest of this pipeline
-//     result = dict((id_with_cn(key, value), value)
-//                   for key, value in d.items())
-//     with open('copynumbers.json', 'w') as handle:
-//         json.dump(result, handle, separators=(",\\n", ":"))
-//     """
-// }
+    records = SeqIO.parse('msa', 'fasta')
+    d = dict((r.id, id_to_cn(r.id)) for r in records)
+    with open('copynumbers.json', 'w') as handle:
+        json.dump(d, handle, separators=(",\\n", ":"))
+    """
+}
 
 // TODO: rewrite as filter_fastx with id prefix
 process oldest_seqs {

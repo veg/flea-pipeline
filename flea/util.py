@@ -433,6 +433,10 @@ def id_with_cn(id_, cn):
     return "{}_cn_{}".format(id_, cn)
 
 
+def id_to_cn(id_):
+    return int(id_.split('_')[-1])
+
+
 def get_date_dict(metafile):
     with open(metafile) as handle:
         parsed = csv.reader(handle, delimiter=' ')
