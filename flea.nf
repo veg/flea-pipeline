@@ -6,6 +6,7 @@
  */
 
 // TODO: run on TORQUE
+// TODO: set cpus and threads for each task
 // TODO: write consensus, alignment, analysis, diagnosis pipelines
 // TODO: allow starting from aligned inputs
 // TODO: do not hardcode min/max lengths
@@ -15,8 +16,9 @@
 
 params.infile = "$HOME/flea/data/P018/data/metadata"
 
+// TODO: how to avoid duplicating?
 Channel.fromPath(params.infile)
-    .into { metadata_1; metadata_2 }
+    .into { metadata_1; metadata_2; metadata_3 }
 
 
 // read input metadata into tuples
@@ -114,7 +116,7 @@ process filter_length {
     set 'filtered', label from filter_db_out
 
     output:
-    set 'lenfiltered', label into qcs_final_1, qcs_final_2
+    set 'lenfiltered', label into qcs_final_1, qcs_final_2, qcs_final_3
 
     """
     ${params.python} ${params.script_dir}/filter_fastx.py \
@@ -259,7 +261,7 @@ process merge_hqcs {
     file 'hqcs' from hqcs_files.collect()
 
     output:
-    file merged_hqcs into merged_hqcs_1, merged_hqcs_2
+    file 'merged_hqcs' into merged_hqcs_out
 
     """
     cat hqcs* > merged_hqcs
@@ -271,7 +273,7 @@ process merge_copynumbers {
     file 'cn*' from cnfiles.collect()
 
     output:
-    file all_cns into all_cns_1, all_cns_2
+    file all_cns into all_cns_out
 
     """
     cat cn* > all_cns
@@ -283,7 +285,7 @@ process merge_copynumbers {
 
 process translate_hqcs {
     input:
-    file 'hqcs' from merged_hqcs_1
+    file 'hqcs' from merged_hqcs_out
 
     output:
     file hqcs_translated
@@ -310,11 +312,11 @@ process align_hqcs {
 // TODO: threaded backtranslate
 process backtranslate_hqcs {
     input:
-    file 'dna' from merged_hqcs_2
+    file 'dna' from merged_hqcs_out
     file 'aa' from hqcs_aligned
 
     output:
-    file msa into msa_1, msa_2
+    file 'msa' into msa_out
 
     """
     ${params.python} ${params.script_dir}/backtranslate.py \
@@ -330,16 +332,56 @@ process backtranslate_hqcs {
 // TODO: all .json files
 // TODO: .zip file
 
+process dates_json_task {
+    input:
+    file 'metadata' from metadata_2
+
+    output:
+    file 'dates.json' into dates_json_out
+
+    """
+    #!${params.python}
+    import json
+    from flea.util import get_date_dict
+
+    result = get_date_dict('metadata')
+    with open('dates.json', 'w') as handle:
+        json.dump(result, handle, separators=(",\\n", ":"))
+    """
+}
+
+// processs copynumber_json {
+//     input:
+//     file 'cns' from all_cns_out
+
+//     output:
+//     file 'copynumbers.json' into copynumbers_json_out
+
+//     """
+//     #!${params.python}
+
+//     from flea.utils import id_with_cn
+
+//     d = parse_copynumbers('cns')
+//     # add copynumber to name, to match rest of this pipeline
+//     result = dict((id_with_cn(key, value), value)
+//                   for key, value in d.items())
+//     with open('copynumbers.json', 'w') as handle:
+//         json.dump(result, handle, separators=(",\\n", ":"))
+//     """
+// }
+
 // TODO: rewrite as filter_fastx with id prefix
 process oldest_seqs {
     input:
-    file 'msa' from msa_1
+    file 'msa' from msa_out
 
     output:
     file oldest_seqs
 
     """
     #!${params.python}
+
     import datetime
     from Bio import SeqIO
 
@@ -352,10 +394,10 @@ process oldest_seqs {
 process mrca {
     input:
     file oldest_seqs
-    file 'cns' from all_cns_1
+    file 'cns' from all_cns_out
 
     output:
-    file 'mrca' into mrca_1, mrca_2
+    file 'mrca' into mrca_out
 
     """
     ${params.python} ${params.script_dir}/DNAcons.py \
@@ -371,14 +413,15 @@ process mrca {
  */
 process add_cn_to_ids {
     input:
-    file 'msa' from msa_2
-    file 'cns' from all_cns_2
+    file 'msa' from msa_out
+    file 'cns' from all_cns_out
 
     output:
-    file msa_with_cn into msa_id_1, msa_id_2, msa_id_3, msa_id_4
+    file 'msa_with_cn' into msa_id_out
 
     """
     #!${params.python}
+
     from Bio import SeqIO
     from flea.util import parse_copynumbers, replace_id
 
@@ -395,23 +438,23 @@ process add_cn_to_ids {
 
 process add_mrca {
     input:
-    file 'mrca' from mrca_1
-    file 'msa' from msa_id_1
+    file 'mrca' from mrca_out
+    file 'msa' from msa_id_out
 
     output:
-    file msa_with_mrca
+    file 'msa_with_mrca' into msa_with_mrca_out
 
     "cat mrca msa > msa_with_mrca"
 }
 
 process fasttree {
     input:
-    file msa_with_mrca
+    file 'msa' from msa_with_mrca_out
 
     output:
     file tree
 
-    "${params.fasttree} -gtr -nt msa_with_mrca > tree"
+    "${params.fasttree} -gtr -nt msa > tree"
 }
 
 process reroot {
@@ -419,10 +462,11 @@ process reroot {
     file tree
 
     output:
-    file rooted_tree
+    file 'rooted_tree' into rooted_tree_out
 
     """
     #!${params.python}
+
     from Bio import Phylo
 
     tree = next(Phylo.parse('tree', 'newick'))
@@ -438,9 +482,28 @@ process reroot {
     """
 }
 
+process tree_json {
+    input:
+    file 'tree' from rooted_tree_out
+
+    output:
+    file 'trees.json' into tree_json_out
+
+    """
+    #!${params.python}
+    import json
+
+    with open('tree') as handle:
+        newick_string = handle.read()
+    result = {'tree': newick_string}
+    with open('trees.json', 'w') as handle:
+        json.dump(result, handle, separators=(",\\n", ":"))
+    """
+}
+
 process translate_msa_with_cn {
     input:
-    file 'msa' from msa_id_2
+    file 'msa' from msa_id_out
 
     output:
     file msa_translated
@@ -453,7 +516,7 @@ process translate_msa_with_cn {
 
 process translate_mrca {
     input:
-    file 'mrca' from mrca_2
+    file 'mrca' from mrca_out
 
     output:
     file mrca_translated
@@ -466,7 +529,7 @@ process translate_mrca {
 
 process js_divergence {
     input:
-    file 'msa' from msa_id_2
+    file 'msa' from msa_id_out
     file 'metadata' from metadata_1
 
     output:
@@ -478,76 +541,301 @@ process js_divergence {
     """
 }
 
-// process distance_matrix {
-//     input:
-//     file 'msa' from msa_cn_4
+process distance_matrix {
+    input:
+    file 'msa' from msa_id_out
 
-//     output:
-//     file dmatrix
+    output:
+    file dmatrix
 
-//     """
-//     ${params.usearch} -calc_distmx msa -distmxout dmatrix \
-//       -format tabbed_pairs
-//     """
-// }
+    """
+    ${params.usearch} -calc_distmx msa -distmxout dmatrix \
+      -format tabbed_pairs
+    """
+}
 
-// process manifold_embedding {
-//     input:
-//     file dmatrix
+// TODO: threading
+process manifold_embedding {
+    input:
+    file dmatrix
 
-//     output:
-//     file 'manifold.json' into manifold_json_out
+    output:
+    file 'manifold.json' into manifold_json_out
 
-//     """
-//     ${params.python} ${params.script_dir}/manifold_embed.py \
-//       --n-jobs ${params.threads} --flip \
-//       dmatrix manifold.json
-//     """
-// }
+    """
+    ${params.python} ${params.script_dir}/manifold_embed.py \
+      --n-jobs 1 --flip \
+      dmatrix manifold.json
+    """
+}
 
-// // process reconstruct_ancestors {
+// TODO: avoid full paths
+// TODO: why do command line arguments not work here?
+process reconstruct_ancestors {
+    input:
+    file 'msa' from msa_with_mrca_out
+    file 'tree' from rooted_tree_out
 
-// // }
+    output:
+    file 'ancestors' into ancestors_out
 
-// // process translate_ancestors {
+    shell:
+    '''
+    echo $(pwd)/msa >> stdin
+    echo $(pwd)/tree >> stdin
+    echo $(pwd)/ancestors >> stdin
+    echo HKY85 >> stdin
+    echo 2 >> stdin
+    !{params.hyphy} !{params.hyphy_dir}/reconstructAncestors.bf < stdin
+    '''
+}
 
-// // }
+process translate_ancestors {
+    input:
+    file 'ancestors' from ancestors_out
 
-// // process replace_stop_codons {
+    output:
+    file 'translated' into ancestors_translated_out
 
-// // }
+    """
+    ${params.python} ${params.script_dir}/translate.py --gapped \
+      < ancestors > translated
+    """
+}
 
-// // process dates_for_evo_history {
+process replace_stop_codons {
+    input:
+    file 'msa' from msa_id_out
 
-// // }
+    output:
+    file 'no_stops' into msa_no_stops
 
-// // process evo_history {
+    """
+    ${params.python} ${params.script_dir}/filter_fastx.py \
+      stop_codons fasta fasta < msa > no_stops
+    """
+}
 
-// // }
+// TODO: why do we need to split output here, but not elsewhere?
+process seq_dates {
+    input:
+    file 'msa' from msa_id_out
+    file 'metadata' from metadata_3
 
-// // process fubar {
+    output:
+    file 'dates' into seq_dates_1, seq_dates_2
 
-// // }
+    """
+    #!${params.python}
+    import json    
+    from Bio import SeqIO
+    from flea.util import get_date_dict
 
-// process dates_json_task {
-//     input:
-//     file 'metadata' from metadata_2
+    date_dict = get_date_dict('metadata')
+    records = list(SeqIO.parse('msa', "fasta"))
+    with open('dates', "w") as handle:
+        outdict = {r.id: date_dict[r.id.split('_')[0]] for r in records}
+        json.dump(outdict, handle, separators=(",\\n", ":"))
+    """
+}
 
-//     output:
-//     file 'dates.json' into dates_json_out
+// FIXME: why does this segfault???
 
-//     """
-//     #!${params.python}
-//     import json
-//     from flea.util import get_date_dict
+/*
+process region_coords {
+    input:
+    file 'mrca' from mrca_out
 
-//     result = get_date_dict('metadata')
-//     with open('dates.json', 'w') as handle:
+    output:
+    file 'region_coords.json' into region_coords_json
+
+    shell:
+    '''
+    !{params.hyphy} !{params.hyphy_dir}/HXB2partsSplitter.bf \
+      $(pwd)/mrca $(pwd)/region_coords.json
+    '''
+}
+
+process evo_history {
+    input:
+    file 'no_stops' from msa_no_stops
+    file 'dates' from seq_dates_1
+    file 'region_coords' from region_coords_json
+
+    output:
+    file rates_pheno
+
+    shell:
+    '''
+    !{params.hyphy} !{params.hyphy_dir}/obtainEvolutionaryHistory.bf \
+      $(pwd)/no_stops $(pwd)/dates $(pwd)/region_coords
+    '''
+}
+
+process rates_pheno_json {
+    input:
+    file rates_pheno
+
+    output:
+    file 'rates_pheno.json' into rates_pheno_json_out
+
+    """
+    #!${params.python}
+
+    import json
+
+    with open('rates_pheno') as h:
+        lines = list(csv.reader(h, delimiter='\t'))
+    result = {}
+    keys, rest = lines[0], lines[1:]
+    result = list(dict((key, value) for key, value in zip(keys, line))
+                  for line in rest)
+    with open('rates_pheno.json', 'w') as h:
+        json.dump(result, h, separators=(",\\n", ":"))
+    """
+}
+*/
+
+process fubar {
+    input:
+    file 'no_stops' from msa_no_stops
+    file 'dates' from seq_dates_2
+    file 'mrca' from mrca_out
+
+    output:
+    file 'rates.json' into rates_json
+
+    shell:
+    '''
+    !{params.hyphy} !{params.hyphy_dir}/runFUBAR.bf \
+      $(pwd)/no_stops $(pwd)/dates $(pwd)/mrca $(pwd) $(pwd)/rates.json
+    '''
+}
+
+// def make_coordinates_json(infile, outfile):
+//     # FIXME: degap MRCA before running?
+//     # FIXME: split up so mafft can run remotely
+//     # FIXME: run mafft with --add
+//     combined = os.path.join(pipeline_dir, 'combined.fasta')
+//     aligned = os.path.join(pipeline_dir, 'combined.aligned.fasta')
+//     cat_files([infile, globals_.config.get('Parameters', 'reference_protein')], combined)
+//     mafft(combined, aligned)
+//     pairwise_mrca, pairwise_ref = list(SeqIO.parse(aligned, 'fasta'))
+//     ref_coords = open(globals_.config.get('Parameters', 'reference_coordinates')).read().strip().split()
+
+//     # transfer coordinates to MRCA
+//     pairwise_coords = extend_coordinates(ref_coords, str(pairwise_ref.seq))
+//     mrca_coords = list(coord for char, coord in zip(str(pairwise_mrca.seq),
+//                                                     pairwise_coords)
+//                        if char != "-")
+
+//     # extend MRCA coords to full MSA
+//     mrca = read_single_record(infile, 'fasta', True)
+//     result = extend_coordinates(mrca_coords, str(mrca.seq))
+
+//     rdict = {'coordinates': result}
+//     with open(outfile, 'w') as handle:
+//         json.dump(rdict, handle, separators=(",\\n", ":"))
+
+// def make_sequences_json(infiles, outfile):
+//     alignment_file, mrca_file, coords_file = infiles
+//     result = {}
+//     observed = {}
+
+//     # add sequences
+//     # TODO: check if MRCA differs from our inferred MRCA
+//     for r in SeqIO.parse(alignment_file, "fasta"):
+//         if r.name == "Node0":
+//             r.name = 'MRCA'
+//         if 'ancestor' in r.name or r.name == 'MRCA':
+//             if 'Ancestors' not in result:
+//                 result['Ancestors'] = {}
+//             result['Ancestors'][r.id] = str(r.seq)
+//         else:
+//             date = name_to_date(r.name)
+//             if date not in observed:
+//                 observed[date] = {}
+//             observed[date][r.id] = str(r.seq)
+//     result['Observed'] = observed
+
+//     # add MRCA
+//     mrca = read_single_record(mrca_file, 'fasta', True)
+//     result['MRCA'] = str(mrca.seq)
+
+//     # add reference
+//     reference = read_single_record(globals_.config.get('Parameters', 'reference_protein'), 'fasta', True)
+//     rstr = str(reference.seq)
+//     with open(coords_file) as handle:
+//         alignment_coords = json.load(handle)['coordinates']
+//     ref_coords = open(globals_.config.get('Parameters', 'reference_coordinates')).read().strip().split()
+//     cmap = dict((c, i) for i, c in enumerate(ref_coords))
+//     ref_result = ''.join(list(rstr[cmap[c]] for c in alignment_coords))
+//     result['Reference'] = ref_result
+
+//     with open(outfile, 'w') as handle:
 //         json.dump(result, handle, separators=(",\\n", ":"))
-//     """
-// }
 
-// // /* ************************************************************************** */
-// // /* DIAGNOSIS SUB-PIPELINE */
 
-// // // TODO: make this optional
+/* ************************************************************************** */
+/* DIAGNOSIS SUB-PIPELINE */
+
+// TODO: make this optional
+
+/*
+process diagnose {
+    input:
+    file "qcs*" from qcs_final_3.map{ it[0] }.collect()
+    file 'hqcs' from merged_hqcs_out    
+
+    output:
+    file 'pairfile' into hqcs_qcs_pairs_out
+
+    """
+    # cat qcs
+    cat qcs* > all_qcs
+    
+    # convert to fasta
+    ${params.python} ${params.script_dir}/filter_fastx.py \
+      convert fastq fasta < all_qcs > qcs_fasta
+
+    # usearch for pairs
+    ${params.usearch} -usearch_global qcs_fasta -db hqcs \
+      -userout pairfile -userfields query+target \
+      -id ${params.qcs_to_hqcs_identity} \
+      -top_hit_only -strand both \
+      -maxaccepts ${params.max_accepts} -maxrejects ${params.max_rejects} \
+      -maxqt ${params.max_qcs_length_ratio} \
+      -threads ${params.threads}
+
+    # combine pairs
+    mkdir alignments
+    ${params.python} ${params.script_dir}/pairs_to_fasta.py \
+      qcs_fasta hqcs pairfile alignments
+
+    # align and insert gaps
+    # TODO: do in parallel
+    for f in alignments/*unaligned.fasta; do
+        ${params.bealign} -a codon f ${f}.bam
+
+        bam2msa ${f}.bam ${f}.bam.fasta
+
+        ${params.python} ${params.script_dir}/insert_gaps.py \
+          ${f}.bam.fasta msa ${f}.bam.fasta.gapped
+    done
+
+    # merge all
+    cat alignments/gapped* > qcs_msa
+
+    # replace gapped codons
+
+    ${params.python} ${params.script_dir}/filter_fastx.py \
+      gap_godons fasta fasta < infile > outfile
+    ${params.python} ${params.script_dir}/translate.py \
+      TODO
+
+    # run diagnosis
+    mkdir diagnosis
+    ${params.python} ${params.script_dir}/diagnose.py hqcs qcs cn diagnosis
+    """
+}
+*/

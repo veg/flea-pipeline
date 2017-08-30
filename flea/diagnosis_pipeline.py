@@ -160,16 +160,6 @@ def replace_gapped_codons_file(infile, outfile):
 @report_wrapper
 def insert_gaps_wrapper(infiles, outfile):
     infile, backtranslated = infiles
-    check_suffix(infile, '.aligned.fasta')
-    check_suffix(backtranslated, 'codon_alignment.fasta')
-    ref, *seqs = list(SeqIO.parse(infile, 'fasta'))
-    ref_gapped = next(r for r in SeqIO.parse(backtranslated, 'fasta')
-                      if r.id == ref.id)
-    seqs_gapped = (new_record_seq_str(r, insert_gaps(str(ref_gapped.seq),
-                                                     str(r.seq),
-                                                     '-', '-'))
-                   for r in seqs)
-    SeqIO.write(seqs_gapped, outfile, "fasta")
 
 
 @must_work()

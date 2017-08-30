@@ -6,12 +6,16 @@ from Bio import SeqIO
 
 from flea.util import run_regexp, iter_sample, is_in_frame
 from flea.util import parse_copynumbers
+from flea.util import handle_codon, replace_stop_codons, replace_gapped_codons
+from flea.util import update_record_seq
 
 
 def main(mode, informat, outformat, params):
     records = SeqIO.parse(sys.stdin, informat)
     result = ()
-    if mode == "runs":
+    if mode == "convert":
+        result = records
+    elif mode == "runs":
         run_length = int(params[0])
         cregexp = run_regexp(run_length)
         result = (r for r in records if cregexp.search(str(r.seq)) is None)
@@ -33,6 +37,14 @@ def main(mode, informat, outformat, params):
         cnfile = params[0]
         cndict = parse_copynumbers(cnfile)
         result = (r for r in records if r.id in cndict and cndict[r.id] > 0)
+    elif mode == "stop_codons":
+        result = (replace_stop_codons(record) for record in records)
+    elif mode == "gap_codons":
+        result = (replace_gapped_codons(record) for record in records)
+    elif mode == "degap":
+        result = (update_record_seq(r, r.seq.ungap('-')) for r in records)
+    else:
+        raise Exception('unknown mode: {}'.format(mode))
     SeqIO.write(result, sys.stdout, outformat)
     
 

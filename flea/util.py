@@ -17,6 +17,7 @@ import csv
 
 from Bio.Seq import Seq
 from Bio import SeqIO
+from Bio.Seq import translate
 
 import numpy as np
 
@@ -436,3 +437,34 @@ def get_date_dict(metafile):
     with open(metafile) as handle:
         parsed = csv.reader(handle, delimiter=' ')
         return dict((tp, int(date)) for _, tp, date in parsed)
+
+
+def handle_codon(codon):
+    codon = ''.join(codon)
+    if codon == "---":
+        return codon
+    if translate(codon) == "*":
+        return "NNN"
+    return codon
+
+
+def replace_stop_codons(record):
+    if len(record.seq) % 3 != 0:
+        raise Exception('record {} is not in frame'.format(record.id))
+    new_str = "".join(handle_codon(codon) for codon in grouper(record.seq, 3))
+    result = new_record_seq_str(record, new_str)
+    # HyPhy does not like anything but the sequence id
+    result.name = ""
+    result.description = ""
+    return result
+
+
+def replace_gapped_codons(record):
+    if len(record.seq) % 3 != 0:
+        raise Exception('record {} is not in frame'.format(record.id))
+    new_str = "".join(handle_gap_codon(codon) for codon in grouper(record.seq, 3))
+    result = new_record_seq_str(record, new_str)
+    # HyPhy does not like anything but the sequence id
+    result.name = ""
+    result.description = ""
+    return result
