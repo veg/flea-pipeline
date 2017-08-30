@@ -12,7 +12,7 @@ Usage:
 Options:
   -v --verbose            Print progress to STDERR
   --keep-gaps             Do not ungap the consensus
-  --copynumbers=<STRING>  File containing "<id>\t<num>" lines.
+  --copynumbers           Seq id ends with copynumber
   --id=<STRING>           Record id for the fasta output
   -o --outfile=<STRING>   Name of output file
   --ambifile=<STRING>
@@ -73,7 +73,7 @@ def consensus(seqs, copies=None, codon=False, seed=None):
     return cons, ambi
 
 
-def consfile(filename, outfile=None, ambifile=None, copynumber_file=None,
+def consfile(filename, outfile=None, ambifile=None, do_copynumber=False,
              id_str=None, codon=False, ungap=True, verbose=False, seed=None):
     """Computes a consensus sequence and writes it to a file.
 
@@ -86,16 +86,12 @@ def consfile(filename, outfile=None, ambifile=None, copynumber_file=None,
     <0-index position> <frequency> <candidates>
 
     """
-    alignment = AlignIO.read(filename, "fasta")
+    alignment = list(AlignIO.read(filename, "fasta"))
     seqs = list(r.seq for r in alignment)
-    if copynumber_file is None:
-        copies = None
+    if do_copynumber:
+        copies = list(int(r.id.split('_')[-1]) for r in alignment)
     else:
-        with open(copynumber_file) as handle:
-            lines = handle.read().strip().split('\n')
-            pairs = list(e.split() for e in lines)
-            cdict = dict((key, int(val)) for key, val in pairs)
-            copies = list(cdict[r.id] for r in alignment)
+        copies = None
     _consensus, ambiguous = consensus(seqs, copies, codon=codon, seed=seed)
     if ungap:
         # cannot just call _consensus.ungap('-'), because that will
@@ -134,7 +130,7 @@ def consfile(filename, outfile=None, ambifile=None, copynumber_file=None,
 if __name__ == "__main__":
     args = docopt(__doc__)
     filename = args["<infile>"]
-    copynumber_file = args["--copynumbers"]
+    do_copynumber = args["--copynumbers"]
     verbose = args["--verbose"]
     id_str = args["--id"]
     outfile = args["--outfile"]
@@ -142,6 +138,6 @@ if __name__ == "__main__":
     keep_gap = args["--keep-gaps"]
     codon = args["--codon"]
     ungap = not keep_gap
-    consfile(filename, outfile, copynumber_file=copynumber_file,
+    consfile(filename, outfile, do_copynumber=do_copynumber,
              ambifile=ambifile, id_str=id_str, codon=codon, ungap=ungap,
              verbose=verbose)

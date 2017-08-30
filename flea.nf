@@ -13,6 +13,7 @@
 // TODO: sub-pipelines
 // TODO: nextflow repo format
 // TODO: infer singleton proc
+// TODO: add file extensions
 
 params.infile = "$HOME/flea/data/P018/data/metadata"
 
@@ -44,12 +45,12 @@ input_channel = Channel.from(input_files)
 /* ************************************************************************** */
 /* QUALITY SUB-PIPELINE */
 
-process quality_filter {
+process quality_pipeline {
     input:
     set 'ccs.fastq', label from input_channel
 
     output:
-    set 'qcs', label into qcs_final_1, qcs_final_2, qcs_final_3
+    set 'qcs', label into qcs_final_1, qcs_final_2
 
     """
     # filter by quality score
@@ -96,33 +97,26 @@ process quality_filter {
 /* ************************************************************************** */
 /* CONSENSUS SUB-PIPELINE */
 
-process cluster {
+process consensus_pipeline {
     input:
     set 'qcs', label from qcs_final_1
 
     output:
-    set 'raw_cluster_*', label into cluster_out
-
-    """
-    ${params.usearch} -cluster_fast qcs -id ${params.cluster_identity} \
-      -sort length \
-      -maxaccepts ${params.max_accepts} -maxrejects ${params.max_rejects} \
-      -top_hit_only -minsl ${params.min_length_ratio} \
-      -threads ${params.threads} \
-      -clusters raw_cluster_
-    """
-}
-
-process consensus {
-    input:
-    set 'raw*', label from cluster_out
-
-    output:
-    set 'all_consensus', label into consensus_out
+    file filtered_hqcs into hqcs_files
+    file cnfile into cnfiles
 
     shell:
     '''
-    for f in raw*; do
+    # cluster
+    !{params.usearch} -cluster_fast qcs -id !{params.cluster_identity} \
+      -sort length \
+      -maxaccepts !{params.max_accepts} -maxrejects !{params.max_rejects} \
+      -top_hit_only -minsl !{params.min_length_ratio} \
+      -threads !{params.threads} \
+      -clusters raw_cluster_
+
+    # sample clusters and do mafft consensus
+    for f in raw_cluster_*; do
         !{params.python} !{params.script_dir}/filter_fastx.py \
           sample fasta fasta \
           !{params.min_cluster_size} !{params.max_cluster_size} \
@@ -140,154 +134,100 @@ process consensus {
         fi
     done
     cat *.consensus > all_consensus
-    '''
-}
 
-/*
- * Shift-corrected, inframe, unique HQCS sequences.
- */
-process shift_correction {
-    input:
-    set 'all_consensus', label from consensus_out
+    ######
+    # shift correction
 
-    output:
-    set 'shifted_uniques', label into shift_correction_out
-
-    """
     # compute inframe
-    ${params.python} ${params.script_dir}/filter_fastx.py \
+    !{params.python} !{params.script_dir}/filter_fastx.py \
       inframe fasta fasta false < all_consensus > inframe
 
     # unique seqs
-    ${params.usearch} -fastx_uniques inframe -fastaout uniques \
-      -threads ${params.threads}
+    !{params.usearch} -fastx_uniques inframe -fastaout uniques \
+      -threads !{params.threads}
 
     # search
-    ${params.usearch} -usearch_global all_consensus -db uniques \
-      -id ${params.reference_identity} \
+    !{params.usearch} -usearch_global all_consensus -db uniques \
+      -id !{params.reference_identity} \
       -top_hit_only -strand both \
-      -maxaccepts ${params.max_accepts} -maxrejects ${params.max_rejects} \
-      -threads ${params.threads} \
+      -maxaccepts !{params.max_accepts} -maxrejects !{params.max_rejects} \
+      -threads !{params.threads} \
       -fastapairs pairfile -userout calnfile -userfields caln
 
     # shift correction
-    ${params.python} ${params.script_dir}/correct_shifts.py \
+    !{params.python} !{params.script_dir}/correct_shifts.py \
       --del-strategy=reference \
       --calns=calnfile \
       pairfile shift_corrected
 
     # compute inframe
-    ${params.python} ${params.script_dir}/filter_fastx.py \
+    !{params.python} !{params.script_dir}/filter_fastx.py \
       inframe fasta fasta true < shift_corrected > inframe
 
     # unique seqs
-    ${params.usearch} -fastx_uniques inframe -fastaout shifted_uniques \
-      -threads ${params.threads}
+    !{params.usearch} -fastx_uniques inframe -fastaout shifted_uniques \
+      -threads !{params.threads}
 
-    """
-}
+    ########
+    # compute copynumbers
 
-/*
- * Compute pairs for copynumbers.
- *
- * We need to be careful to group files by time point.
- *
- */
-process copynumbers {
-    input:
-    set label, 'hqcs', 'qcs' from shift_correction_out.combine(qcs_final_2, by: 1)
-
-    output:
-    file filtered_hqcs into hqcs_files
-    file cnfile into cnfiles
-
-    """
     # usearch for pairs
-    ${params.usearch} -usearch_global qcs -db hqcs \
+    !{params.usearch} -usearch_global qcs -db shifted_uniques \
       -userout pairfile -userfields query+target \
-      -id ${params.copynumber_identity} \
+      -id !{params.copynumber_identity} \
       -top_hit_only -strand both \
-      -maxaccepts ${params.max_accepts} -maxrejects ${params.max_rejects} \
-      -maxqt ${params.cn_max_length_ratio} \
-      -threads ${params.threads}
+      -maxaccepts !{params.max_accepts} -maxrejects !{params.max_rejects} \
+      -maxqt !{params.cn_max_length_ratio} \
+      -threads !{params.threads}
 
     # write copynumber file
-    ${params.python} ${params.script_dir}/write_copynumbers.py \
+    !{params.python} !{params.script_dir}/write_copynumbers.py \
       < pairfile > cnfile
 
     # filter out HQCS with 0 copynumber
-    ${params.python} ${params.script_dir}/filter_fastx.py \
+    !{params.python} !{params.script_dir}/filter_fastx.py \
       copynumber fasta fasta cnfile \
-      < hqcs > filtered_hqcs
-    """
+      < shifted_uniques > filtered_hqcs
+    '''
 }
 
-
-process merge_hqcs {
+process merge_timepoints {
     input:
-    file 'hqcs' from hqcs_files.collect()
-
-    output:
-    file 'merged_hqcs' into merged_hqcs_out
-
-    """
-    cat hqcs* > merged_hqcs
-    """
-}
-
-process merge_copynumbers {
-    input:
+    file 'hqcs*' from hqcs_files.collect()
     file 'cn*' from cnfiles.collect()
 
     output:
-    file all_cns into all_cns_out
+    file final_hqcs into merged_hqcs_out
 
     """
-    cat cn* > all_cns
+    cat hqcs* > merged_hqcs
+    cat cn* > merged_cns
+
+    # add copynumbers to ids, for evo_history
+    ${params.python} ${params.script_dir}/add_cn_to_id.py \
+      merged_hqcs merged_cns final_hqcs
     """
 }
 
 /* ************************************************************************** */
 /* ALIGNMENT SUB-PIPELINE */
 
-process translate_hqcs {
+process alignment_pipeline {
     input:
     file 'hqcs' from merged_hqcs_out
-
-    output:
-    file hqcs_translated
-
-    """
-    ${params.python} ${params.script_dir}/translate.py \
-      < hqcs > hqcs_translated
-    """
-}
-
-process align_hqcs {
-    input:
-    file hqcs_translated
-
-    output:
-    file hqcs_aligned
-
-    """
-    ${params.mafft} --ep 0.5 --quiet --preservecase \
-      hqcs_translated > hqcs_aligned
-    """
-}
-
-// TODO: threaded backtranslate
-process backtranslate_hqcs {
-    input:
-    file 'dna' from merged_hqcs_out
-    file 'aa' from hqcs_aligned
 
     output:
     file 'msa' into msa_out
 
     """
+    ${params.python} ${params.script_dir}/translate.py \
+      < hqcs > hqcs_protein
+
+    ${params.mafft} --ep 0.5 --quiet --preservecase \
+      hqcs_protein > hqcs_protein_aligned
+
     ${params.python} ${params.script_dir}/backtranslate.py \
-      aa dna msa
+      hqcs_protein_aligned hqcs msa
     """
 }
 
@@ -319,7 +259,7 @@ process dates_json_task {
 
 // processs copynumber_json {
 //     input:
-//     file 'cns' from all_cns_out
+//     file 'cns' from merged_cns_out
 
 //     output:
 //     file 'copynumbers.json' into copynumbers_json_out
@@ -361,7 +301,6 @@ process oldest_seqs {
 process mrca {
     input:
     file oldest_seqs
-    file 'cns' from all_cns_out
 
     output:
     file 'mrca' into mrca_out
@@ -370,43 +309,15 @@ process mrca {
     ${params.python} ${params.script_dir}/DNAcons.py \
       --keep-gaps --codon --id MRCA \
       -o mrca \
-      --copynumbers cns \
+      --copynumbers \
       oldest_seqs
-    """
-}
-
-/*
- * evo history needs copynumbers in the names
- */
-process add_cn_to_ids {
-    input:
-    file 'msa' from msa_out
-    file 'cns' from all_cns_out
-
-    output:
-    file 'msa_with_cn' into msa_id_out
-
-    """
-    #!${params.python}
-
-    from Bio import SeqIO
-    from flea.util import parse_copynumbers, replace_id
-
-    def id_with_cn(id_, cn):
-        return "{}_cn_{}".format(id_, cn)
-
-    id_to_cn = parse_copynumbers('cns')
-    records = SeqIO.parse('msa', 'fasta')
-    result = (replace_id(r, id_with_cn(r.id, id_to_cn[r.id]))
-              for r in records)
-    SeqIO.write(result, 'msa_with_cn', "fasta")
     """
 }
 
 process add_mrca {
     input:
     file 'mrca' from mrca_out
-    file 'msa' from msa_id_out
+    file 'msa' from msa_out
 
     output:
     file 'msa_with_mrca' into msa_with_mrca_out
@@ -470,7 +381,7 @@ process tree_json {
 
 process translate_msa_with_cn {
     input:
-    file 'msa' from msa_id_out
+    file 'msa' from msa_out
 
     output:
     file msa_translated
@@ -496,7 +407,7 @@ process translate_mrca {
 
 process js_divergence {
     input:
-    file 'msa' from msa_id_out
+    file 'msa' from msa_out
     file 'metadata' from metadata_1
 
     output:
@@ -508,28 +419,17 @@ process js_divergence {
     """
 }
 
-process distance_matrix {
-    input:
-    file 'msa' from msa_id_out
-
-    output:
-    file dmatrix
-
-    """
-    ${params.usearch} -calc_distmx msa -distmxout dmatrix \
-      -format tabbed_pairs
-    """
-}
-
-// TODO: threading
 process manifold_embedding {
     input:
-    file dmatrix
+    file 'msa' from msa_out
 
     output:
     file 'manifold.json' into manifold_json_out
 
     """
+    ${params.usearch} -calc_distmx msa -distmxout dmatrix \
+      -format tabbed_pairs
+
     ${params.python} ${params.script_dir}/manifold_embed.py \
       --n-jobs 1 --flip \
       dmatrix manifold.json
@@ -544,7 +444,7 @@ process reconstruct_ancestors {
     file 'tree' from rooted_tree_out
 
     output:
-    file 'ancestors' into ancestors_out
+    file 'translated' into ancestors_out
 
     shell:
     '''
@@ -554,25 +454,15 @@ process reconstruct_ancestors {
     echo HKY85 >> stdin
     echo 2 >> stdin
     !{params.hyphy} !{params.hyphy_dir}/reconstructAncestors.bf < stdin
-    '''
-}
 
-process translate_ancestors {
-    input:
-    file 'ancestors' from ancestors_out
-
-    output:
-    file 'translated' into ancestors_translated_out
-
-    """
-    ${params.python} ${params.script_dir}/translate.py --gapped \
+    !{params.python} !{params.script_dir}/translate.py --gapped \
       < ancestors > translated
-    """
+    '''
 }
 
 process replace_stop_codons {
     input:
-    file 'msa' from msa_id_out
+    file 'msa' from msa_out
 
     output:
     file 'no_stops' into msa_no_stops
@@ -586,7 +476,7 @@ process replace_stop_codons {
 // TODO: why do we need to split output here, but not elsewhere?
 process seq_dates {
     input:
-    file 'msa' from msa_id_out
+    file 'msa' from msa_out
     file 'metadata' from metadata_3
 
     output:
@@ -594,7 +484,7 @@ process seq_dates {
 
     """
     #!${params.python}
-    import json    
+    import json
     from Bio import SeqIO
     from flea.util import get_date_dict
 
@@ -663,21 +553,21 @@ process rates_pheno_json {
 }
 */
 
-process fubar {
-    input:
-    file 'no_stops' from msa_no_stops
-    file 'dates' from seq_dates_2
-    file 'mrca' from mrca_out
-
-    output:
-    file 'rates.json' into rates_json
-
-    shell:
-    '''
-    !{params.hyphy} !{params.hyphy_dir}/runFUBAR.bf \
-      $(pwd)/no_stops $(pwd)/dates $(pwd)/mrca $(pwd) $(pwd)/rates.json
-    '''
-}
+// process fubar {
+//     input:
+//     file 'no_stops' from msa_no_stops
+//     file 'dates' from seq_dates_2
+//     file 'mrca' from mrca_out
+//
+//     output:
+//     file 'rates.json' into rates_json
+//
+//     shell:
+//     '''
+//     !{params.hyphy} !{params.hyphy_dir}/runFUBAR.bf \
+//       $(pwd)/no_stops $(pwd)/dates $(pwd)/mrca $(pwd) $(pwd)/rates.json
+//     '''
+// }
 
 // def make_coordinates_json(infile, outfile):
 //     # FIXME: degap MRCA before running?
@@ -751,8 +641,8 @@ process fubar {
 /*
 process diagnose {
     input:
-    file "qcs*" from qcs_final_3.map{ it[0] }.collect()
-    file 'hqcs' from merged_hqcs_out    
+    file "qcs*" from qcs_final_2.map{ it[0] }.collect()
+    file 'hqcs' from merged_hqcs_out
 
     output:
     file 'pairfile' into hqcs_qcs_pairs_out
@@ -760,7 +650,7 @@ process diagnose {
     """
     # cat qcs
     cat qcs* > all_qcs
-    
+
     # convert to fasta
     ${params.python} ${params.script_dir}/filter_fastx.py \
       convert fastq fasta < all_qcs > qcs_fasta
