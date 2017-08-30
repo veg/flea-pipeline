@@ -49,55 +49,31 @@ process quality_filter {
     set 'ccs.fastq', label from input_channel
 
     output:
-    set 'qfiltered', label into quality_out
+    set 'qcs', label into qcs_final_1, qcs_final_2, qcs_final_3
 
     """
+    # filter by quality score
     ${params.usearch} -fastq_filter ccs.fastq \
       -fastq_maxee_rate ${params.max_error_rate} \
       -threads ${params.threads} \
       -fastq_qmax ${params.qmax} -fastq_minlen ${params.min_length} \
       -fastqout qfiltered \
       -relabel "${label}_ccs_"
-    """
-}
 
-process trim_ends {
-    input:
-    set 'qfiltered', label from quality_out
-
-    output:
-    set 'trimmed', label into trim_ends_out
-
-    """${params.python} ${params.script_dir}/trim.py \
+    # trim ends
+    ${params.python} ${params.script_dir}/trim.py \
       --jobs ${params.threads} --fastq qfiltered trimmed
-    """
-}
 
-process filter_runs {
-    input:
-    set 'trimmed', label from trim_ends_out
-
-    output:
-    set 'no_runs', label into filter_runs_out
-
-    """
+    # filter runs
     ${params.python} ${params.script_dir}/filter_fastx.py \
       runs fastq fastq ${params.run_length} < trimmed > no_runs
-    """
-}
 
-process filter_db {
-    input:
-    set 'no_runs', label from filter_runs_out
-
-    output:
-    set 'filtered', label into filter_db_out
-
-    """
+    # filter against contaminants
     ${params.usearch} -usearch_global no_runs \
       -db ${params.contaminants_db} -id ${params.contaminant_identity} -strand both \
       -threads ${params.threads} -notmatchedfq uncontam
 
+    # filter against reference
     ${params.usearch} -usearch_global uncontam -db ${params.reference_db} \
       -id ${params.reference_identity} \
       -userfields qstrand+tstrand+caln \
@@ -106,23 +82,14 @@ process filter_db {
       -threads ${params.threads} \
       -matchedfq matches_db -userout userout
 
-     ${params.python} ${params.script_dir}/trim_terminal_gaps.py matches_db userout filtered
-     """
-}
+    # trim terminal gaps
+    ${params.python} ${params.script_dir}/trim_terminal_gaps.py matches_db userout filtered
 
-// FIXME: do not hardcode min/max length
-process filter_length {
-    input:
-    set 'filtered', label from filter_db_out
-
-    output:
-    set 'lenfiltered', label into qcs_final_1, qcs_final_2, qcs_final_3
-
-    """
+    # length filter
     ${params.python} ${params.script_dir}/filter_fastx.py \
       length fastq fastq \
       ${params.min_length} ${params.max_length} \
-      < filtered > lenfiltered
+      < filtered > qcs
     """
 }
 
@@ -131,13 +98,13 @@ process filter_length {
 
 process cluster {
     input:
-    set 'lenfiltered', label from qcs_final_1
+    set 'qcs', label from qcs_final_1
 
     output:
     set 'raw_cluster_*', label into cluster_out
 
     """
-    ${params.usearch} -cluster_fast lenfiltered -id ${params.cluster_identity} \
+    ${params.usearch} -cluster_fast qcs -id ${params.cluster_identity} \
       -sort length \
       -maxaccepts ${params.max_accepts} -maxrejects ${params.max_rejects} \
       -top_hit_only -minsl ${params.min_length_ratio} \
