@@ -57,15 +57,6 @@ def hyphy_call(script_file, infiles, outfiles,  name, args):
                       walltime=globals_.config.getint('Jobs', 'long_walltime'))
 
 
-def replace_id(record, id_):
-    result = record[:]
-    result.id = id_
-    # HyPhy fails if a name or description are present
-    result.name = ""
-    result.description = ""
-    return result
-
-
 @must_work()
 @report_wrapper
 def dates_json(infiles, outfile):

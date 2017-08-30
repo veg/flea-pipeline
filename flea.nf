@@ -11,8 +11,13 @@
 // TODO: do not hardcode min/max lengths
 // TODO: sub-pipelines
 // TODO: nextflow repo format
+// TODO: infer singleton proc
 
 params.infile = "$HOME/flea/data/P018/data/metadata"
+
+Channel.fromPath(params.infile)
+    .into { metadata_1; metadata_2 }
+
 
 // read input metadata into tuples
 input_files = []
@@ -29,6 +34,9 @@ infile
         tp_to_date[timepoint_label] = date
     }
 
+// FIXME: do this programmatically
+oldest_label = 'V06'
+
 input_channel = Channel.from(input_files)
 
 /* ************************************************************************** */
@@ -39,7 +47,7 @@ process quality_filter {
     set 'ccs.fastq', label from input_channel
 
     output:
-    set 'qfiltered', label into quality_outs
+    set 'qfiltered', label into quality_out
 
     """
     ${params.usearch} -fastq_filter ccs.fastq \
@@ -53,10 +61,10 @@ process quality_filter {
 
 process trim_ends {
     input:
-    set 'qfiltered', label from quality_outs
+    set 'qfiltered', label from quality_out
 
     output:
-    set 'trimmed', label into trim_ends_outs
+    set 'trimmed', label into trim_ends_out
 
     """${params.python} ${params.script_dir}/trim.py \
       --jobs ${params.threads} --fastq qfiltered trimmed
@@ -65,10 +73,10 @@ process trim_ends {
 
 process filter_runs {
     input:
-    set 'trimmed', label from trim_ends_outs
+    set 'trimmed', label from trim_ends_out
 
     output:
-    set 'no_runs', label into filter_runs_outs
+    set 'no_runs', label into filter_runs_out
 
     """
     ${params.python} ${params.script_dir}/filter_fastx.py \
@@ -78,10 +86,10 @@ process filter_runs {
 
 process filter_db {
     input:
-    set 'no_runs', label from filter_runs_outs
+    set 'no_runs', label from filter_runs_out
 
     output:
-    set 'filtered', label into filter_db_outs
+    set 'filtered', label into filter_db_out
 
     """
     ${params.usearch} -usearch_global no_runs \
@@ -103,10 +111,10 @@ process filter_db {
 // FIXME: do not hardcode min/max length
 process filter_length {
     input:
-    set 'filtered', label from filter_db_outs
+    set 'filtered', label from filter_db_out
 
     output:
-    set 'lenfiltered', label into filter_length_outs
+    set 'lenfiltered', label into qcs_final_1, qcs_final_2
 
     """
     ${params.python} ${params.script_dir}/filter_fastx.py \
@@ -119,14 +127,12 @@ process filter_length {
 /* ************************************************************************** */
 /* CONSENSUS SUB-PIPELINE */
 
-filter_length_outs.into { qcs_outs_for_cluster; qcs_outs_for_copynumber }
-
 process cluster {
     input:
-    set 'lenfiltered', label from qcs_outs_for_cluster
+    set 'lenfiltered', label from qcs_final_1
 
     output:
-    set 'raw_cluster_*', label into cluster_outs
+    set 'raw_cluster_*', label into cluster_out
 
     """
     ${params.usearch} -cluster_fast lenfiltered -id ${params.cluster_identity} \
@@ -140,10 +146,10 @@ process cluster {
 
 process consensus {
     input:
-    set 'raw*', label from cluster_outs
+    set 'raw*', label from cluster_out
 
     output:
-    file all_consensus
+    set 'all_consensus', label into consensus_out
 
     shell:
     '''
@@ -154,7 +160,7 @@ process consensus {
           < $f > ${f}.sampled
 
         if [ -s ${f}.sampled ]
-	then
+        then
             !{params.mafft} --ep 0.5 --quiet --preservecase \
             ${f} > ${f}.aligned
 
@@ -173,10 +179,10 @@ process consensus {
  */
 process shift_correction {
     input:
-    file all_consensus
+    set 'all_consensus', label from consensus_out
 
     output:
-    file shifted_uniques
+    set 'shifted_uniques', label into shift_correction_out
 
     """
     # compute inframe
@@ -208,24 +214,23 @@ process shift_correction {
     # unique seqs
     ${params.usearch} -fastx_uniques inframe -fastaout shifted_uniques \
       -threads ${params.threads}
-      
+
     """
 }
 
-// get hqcs and qcs sequences for this time point
-shifted_uniques
-    .merge( qcs_outs_for_copynumber.map { it[0] } ) { hqcs, ccs -> [hqcs, ccs] }
-    .set { hqcs_qcs_pairs }
-
 /*
  * Compute pairs for copynumbers.
+ *
+ * We need to be careful to group files by time point.
+ *
  */
 process copynumbers {
     input:
-    set 'hqcs', 'qcs' from hqcs_qcs_pairs
+    set label, 'hqcs', 'qcs' from shift_correction_out.combine(qcs_final_2, by: 1)
 
     output:
-    set 'final_hqcs', 'cnfile' into hqcs_copynumber_pairs
+    file filtered_hqcs into hqcs_files
+    file cnfile into cnfiles
 
     """
     # usearch for pairs
@@ -244,34 +249,29 @@ process copynumbers {
     # filter out HQCS with 0 copynumber
     ${params.python} ${params.script_dir}/filter_fastx.py \
       copynumber fasta fasta cnfile \
-      < hqcs > final_hqcs
+      < hqcs > filtered_hqcs
     """
 }
 
-hqcs_files = Channel.create()
-cn_files = Channel.create()
-
-hqcs_copynumber_pairs
-    .separate( hqcs_files, cn_files ) { x -> [x[0], x[1]] }
 
 process merge_hqcs {
     input:
-    file 'hqcs*' from hqcs_files.collect()
+    file 'hqcs' from hqcs_files.collect()
 
     output:
-    file all_hqcs
+    file merged_hqcs into merged_hqcs_1, merged_hqcs_2
 
     """
-    cat hqcs* > all_hqcs
+    cat hqcs* > merged_hqcs
     """
 }
 
 process merge_copynumbers {
     input:
-    file 'cn*' from cn_files.collect()
+    file 'cn*' from cnfiles.collect()
 
     output:
-    file all_cns
+    file all_cns into all_cns_1, all_cns_2
 
     """
     cat cn* > all_cns
@@ -281,18 +281,16 @@ process merge_copynumbers {
 /* ************************************************************************** */
 /* ALIGNMENT SUB-PIPELINE */
 
-all_hqcs.into { hqcs_for_translate; hqcs_for_backtranslate }
-
 process translate_hqcs {
     input:
-    file hqcs_for_translate
+    file 'hqcs' from merged_hqcs_1
 
     output:
     file hqcs_translated
 
     """
     ${params.python} ${params.script_dir}/translate.py \
-      < all_hqcs > hqcs_translated
+      < hqcs > hqcs_translated
     """
 }
 
@@ -309,25 +307,20 @@ process align_hqcs {
     """
 }
 
-hqcs_for_backtranslate
-    .merge ( hqcs_aligned ) { dna, aa -> [dna, aa] }
-    .set { dna_aa_pairs }
-
 // TODO: threaded backtranslate
 process backtranslate_hqcs {
     input:
-    set 'dna', 'aa' from dna_aa_pairs
+    file 'dna' from merged_hqcs_2
+    file 'aa' from hqcs_aligned
 
     output:
-    file backtranslated
+    file msa into msa_1, msa_2
 
     """
     ${params.python} ${params.script_dir}/backtranslate.py \
-      aa dna backtranslated
+      aa dna msa
     """
 }
-
-// FIXME: why does the pipeline hang here???
 
 /* ************************************************************************** */
 /* ANALYSIS SUB-PIPELINE */
@@ -337,23 +330,61 @@ process backtranslate_hqcs {
 // TODO: all .json files
 // TODO: .zip file
 
-// duplicate all the inputs needed by this part of the pipeline
+// TODO: rewrite as filter_fastx with id prefix
+process oldest_seqs {
+    input:
+    file 'msa' from msa_1
+
+    output:
+    file oldest_seqs
+
+    """
+    #!${params.python}
+    import datetime
+    from Bio import SeqIO
+
+    records = SeqIO.parse('msa', "fasta")
+    oldest_records = (r for r in records if r.id.startswith("${oldest_label}"))
+    SeqIO.write(oldest_records, 'oldest_seqs', "fasta")
+    """
+}
+
+process mrca {
+    input:
+    file oldest_seqs
+    file 'cns' from all_cns_1
+
+    output:
+    file 'mrca' into mrca_1, mrca_2
+
+    """
+    ${params.python} ${params.script_dir}/DNAcons.py \
+      --keep-gaps --codon --id MRCA \
+      -o mrca \
+      --copynumbers cns \
+      oldest_seqs
+    """
+}
 
 /*
  * evo history needs copynumbers in the names
  */
 process add_cn_to_ids {
     input:
-    set 'msa', 'cns' from XXX
+    file 'msa' from msa_2
+    file 'cns' from all_cns_2
 
     output:
-    msa_with_cn
+    file msa_with_cn into msa_id_1, msa_id_2, msa_id_3, msa_id_4
 
     """
     #!${params.python}
     from Bio import SeqIO
     from flea.util import parse_copynumbers, replace_id
-    
+
+    def id_with_cn(id_, cn):
+        return "{}_cn_{}".format(id_, cn)
+
     id_to_cn = parse_copynumbers('cns')
     records = SeqIO.parse('msa', 'fasta')
     result = (replace_id(r, id_with_cn(r.id, id_to_cn[r.id]))
@@ -362,85 +393,161 @@ process add_cn_to_ids {
     """
 }
 
-process mrca {
+process add_mrca {
     input:
+    file 'mrca' from mrca_1
+    file 'msa' from msa_id_1
 
     output:
+    file msa_with_mrca
 
-    """
-    #!${params.python}
-
-    alignment_file, copynumber_file = infiles
-    strptime = lambda t: datetime.strptime(t.date, "%Y%m%d")
-    oldest_timepoint = min(globals_.timepoints, key=strptime)
-    oldest_records_filename = os.path.join(pipeline_dir, 'oldest_sequences.fasta')
-
-    records = SeqIO.parse(alignment_file, "fasta")
-    oldest_records = (r for r in records if r.id.startswith(oldest_timepoint.label))
-    SeqIO.write(oldest_records, oldest_records_filename, "fasta")
-
-    return mrca(oldest_records_filename, copynumber_file, outfile)
-    """
-}
-
-process add_mrca {
-
+    "cat mrca msa > msa_with_mrca"
 }
 
 process fasttree {
+    input:
+    file msa_with_mrca
 
+    output:
+    file tree
+
+    "${params.fasttree} -gtr -nt msa_with_mrca > tree"
 }
 
 process reroot {
+    input:
+    file tree
 
+    output:
+    file rooted_tree
+
+    """
+    #!${params.python}
+    from Bio import Phylo
+
+    tree = next(Phylo.parse('tree', 'newick'))
+    clade = next(tree.find_clades('MRCA'))
+    tree.root_with_outgroup(clade)
+
+    # also rename for HyPhy
+    for i, node in enumerate(tree.get_nonterminals()):
+        node.confidence = None
+        if node.name != 'MRCA':
+            node.name = "ancestor_{}".format(i)
+    Phylo.write([tree], 'rooted_tree', 'newick')
+    """
+}
+
+process translate_msa_with_cn {
+    input:
+    file 'msa' from msa_id_2
+
+    output:
+    file msa_translated
+
+    """
+    ${params.python} ${params.script_dir}/translate.py --gapped \
+      < msa > msa_translated
+    """
 }
 
 process translate_mrca {
+    input:
+    file 'mrca' from mrca_2
 
-}
+    output:
+    file mrca_translated
 
-process translate_msa {
-
+    """
+    ${params.python} ${params.script_dir}/translate.py --gapped \
+      < mrca > mrca_translated
+    """
 }
 
 process js_divergence {
+    input:
+    file 'msa' from msa_id_2
+    file 'metadata' from metadata_1
 
+    output:
+    file 'js_divergence.json' into js_divergence_json
+
+    """
+    ${params.python} ${params.script_dir}/js_divergence.py \
+      msa metadata js_divergence.json
+    """
 }
 
-process distance_matrix {
+// process distance_matrix {
+//     input:
+//     file 'msa' from msa_cn_4
 
-}
+//     output:
+//     file dmatrix
 
-process manifold_embedding {
+//     """
+//     ${params.usearch} -calc_distmx msa -distmxout dmatrix \
+//       -format tabbed_pairs
+//     """
+// }
 
-}
+// process manifold_embedding {
+//     input:
+//     file dmatrix
 
-process reconstruct_ancestors {
+//     output:
+//     file 'manifold.json' into manifold_json_out
 
-}
+//     """
+//     ${params.python} ${params.script_dir}/manifold_embed.py \
+//       --n-jobs ${params.threads} --flip \
+//       dmatrix manifold.json
+//     """
+// }
 
-process translate_ancestors {
+// // process reconstruct_ancestors {
 
-}
+// // }
 
-process replace_stop_codons {
+// // process translate_ancestors {
 
-}
+// // }
 
-process dates_for_evo_history {
+// // process replace_stop_codons {
 
-}
+// // }
 
-process evo_history {
+// // process dates_for_evo_history {
 
-}
+// // }
 
-process fubar {
+// // process evo_history {
 
-}
+// // }
 
+// // process fubar {
 
-/* ************************************************************************** */
-/* DIAGNOSIS SUB-PIPELINE */
+// // }
 
-// TODO: make this optional
+// process dates_json_task {
+//     input:
+//     file 'metadata' from metadata_2
+
+//     output:
+//     file 'dates.json' into dates_json_out
+
+//     """
+//     #!${params.python}
+//     import json
+//     from flea.util import get_date_dict
+
+//     result = get_date_dict('metadata')
+//     with open('dates.json', 'w') as handle:
+//         json.dump(result, handle, separators=(",\\n", ":"))
+//     """
+// }
+
+// // /* ************************************************************************** */
+// // /* DIAGNOSIS SUB-PIPELINE */
+
+// // // TODO: make this optional

@@ -227,50 +227,6 @@ def check_in_frame(f):
                             ' of 3'.format(r.id, f, len_))
 
 
-def split_name(name):
-    # TODO: duplicate code with name_to_label
-    cands = list(t.key for t in globals_.timepoints
-                 if name.startswith(t.key))
-    if not cands:
-        raise Exception('name matches no'
-                        ' key: "{}"'.format(name))
-    if len(cands) != 1:
-        raise Exception('name starts with non-unique'
-                        ' key: "{}"'.format(name))
-    key = cands[0]
-    rest = name[len(key):].strip('_')
-    if not rest:
-        raise Exception('name has no unique part:'
-                        ' "{}"'.format(name))
-    return key, rest
-
-
-def name_key_to_label(name):
-    key, _ = split_name(name)
-    return globals_.key_to_label[key]
-
-
-def name_to_label(name):
-    cands = list(t.label for t in globals_.timepoints
-                 if name.startswith(t.label))
-    if not cands:
-        raise Exception('name matches no'
-                        ' label: "{}"'.format(name))
-    if len(cands) != 1:
-        raise Exception('name starts with non-unique'
-                        ' label: "{}"'.format(name))
-    label = cands[0]
-    rest = name[len(label):].strip('_')
-    if not rest:
-        raise Exception('name has no unique part:'
-                        ' "{}"'.format(name))
-    return label
-
-
-def name_to_date(name):
-    return globals_.label_to_date[name_to_label(name)]
-
-
 def extend_coordinates(coordinates, seq, gap=None):
     """Extend coordinates to a gappy sequence.
 
@@ -292,19 +248,19 @@ def extend_coordinates(coordinates, seq, gap=None):
     return result
 
 
-def column_count(a, keys, weights=None):
+def column_count(a, alphabet, weights=None):
     """
     >>> column_count(np.array([['A', 'A'], ['A', 'B']]), ['A', 'B'])
     array([[2, 1],
            [0, 1]])
 
-    >>> column_count(np.array([['A', 'A'], ['A', 'B']]), keys=['A', 'B'], weights=[3, 2])
+    >>> column_count(np.array([['A', 'A'], ['A', 'B']]), alphabet=['A', 'B'], weights=[3, 2])
     array([[5, 3],
            [0, 2]])
 
     """
-    keys = np.array(keys).ravel()
-    result = (a == keys[:, np.newaxis, np.newaxis])
+    alphabet = np.array(alphabet).ravel()
+    result = (a == alphabet[:, np.newaxis, np.newaxis])
     if weights is not None:
         weights = np.array(weights).ravel()
         assert len(weights) == len(a)
@@ -461,3 +417,22 @@ def parse_copynumbers(infile):
     with open(infile) as handle:
         parsed = csv.reader(handle, delimiter='\t')
         return dict((i, int(n)) for i, n in parsed)
+
+
+def replace_id(record, id_):
+    result = record[:]
+    result.id = id_
+    # HyPhy fails if a name or description are present
+    result.name = ""
+    result.description = ""
+    return result
+
+
+def id_with_cn(id_, cn):
+    return "{}_cn_{}".format(id_, cn)
+
+
+def get_date_dict(metafile):
+    with open(metafile) as handle:
+        parsed = csv.reader(handle, delimiter=' ')
+        return dict((tp, int(date)) for _, tp, date in parsed)
