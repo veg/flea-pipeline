@@ -43,6 +43,9 @@ def main(mode, informat, outformat, params):
         result = (replace_gapped_codons(record) for record in records)
     elif mode == "degap":
         result = (update_record_seq(r, r.seq.ungap('-')) for r in records)
+    elif mode == 'prefix':
+        prefix = params[0]
+        result = (r for r in records if r.id.startswith(prefix))
     else:
         raise Exception('unknown mode: {}'.format(mode))
     SeqIO.write(result, sys.stdout, outformat)

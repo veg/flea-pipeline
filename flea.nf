@@ -279,38 +279,27 @@ process copynumbers_json {
 }
 
 // TODO: rewrite as filter_fastx with id prefix
-process oldest_seqs {
+process mrca {
     input:
     file 'msa' from msa_out
 
     output:
-    file oldest_seqs
-
-    """
-    #!${params.python}
-
-    import datetime
-    from Bio import SeqIO
-
-    records = SeqIO.parse('msa', "fasta")
-    oldest_records = (r for r in records if r.id.startswith("${oldest_label}"))
-    SeqIO.write(oldest_records, 'oldest_seqs', "fasta")
-    """
-}
-
-process mrca {
-    input:
-    file oldest_seqs
-
-    output:
     file 'mrca' into mrca_out
+    file 'mrca_translated' into mrca_translated_out
 
     """
+    ${params.python} ${params.script_dir}/filter_fastx.py \
+      prefix fasta fasta ${oldest_label} \
+      < msa > oldest_seqs
+
     ${params.python} ${params.script_dir}/DNAcons.py \
       --keep-gaps --codon --id MRCA \
       -o mrca \
       --copynumbers \
       oldest_seqs
+
+    ${params.python} ${params.script_dir}/translate.py --gapped \
+      < mrca > mrca_translated
     """
 }
 
@@ -376,32 +365,6 @@ process tree_json {
     result = {'tree': newick_string}
     with open('trees.json', 'w') as handle:
         json.dump(result, handle, separators=(",\\n", ":"))
-    """
-}
-
-process translate_msa_with_cn {
-    input:
-    file 'msa' from msa_out
-
-    output:
-    file msa_translated
-
-    """
-    ${params.python} ${params.script_dir}/translate.py --gapped \
-      < msa > msa_translated
-    """
-}
-
-process translate_mrca {
-    input:
-    file 'mrca' from mrca_out
-
-    output:
-    file mrca_translated
-
-    """
-    ${params.python} ${params.script_dir}/translate.py --gapped \
-      < mrca > mrca_translated
     """
 }
 

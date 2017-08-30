@@ -34,7 +34,7 @@ from Bio import AlignIO
 from Bio.Alphabet import IUPAC
 
 from flea.util import grouper
-from flea.util import id_to_con
+from flea.util import id_to_cn
 
 
 def _column_consensus(counter, seed=None, codon=False):
