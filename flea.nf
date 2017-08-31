@@ -7,25 +7,25 @@
 
 // TODO: run on TORQUE
 // TODO: set cpus and threads for each task
-// TODO: write consensus, alignment, analysis, diagnosis pipelines
 // TODO: allow starting from aligned inputs
-// TODO: do not hardcode min/max lengths
 // TODO: sub-pipelines
 // TODO: nextflow repo format
 // TODO: infer singleton proc
 // TODO: add file extensions
 // TODO: Docker container
 
+
 params.infile = "$HOME/flea/data/P018/data/metadata"
+params.results_dir = "results"
+
 
 // TODO: how to avoid duplicating?
 Channel.fromPath(params.infile)
-    .into { metadata_1; metadata_2; metadata_3; metadata_4; }
+    .into { metadata_1; metadata_2; metadata_3; metadata_4; metadata_5 }
 
 
 // read input metadata into tuples
 input_files = []
-tp_to_date = {}
 infile = file(params.infile)
 
 infile
@@ -35,7 +35,6 @@ infile
         tpfile = file(infile.parent / filename)
         mytuple = tuple(tpfile, timepoint_label)
         input_files.add(mytuple)
-        tp_to_date[timepoint_label] = date
     }
 
 
@@ -59,13 +58,15 @@ max_qcs_len = reflen_2
 
 
 process quality_pipeline {
+    publishDir params.results_dir
+
     input:
     set 'ccs.fastq', label from input_channel
-    val minlen from min_qcs_len
-    val maxlen from max_qcs_len
+    each minlen from min_qcs_len
+    each maxlen from max_qcs_len
 
     output:
-    set 'qcs', label into qcs_final_1, qcs_final_2
+    set '*qcs.fastq', label into qcs_final_1, qcs_final_2
 
     """
     # filter by quality score
@@ -86,11 +87,13 @@ process quality_pipeline {
 
     # filter against contaminants
     ${params.usearch} -usearch_global no_runs \
+      -qmask none \
       -db ${params.contaminants_db} -id ${params.contaminant_identity} -strand both \
       -threads ${params.threads} -notmatchedfq uncontam
 
     # filter against reference
     ${params.usearch} -usearch_global uncontam -db ${params.reference_db} \
+      -qmask none \
       -id ${params.reference_identity} \
       -userfields qstrand+tstrand+caln \
       -top_hit_only -strand both \
@@ -105,7 +108,7 @@ process quality_pipeline {
     ${params.python} ${params.script_dir}/filter_fastx.py \
       length fastq fastq \
       ${minlen} ${maxlen} \
-      < filtered > qcs
+      < filtered > ${label}.qcs.fastq
     """
 }
 
@@ -124,6 +127,7 @@ process consensus_pipeline {
     '''
     # cluster
     !{params.usearch} -cluster_fast qcs -id !{params.cluster_identity} \
+      -qmask none \
       -sort length \
       -maxaccepts !{params.max_accepts} -maxrejects !{params.max_rejects} \
       -top_hit_only -minsl !{params.min_length_ratio} \
@@ -143,7 +147,7 @@ process consensus_pipeline {
             !{params.mafft} --ep 0.5 --quiet --preservecase \
             ${f} > ${f}.aligned
 
-             number=$(echo $f | cut -d '_' -f 2)
+             number=$(echo $f | cut -d '_' -f 3)
 
              !{params.python} !{params.script_dir}/DNAcons.py -o ${f}.consensus \
                 --id !{label}_consensus_${number} ${f}.aligned
@@ -164,6 +168,7 @@ process consensus_pipeline {
 
     # search
     !{params.usearch} -usearch_global all_consensus -db uniques \
+      -qmask none \
       -id !{params.reference_identity} \
       -top_hit_only -strand both \
       -maxaccepts !{params.max_accepts} -maxrejects !{params.max_rejects} \
@@ -189,6 +194,7 @@ process consensus_pipeline {
 
     # usearch for pairs
     !{params.usearch} -usearch_global qcs -db shifted_uniques \
+      -qmask none \
       -userout pairfile -userfields query+target \
       -id !{params.copynumber_identity} \
       -top_hit_only -strand both \
@@ -208,6 +214,10 @@ process consensus_pipeline {
 }
 
 process merge_timepoints {
+    executor 'local'
+
+    publishDir params.results_dir
+
     input:
     file 'hqcs*' from hqcs_files.collect()
     file 'cn*' from cnfiles.collect()
@@ -229,11 +239,14 @@ process merge_timepoints {
 /* ALIGNMENT SUB-PIPELINE */
 
 process alignment_pipeline {
+    publishDir params.results_dir
+
     input:
     file 'hqcs' from merged_hqcs_out
 
     output:
     file msa into msa_out
+    file hqcs_protein_aligned into msa_aa_out
 
     """
     ${params.python} ${params.script_dir}/translate.py \
@@ -256,6 +269,10 @@ process alignment_pipeline {
 // TODO: .zip file
 
 process dates_json_task {
+    executor 'local'
+
+    publishDir params.results_dir
+
     input:
     file 'metadata' from metadata_1
 
@@ -267,13 +284,16 @@ process dates_json_task {
     import json
     from flea.util import get_date_dict
 
-    result = get_date_dict('metadata')
+    d = get_date_dict('metadata')
+    result = dict((v, k) for k, v in d.items())
     with open('dates.json', 'w') as handle:
         json.dump(result, handle, separators=(",\\n", ":"))
     """
 }
 
 process copynumbers_json {
+    publishDir params.results_dir
+
     input:
     file 'msa' from msa_out
 
@@ -295,6 +315,8 @@ process copynumbers_json {
 }
 
 process get_oldest_label {
+    executor 'local'
+
     input:
     file 'metadata' from metadata_2
 
@@ -319,7 +341,7 @@ process mrca {
     val oldest_label
 
     output:
-    file mrca into mrca_out
+    file mrca into mrca_1, mrca_2, mrca_3
     file mrca_translated into mrca_translated_1, mrca_translated_2
 
     """
@@ -340,8 +362,10 @@ process mrca {
 
 // TODO: why do we have to duplicate outputs here?
 process add_mrca {
+    executor 'local'
+
     input:
-    file 'mrca' from mrca_out
+    file 'mrca' from mrca_1
     file 'msa' from msa_out
 
     output:
@@ -386,6 +410,10 @@ process reroot {
 }
 
 process tree_json {
+    executor 'local'
+
+    publishDir params.results_dir
+
     input:
     file 'tree' from rooted_tree_1
 
@@ -405,6 +433,8 @@ process tree_json {
 }
 
 process js_divergence {
+    publishDir params.results_dir
+
     input:
     file 'msa' from msa_out
     file 'metadata' from metadata_3
@@ -419,6 +449,8 @@ process js_divergence {
 }
 
 process manifold_embedding {
+    publishDir params.results_dir
+
     input:
     file 'msa' from msa_out
 
@@ -430,8 +462,7 @@ process manifold_embedding {
       -format tabbed_pairs
 
     ${params.python} ${params.script_dir}/manifold_embed.py \
-      --n-jobs 1 --flip \
-      dmatrix manifold.json
+      --n-jobs ${params.threads} dmatrix manifold.json
     """
 }
 
@@ -440,10 +471,11 @@ process manifold_embedding {
 process reconstruct_ancestors {
     input:
     file 'msa' from msa_with_mrca_2
+    file 'msa_aa' from msa_aa_out
     file 'tree' from rooted_tree_2
 
     output:
-    file msa_with_ancestors into msa_with_ancestors_out
+    file msa_aa_ancestors into msa_aa_ancestors_out
 
     shell:
     '''
@@ -457,11 +489,13 @@ process reconstruct_ancestors {
     !{params.python} !{params.script_dir}/translate.py --gapped \
       < ancestors > translated
 
-    cat msa translated > msa_with_ancestors
+    cat msa_aa translated > msa_aa_ancestors
     '''
 }
 
 process coordinates_json {
+    publishDir params.results_dir
+
     input:
     file 'mrca' from mrca_translated_1
 
@@ -479,17 +513,20 @@ process coordinates_json {
 }
 
 process sequences_json {
+    publishDir params.results_dir
+
     input:
-    file 'msa' from msa_with_ancestors_out
+    file 'msa' from msa_aa_ancestors_out
     file 'mrca' from mrca_translated_2
     file 'coordinates.json' from coordinates_json_out
+    file 'metadata' from metadata_4
 
     output:
     file 'sequences.json' into sequences_json_out
 
     """
     ${params.python} ${params.script_dir}/sequences_json.py \
-      msa mrca coordinates.json \
+      msa mrca coordinates.json metadata \
       ${params.reference_protein} ${params.reference_coordinates} \
       sequences.json
     """
@@ -512,7 +549,7 @@ process replace_stop_codons {
 process seq_dates {
     input:
     file 'msa' from msa_out
-    file 'metadata' from metadata_4
+    file 'metadata' from metadata_5
 
     output:
     file dates into seq_dates_1, seq_dates_2
@@ -534,8 +571,10 @@ process seq_dates {
 // FIXME: why does this segfault???
 /*
 process region_coords {
+    publishDir params.results_dir
+
     input:
-    file 'mrca' from mrca_out
+    file 'mrca' from mrca_2
 
     output:
     file 'region_coords.json' into region_coords_json
@@ -564,6 +603,8 @@ process evo_history {
 }
 
 process rates_pheno_json {
+    publishDir params.results_dir
+
     input:
     file rates_pheno
 
@@ -585,13 +626,14 @@ process rates_pheno_json {
         json.dump(result, h, separators=(",\\n", ":"))
     """
 }
-*/
 
 process fubar {
+    publishDir params.results_dir
+
     input:
     file 'no_stops' from msa_no_stops
     file 'dates' from seq_dates_2
-    file 'mrca' from mrca_out
+    file 'mrca' from mrca_3
 
     output:
     file 'rates.json' into rates_json
@@ -603,19 +645,24 @@ process fubar {
     '''
 }
 
+*/
+
 /* ************************************************************************** */
 /* DIAGNOSIS SUB-PIPELINE */
 
 // TODO: make this optional
 
 process diagnose {
+    publishDir params.results_dir
+
     input:
     file 'qcs*' from qcs_final_2.map{ it[0] }.collect()
     file 'hqcs' from merged_hqcs_out
     file 'hqcs_msa' from msa_out
+    file 'hqcs_aa_msa' from msa_aa_out
 
     output:
-    file 'results/*' into diagnosis_results
+    file 'diagnosis_results/*' into diagnosis_results
 
     when:
     params.do_diagnosis
@@ -631,6 +678,7 @@ process diagnose {
 
     # usearch for pairs
     !{params.usearch} -usearch_global qcs.fasta -db hqcs \
+      -qmask none \
       -userout pairfile -userfields query+target \
       -id !{params.qcs_to_hqcs_identity} \
       -top_hit_only -strand both \
@@ -665,8 +713,8 @@ process diagnose {
       < qcs_msa_nogaps > qcs_msa_aa
 
     # run diagnosis
-    mkdir results
+    mkdir diagnosis_results
     !{params.python} !{params.script_dir}/diagnose.py \
-      hqcs_msa qcs_msa_aa results
+      hqcs_aa_msa qcs_msa_aa diagnosis_results
     '''
 }

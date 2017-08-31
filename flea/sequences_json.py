@@ -5,12 +5,15 @@ from Bio import SeqIO
 
 from flea.util import id_to_label
 from flea.util import read_single_record
+from flea.util import get_date_dict
 
-
-def main(aln_file, mrca_file, coords_file, ref_protein, ref_coords, outfile):
+def main(aln_file, mrca_file, coords_file, metadata,
+         ref_protein, ref_coords, outfile):
 
     result = {}
     observed = {}
+
+    date_dict = get_date_dict(metadata)
 
     # add sequences
     # TODO: check if MRCA differs from our inferred MRCA
@@ -22,10 +25,10 @@ def main(aln_file, mrca_file, coords_file, ref_protein, ref_coords, outfile):
                 result['Ancestors'] = {}
             result['Ancestors'][r.id] = str(r.seq)
         else:
-            label = id_to_label(r.id)
-            if label not in observed:
-                observed[label] = {}
-            observed[label][r.id] = str(r.seq)
+            date = date_dict[id_to_label(r.id)]
+            if date not in observed:
+                observed[date] = {}
+            observed[date][r.id] = str(r.seq)
     result['Observed'] = observed
 
     # add MRCA

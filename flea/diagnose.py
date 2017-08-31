@@ -47,7 +47,7 @@ def diagnose(hqcsfile, qcsfile, result_path, cutoff):
     copynumber_array = np.array(list(id_to_cn(rec.id) for rec in hqcs))
 
     # import qcs seqs
-    qcs = list(SeqIO.parse(filename_qcs, format))
+    qcs = list(SeqIO.parse(qcsfile, format))
     qcs_array = np.array(list(list(str(rec.seq)) for rec in qcs))
     qcs_labels = np.array(list(id_to_label(rec.id) for rec in qcs))
 
