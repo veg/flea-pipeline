@@ -5,10 +5,7 @@
  *
  */
 
-// TODO: get hyphy scripts running
-// TODO: run for loops with gnu parallel
-// TODO: parallelize filter_fastx and other scripts
-// TODO: parallelize diagnosis
+// TODO: parallelize filter_fastx and other scripts, if it speeds them up
 // TODO: parallelize hyphy scripts, if possible
 // TODO: fix MDS parallelism
 // TODO: set cpus, threads, and time for each task
@@ -145,26 +142,31 @@ process consensus_pipeline {
       -threads !{params.threads} \
       -clusters raw_cluster_
 
-    # sample clusters and do mafft consensus
-    # TODO: do in parallel
-    for f in raw_cluster_*; do
+    # function sample clusters and do mafft consensus
+    doconsensus() {
         !{params.python} !{params.script_dir}/filter_fastx.py \
           sample fasta fasta \
           !{params.min_cluster_size} !{params.max_cluster_size} \
-          < $f > ${f}.sampled
+          < $1 > ${1}.sampled
 
-        if [ -s ${f}.sampled ]
+        if [ -s ${1}.sampled ]
         then
             !{params.mafft} --ep 0.5 --quiet --preservecase \
             --thread !{params.threads} \
-            ${f} > ${f}.aligned
+            ${1} > ${1}.aligned
 
-             number=$(echo $f | cut -d '_' -f 3)
+             number=$(echo $1 | cut -d '_' -f 3)
 
-             !{params.python} !{params.script_dir}/DNAcons.py -o ${f}.consensus \
-                --id !{label}_consensus_${number} ${f}.aligned
+             !{params.python} !{params.script_dir}/DNAcons.py -o ${1}.consensus \
+                --id !{label}_consensus_${number} ${1}.aligned
         fi
-    done
+
+    }
+    export -f doconsensus
+
+    # run in parallel
+    !{params.parallel} -j !{params.threads} 'doconsensus {}' ::: raw_cluster_*
+
     cat *.consensus > all_consensus
 
     ######
@@ -470,7 +472,7 @@ process js_divergence {
     publishDir params.results_dir
 
     input:
-    file 'msa' from msa_out
+    file 'msa' from msa_aa_out
     file 'metadata' from metadata_3
 
     output:
@@ -758,13 +760,13 @@ process diagnose {
       qcs.fasta hqcs pairfile alignments
 
     # align and insert gaps
-    parallel -j !{params.threads} \
+    !{params.parallel} -j !{params.threads} \
       '!{params.bealign} -a codon {} {}.bam' ::: alignments/*unaligned.fasta
 
-    parallel -j !{params.threads} \
+    !{params.parallel} -j !{params.threads} \
       '!{params.bam2msa} {} {}.fasta' ::: alignments/*.bam
 
-    parallel -j !{params.threads} \
+    !{params.parallel} -j !{params.threads} \
       '!{params.python} !{params.script_dir}/insert_gaps.py {} hqcs_msa {}.gapped' ::: alignments/*.bam.fasta
 
     # merge all
