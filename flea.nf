@@ -11,6 +11,7 @@ vim: syntax=groovy
 ----------------------------------------------------------------------------------------
 */
 
+// TODO: benchmark gnu parallel and see if it is actually faster
 // TODO: parallelize filter_fastx and other scripts, if it speeds them up
 // TODO: parallelize hyphy scripts, if possible
 // TODO: fix MDS parallelism
@@ -153,14 +154,14 @@ process consensus_pipeline {
         !{params.python} !{params.script_dir}/filter_fastx.py \
           sample fasta fasta \
           !{params.min_cluster_size} !{params.max_cluster_size} \
-          < $1 > ${1}.sampled
+          < ${1} > ${1}.sampled
 
         if [ -s ${1}.sampled ]
         then
             !{params.mafft} --ep 0.5 --quiet --preservecase \
             ${1} > ${1}.aligned
 
-             number=$(echo $1 | cut -d '_' -f 3)
+             number=$(echo ${1} | cut -d '_' -f 3)
 
              !{params.python} !{params.script_dir}/DNAcons.py -o ${1}.consensus \
                 --id !{label}_consensus_${number} ${1}.aligned
@@ -170,7 +171,7 @@ process consensus_pipeline {
     export -f doconsensus
 
     # run in parallel
-    !{params.parallel} -j !{params.threads} 'doconsensus {}' ::: raw_cluster_*
+    !{params.parallel} -X -j !{params.threads} 'doconsensus {}' ::: raw_cluster_*
 
     cat *.consensus > all_consensus
 
@@ -765,13 +766,13 @@ process diagnose {
       qcs.fasta hqcs pairfile alignments
 
     # align and insert gaps
-    !{params.parallel} -j !{params.threads} \
+    !{params.parallel} -X -j !{params.threads} \
       '!{params.bealign} -a codon {} {}.bam' ::: alignments/*unaligned.fasta
 
-    !{params.parallel} -j !{params.threads} \
+    !{params.parallel} -X -j !{params.threads} \
       '!{params.bam2msa} {} {}.fasta' ::: alignments/*.bam
 
-    !{params.parallel} -j !{params.threads} \
+    !{params.parallel} -X -j !{params.threads} \
       '!{params.python} !{params.script_dir}/insert_gaps.py {} hqcs_msa {}.gapped' ::: alignments/*.bam.fasta
 
     # merge all
