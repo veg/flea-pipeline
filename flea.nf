@@ -5,11 +5,12 @@
  *
  */
 
-// TODO: run for loops in parallel
+// TODO: get hyphy scripts running
+// TODO: run for loops with gnu parallel
 // TODO: parallelize filter_fastx and other scripts
 // TODO: parallelize diagnosis
 // TODO: parallelize hyphy scripts, if possible
-// TODO: fix MDS dissimilarity and parallelism
+// TODO: fix MDS parallelism
 // TODO: set cpus, threads, and time for each task
 
 // TODO: allow starting from aligned inputs
@@ -263,7 +264,7 @@ process alignment_pipeline {
 
     output:
     file 'msa.fasta' into msa_out
-    file hqcs_protein_aligned into msa_aa_out
+    file 'msa.aa.fasta' into msa_aa_out
 
     """
     ${params.python} ${params.script_dir}/translate.py \
@@ -271,20 +272,15 @@ process alignment_pipeline {
 
     ${params.mafft} --ep 0.5 --quiet --preservecase \
       --thread ${params.threads} \
-      hqcs_protein > hqcs_protein_aligned
+      hqcs_protein > msa.aa.fasta
 
     ${params.python} ${params.script_dir}/backtranslate.py \
-      hqcs_protein_aligned hqcs msa.fasta
+      msa.aa.fasta hqcs msa.fasta
     """
 }
 
 /* ************************************************************************** */
 /* ANALYSIS SUB-PIPELINE */
-
-// TODO: combine into fewest possible tasks
-// TODO: thread as many as possible
-// TODO: all .json files
-// TODO: .zip file
 
 process dates_json_task {
 
@@ -356,7 +352,6 @@ process get_oldest_label {
     """
 }
 
-// TODO: rewrite as filter_fastx with id prefix
 process mrca {
 
     time params.slow_time
@@ -552,6 +547,7 @@ process coordinates_json {
 
     output:
     file 'coordinates.json' into coordinates_json_out
+
     """
     cat mrca ${params.reference_protein} > pair.fasta
 
@@ -629,8 +625,6 @@ process seq_dates {
     """
 }
 
-// FIXME: why does this segfault???
-/*
 process region_coords {
 
     time params.fast_time
@@ -650,6 +644,7 @@ process region_coords {
     '''
 }
 
+
 process evo_history {
 
     time params.crazy_time
@@ -660,12 +655,12 @@ process evo_history {
     file 'region_coords' from region_coords_json
 
     output:
-    file rates_pheno
+    file 'rates_pheno.tsv' into rates_pheno
 
     shell:
     '''
     !{params.hyphy} !{params.hyphy_dir}/obtainEvolutionaryHistory.bf \
-      $(pwd)/no_stops $(pwd)/dates $(pwd)/region_coords
+      $(pwd)/no_stops $(pwd)/dates $(pwd)/region_coords $(pwd)/rates_pheno.tsv
     '''
 }
 
@@ -683,9 +678,10 @@ process rates_pheno_json {
     """
     #!${params.python}
 
+    import csv
     import json
 
-    with open('rates_pheno') as h:
+    with open('rates_pheno.tsv') as h:
         lines = list(csv.reader(h, delimiter='\t'))
     result = {}
     keys, rest = lines[0], lines[1:]
@@ -716,14 +712,12 @@ process fubar {
     '''
 }
 
-*/
-
 /* ************************************************************************** */
 /* DIAGNOSIS SUB-PIPELINE */
 
-// TODO: make this optional
-
 process diagnose {
+    when:
+    params.do_diagnosis
 
     cpus params.threads
     time params.crazy_time
@@ -738,9 +732,6 @@ process diagnose {
 
     output:
     file 'diagnosis_results/*' into diagnosis_results
-
-    when:
-    params.do_diagnosis
 
     shell:
     '''
