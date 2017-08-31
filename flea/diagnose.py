@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 """
-Compare HQCS frequencies to CCS frequencies.
+Compare HQCS frequencies to QCS frequencies.
 
 Usage:
-  diagnose.py [options] <hqcs_file> <ccs_file> <copynumber_file> <result_path>
+  diagnose.py [options] <hqcs_file> <qcs_file> <result_path>
   diagnose.py -h | --help
 
 Options:
@@ -12,7 +12,6 @@ Options:
   -h --help   Show this screen
 
 """
-
 
 import csv
 import os
@@ -27,12 +26,13 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from flea.util import column_count, prob, js_divergence
+from flea.util import id_to_label, id_to_cn
 
 
 np.set_printoptions(suppress=True)
 
 
-def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
+def diagnose(hqcsfile, qcsfile, result_path, cutoff):
     def out(f):
         return os.path.join(result_path, f)
 
@@ -40,35 +40,22 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
 
     plt.style.use('seaborn-deep')
 
-    #Getting and sorting copynumbers
-    with open(copynumbers_file, 'r') as handle:
-        parsed = csv.reader(handle, delimiter='\t')
-        cns = list(sorted(parsed))
-        copynumber_array = np.array(list(int(n) for _, n in cns))
-        copynumber_ids = np.array(list(elem for elem, _ in cns))
-
     #Getting and sorting HQCS seqs
-    hqcs = list(sorted(SeqIO.parse(filename, format), key=lambda r: r.id))
+    hqcs = list(sorted(SeqIO.parse(hqcsfile, format), key=lambda r: r.id))
     hqcs_array = np.array(list(list(str(rec.seq)) for rec in hqcs))
-    hqcs_labels = np.array(list(rec.id.split("_")[0] for rec in hqcs))
-    hqcs_ids = np.array(list(rec.id for rec in hqcs))
+    hqcs_labels = np.array(list(id_to_label(rec.id) for rec in hqcs))
+    copynumber_array = np.array(list(id_to_cn(rec.id) for rec in hqcs))
 
-    if len(copynumber_array) != len(hqcs_array):
-        raise Exception('number of HQCS sequence does not match copy numbers')
+    # import qcs seqs
+    qcs = list(SeqIO.parse(filename_qcs, format))
+    qcs_array = np.array(list(list(str(rec.seq)) for rec in qcs))
+    qcs_labels = np.array(list(id_to_label(rec.id) for rec in qcs))
 
-    if not np.all(copynumber_ids == hqcs_ids):
-        raise Exception('HQCS ids do not match copy number ids')
-
-    # import ccs seqs
-    ccs = list(SeqIO.parse(filename_ccs, format))
-    ccs_array = np.array(list(list(str(rec.seq)) for rec in ccs))
-    ccs_labels = np.array(list(rec.id.split("_")[0] for rec in ccs))
-
-    if hqcs_array.shape[1] != ccs_array.shape[1]:
+    if hqcs_array.shape[1] != qcs_array.shape[1]:
         raise Exception('alignment shapes do not match')
 
     # amino acids
-    aas = list(sorted(set(hqcs_array.ravel()) | set(ccs_array.ravel())))
+    aas = list(sorted(set(hqcs_array.ravel()) | set(qcs_array.ravel())))
     keys = np.array(aas)
 
     # Relying on "_" to separate timepoint ID
@@ -77,31 +64,31 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
     for label in labels + ['overall']:
         if label == 'overall':
             hqcs_bools = np.array([True] * len(hqcs_array))
-            ccs_bools = np.array([True] * len(ccs_array))
+            qcs_bools = np.array([True] * len(qcs_array))
         else:
             hqcs_bools = hqcs_labels == label
-            ccs_bools = ccs_labels == label
+            qcs_bools = qcs_labels == label
 
         hqcs_counts = column_count(hqcs_array[hqcs_bools], keys, weights=copynumber_array[hqcs_bools])
-        ccs_counts = column_count(ccs_array[ccs_bools], keys)
+        qcs_counts = column_count(qcs_array[qcs_bools], keys)
 
         if np.all(hqcs_counts.sum(axis=0) != copynumber_array[hqcs_bools].sum()):
             raise Exception('bad hqcs counts')
 
-        if np.all(ccs_counts.sum(axis=0) != ccs_bools.sum()):
-            raise Exception('bad ccs counts')
+        if np.all(qcs_counts.sum(axis=0) != qcs_bools.sum()):
+            raise Exception('bad qcs counts')
 
         np.savetxt(out("hqcs_counts_{}.csv".format(label)), hqcs_counts.T,
                    fmt="%1.1u", delimiter=",", header=",".join(aas))
-        np.savetxt(out("ccs_counts_{}.csv".format(label)), ccs_counts.T,
+        np.savetxt(out("qcs_counts_{}.csv".format(label)), qcs_counts.T,
                    fmt="%u", delimiter=",", header=",".join(aas))
 
         # plot all freqs
         plt.scatter(np.ravel(prob(hqcs_counts, axis=0)),
-                    np.ravel(prob(ccs_counts, axis=0)),
+                    np.ravel(prob(qcs_counts, axis=0)),
                     alpha=0.5)
         plt.xlabel('HQCS frequency')
-        plt.ylabel('CCS frequency')
+        plt.ylabel('QCS frequency')
         plt.title(label)
         plt.savefig(out("freq_agreement_{}.pdf".format(label)))
         plt.close()
@@ -110,19 +97,19 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
         x_index = aas.index('X')
         hqcs_no_x = np.delete(hqcs_counts, x_index, 0)
         hqcs_no_x_freqs = prob(hqcs_no_x, axis=0)
-        ccs_no_x = np.delete(ccs_counts, x_index, 0)
-        ccs_no_x_freqs = prob(ccs_no_x, axis=0)
+        qcs_no_x = np.delete(qcs_counts, x_index, 0)
+        qcs_no_x_freqs = prob(qcs_no_x, axis=0)
 
         # plot without X
-        plt.scatter(np.ravel(hqcs_no_x_freqs), np.ravel(ccs_no_x_freqs), alpha=0.5)
+        plt.scatter(np.ravel(hqcs_no_x_freqs), np.ravel(qcs_no_x_freqs), alpha=0.5)
         plt.xlabel('HQCS frequency')
-        plt.ylabel('CCS frequency')
+        plt.ylabel('QCS frequency')
         plt.title("{} no X".format(label))
         plt.savefig(out("freq_agreement_no_x_{}.pdf".format(label)))
         plt.close()
 
         js_divs = np.array(list(js_divergence(a, b)
-                                for a, b in zip(hqcs_no_x_freqs.T, ccs_no_x_freqs.T)))
+                                for a, b in zip(hqcs_no_x_freqs.T, qcs_no_x_freqs.T)))
 
         bad_columns = np.where(js_divs > cutoff)[0]
 
@@ -149,20 +136,19 @@ def diagnose(filename, filename_ccs, copynumbers_file, result_path, cutoff):
                 js_divs,
                 keys[hqcs_no_x_freqs.argmax(axis=0)],
                 hqcs_no_x_freqs.max(axis=0),
-                keys[ccs_no_x_freqs.argmax(axis=0)],
-                ccs_no_x_freqs.max(axis=0)]
+                keys[qcs_no_x_freqs.argmax(axis=0)],
+                qcs_no_x_freqs.max(axis=0)]
         rows = list(zip(*cols))
         with open(out("js_divergence_{}.csv".format(label)), "w") as f:
             writer = csv.writer(f)
-            writer.writerow(['column', 'js_divergence', 'hqcs_aa', 'hqcs_freq', 'ccs_aa', 'ccs_freq'])
+            writer.writerow(['column', 'js_divergence', 'hqcs_aa', 'hqcs_freq', 'qcs_aa', 'qcs_freq'])
             writer.writerows(rows)
 
 
 if __name__ == "__main__":
     args = docopt(__doc__)
     hqcs_file = args["<hqcs_file>"]
-    ccs_file = args["<ccs_file>"]
-    copy_file = args["<copynumber_file>"]
+    qcs_file = args["<qcs_file>"]
     result_path = args["<result_path>"]
     cutoff = float(args["-c"])
-    diagnose(hqcs_file, ccs_file, copy_file, result_path, cutoff)
+    diagnose(hqcs_file, qcs_file, result_path, cutoff)

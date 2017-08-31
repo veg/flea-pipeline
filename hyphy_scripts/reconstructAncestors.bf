@@ -1,3 +1,6 @@
+LoadFunctionLibrary ("ReadDelimitedFiles");
+LoadFunctionLibrary ("tools.bf");
+
 /* UNCOMMENT FOR CODON MODEL */
 /* LoadFunctionLibrary("chooseGeneticCode", {"0" : "Universal"}); */
 

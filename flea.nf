@@ -14,12 +14,13 @@
 // TODO: nextflow repo format
 // TODO: infer singleton proc
 // TODO: add file extensions
+// TODO: Docker container
 
 params.infile = "$HOME/flea/data/P018/data/metadata"
 
 // TODO: how to avoid duplicating?
 Channel.fromPath(params.infile)
-    .into { metadata_1; metadata_2; metadata_3 }
+    .into { metadata_1; metadata_2; metadata_3; metadata_4; }
 
 
 // read input metadata into tuples
@@ -37,17 +38,31 @@ infile
         tp_to_date[timepoint_label] = date
     }
 
-// FIXME: do this programmatically
-oldest_label = 'V06'
 
 input_channel = Channel.from(input_files)
 
 /* ************************************************************************** */
 /* QUALITY SUB-PIPELINE */
 
+// compute final min/max QCS length from reference length
+Channel.fromPath( params.reference_dna )
+    .splitFasta( record: [seqString: true ] )
+    .map { record -> record.seqString.length() }
+    .take(1)
+    .into { reflen_1; reflen_2 }
+
+min_qcs_len = reflen_1
+    .map { n -> Math.round(n * params.qcs_length_coeff.toBigDecimal()) }
+
+max_qcs_len = reflen_2
+    .map { n -> Math.round(n * (2.0 - params.qcs_length_coeff.toBigDecimal())) }
+
+
 process quality_pipeline {
     input:
     set 'ccs.fastq', label from input_channel
+    val minlen from min_qcs_len
+    val maxlen from max_qcs_len
 
     output:
     set 'qcs', label into qcs_final_1, qcs_final_2
@@ -57,7 +72,7 @@ process quality_pipeline {
     ${params.usearch} -fastq_filter ccs.fastq \
       -fastq_maxee_rate ${params.max_error_rate} \
       -threads ${params.threads} \
-      -fastq_qmax ${params.qmax} -fastq_minlen ${params.min_length} \
+      -fastq_qmax ${params.qmax} -fastq_minlen ${minlen} \
       -fastqout qfiltered \
       -relabel "${label}_ccs_"
 
@@ -89,7 +104,7 @@ process quality_pipeline {
     # length filter
     ${params.python} ${params.script_dir}/filter_fastx.py \
       length fastq fastq \
-      ${params.min_length} ${params.max_length} \
+      ${minlen} ${maxlen} \
       < filtered > qcs
     """
 }
@@ -116,6 +131,7 @@ process consensus_pipeline {
       -clusters raw_cluster_
 
     # sample clusters and do mafft consensus
+    # TODO: do in parallel
     for f in raw_cluster_*; do
         !{params.python} !{params.script_dir}/filter_fastx.py \
           sample fasta fasta \
@@ -201,11 +217,11 @@ process merge_timepoints {
 
     """
     cat hqcs* > merged_hqcs
-    cat cn* > merged_cns
+    cat cn* > merged_copynumbers
 
     # add copynumbers to ids, for evo_history
-    ${params.python} ${params.script_dir}/add_cn_to_id.py \
-      merged_hqcs merged_cns final_hqcs
+    ${params.python} ${params.script_dir}/add_copynumber_to_id.py \
+      merged_hqcs merged_copynumbers final_hqcs
     """
 }
 
@@ -217,7 +233,7 @@ process alignment_pipeline {
     file 'hqcs' from merged_hqcs_out
 
     output:
-    file 'msa' into msa_out
+    file msa into msa_out
 
     """
     ${params.python} ${params.script_dir}/translate.py \
@@ -241,7 +257,7 @@ process alignment_pipeline {
 
 process dates_json_task {
     input:
-    file 'metadata' from metadata_2
+    file 'metadata' from metadata_1
 
     output:
     file 'dates.json' into dates_json_out
@@ -278,14 +294,33 @@ process copynumbers_json {
     """
 }
 
+process get_oldest_label {
+    input:
+    file 'metadata' from metadata_2
+
+    output:
+    stdout oldest_label
+
+    """
+    #!${params.python}
+
+    import sys
+    from flea.util import get_date_dict
+
+    d = get_date_dict('metadata')
+    sys.stdout.write(sorted(d, key=d.get)[0])
+    """
+}
+
 // TODO: rewrite as filter_fastx with id prefix
 process mrca {
     input:
     file 'msa' from msa_out
+    val oldest_label
 
     output:
-    file 'mrca' into mrca_out
-    file 'mrca_translated' into mrca_translated_out
+    file mrca into mrca_out
+    file mrca_translated into mrca_translated_1, mrca_translated_2
 
     """
     ${params.python} ${params.script_dir}/filter_fastx.py \
@@ -303,20 +338,21 @@ process mrca {
     """
 }
 
+// TODO: why do we have to duplicate outputs here?
 process add_mrca {
     input:
     file 'mrca' from mrca_out
     file 'msa' from msa_out
 
     output:
-    file 'msa_with_mrca' into msa_with_mrca_out
+    file 'msa_with_mrca' into msa_with_mrca_1, msa_with_mrca_2
 
     "cat mrca msa > msa_with_mrca"
 }
 
 process fasttree {
     input:
-    file 'msa' from msa_with_mrca_out
+    file 'msa' from msa_with_mrca_1
 
     output:
     file tree
@@ -329,7 +365,7 @@ process reroot {
     file tree
 
     output:
-    file 'rooted_tree' into rooted_tree_out
+    file rooted_tree into rooted_tree_1, rooted_tree_2
 
     """
     #!${params.python}
@@ -351,7 +387,7 @@ process reroot {
 
 process tree_json {
     input:
-    file 'tree' from rooted_tree_out
+    file 'tree' from rooted_tree_1
 
     output:
     file 'trees.json' into tree_json_out
@@ -371,7 +407,7 @@ process tree_json {
 process js_divergence {
     input:
     file 'msa' from msa_out
-    file 'metadata' from metadata_1
+    file 'metadata' from metadata_3
 
     output:
     file 'js_divergence.json' into js_divergence_json
@@ -403,11 +439,11 @@ process manifold_embedding {
 // TODO: why do command line arguments not work here?
 process reconstruct_ancestors {
     input:
-    file 'msa' from msa_with_mrca_out
-    file 'tree' from rooted_tree_out
+    file 'msa' from msa_with_mrca_2
+    file 'tree' from rooted_tree_2
 
     output:
-    file 'translated' into ancestors_out
+    file msa_with_ancestors into msa_with_ancestors_out
 
     shell:
     '''
@@ -420,7 +456,43 @@ process reconstruct_ancestors {
 
     !{params.python} !{params.script_dir}/translate.py --gapped \
       < ancestors > translated
+
+    cat msa translated > msa_with_ancestors
     '''
+}
+
+process coordinates_json {
+    input:
+    file 'mrca' from mrca_translated_1
+
+    output:
+    file 'coordinates.json' into coordinates_json_out
+    """
+    cat mrca ${params.reference_protein} > pair.fasta
+
+    ${params.mafft} --ep 0.5 --quiet --preservecase \
+      pair.fasta > aligned.fasta
+
+    ${params.python} ${params.script_dir}/coordinates_json.py \
+      mrca aligned.fasta ${params.reference_coordinates} coordinates.json
+    """
+}
+
+process sequences_json {
+    input:
+    file 'msa' from msa_with_ancestors_out
+    file 'mrca' from mrca_translated_2
+    file 'coordinates.json' from coordinates_json_out
+
+    output:
+    file 'sequences.json' into sequences_json_out
+
+    """
+    ${params.python} ${params.script_dir}/sequences_json.py \
+      msa mrca coordinates.json \
+      ${params.reference_protein} ${params.reference_coordinates} \
+      sequences.json
+    """
 }
 
 process replace_stop_codons {
@@ -428,7 +500,7 @@ process replace_stop_codons {
     file 'msa' from msa_out
 
     output:
-    file 'no_stops' into msa_no_stops
+    file no_stops into msa_no_stops
 
     """
     ${params.python} ${params.script_dir}/filter_fastx.py \
@@ -440,10 +512,10 @@ process replace_stop_codons {
 process seq_dates {
     input:
     file 'msa' from msa_out
-    file 'metadata' from metadata_3
+    file 'metadata' from metadata_4
 
     output:
-    file 'dates' into seq_dates_1, seq_dates_2
+    file dates into seq_dates_1, seq_dates_2
 
     """
     #!${params.python}
@@ -460,7 +532,6 @@ process seq_dates {
 }
 
 // FIXME: why does this segfault???
-
 /*
 process region_coords {
     input:
@@ -516,146 +587,86 @@ process rates_pheno_json {
 }
 */
 
-// process fubar {
-//     input:
-//     file 'no_stops' from msa_no_stops
-//     file 'dates' from seq_dates_2
-//     file 'mrca' from mrca_out
-//
-//     output:
-//     file 'rates.json' into rates_json
-//
-//     shell:
-//     '''
-//     !{params.hyphy} !{params.hyphy_dir}/runFUBAR.bf \
-//       $(pwd)/no_stops $(pwd)/dates $(pwd)/mrca $(pwd) $(pwd)/rates.json
-//     '''
-// }
+process fubar {
+    input:
+    file 'no_stops' from msa_no_stops
+    file 'dates' from seq_dates_2
+    file 'mrca' from mrca_out
 
-// def make_coordinates_json(infile, outfile):
-//     # FIXME: degap MRCA before running?
-//     # FIXME: split up so mafft can run remotely
-//     # FIXME: run mafft with --add
-//     combined = os.path.join(pipeline_dir, 'combined.fasta')
-//     aligned = os.path.join(pipeline_dir, 'combined.aligned.fasta')
-//     cat_files([infile, globals_.config.get('Parameters', 'reference_protein')], combined)
-//     mafft(combined, aligned)
-//     pairwise_mrca, pairwise_ref = list(SeqIO.parse(aligned, 'fasta'))
-//     ref_coords = open(globals_.config.get('Parameters', 'reference_coordinates')).read().strip().split()
+    output:
+    file 'rates.json' into rates_json
 
-//     # transfer coordinates to MRCA
-//     pairwise_coords = extend_coordinates(ref_coords, str(pairwise_ref.seq))
-//     mrca_coords = list(coord for char, coord in zip(str(pairwise_mrca.seq),
-//                                                     pairwise_coords)
-//                        if char != "-")
-
-//     # extend MRCA coords to full MSA
-//     mrca = read_single_record(infile, 'fasta', True)
-//     result = extend_coordinates(mrca_coords, str(mrca.seq))
-
-//     rdict = {'coordinates': result}
-//     with open(outfile, 'w') as handle:
-//         json.dump(rdict, handle, separators=(",\\n", ":"))
-
-// def make_sequences_json(infiles, outfile):
-//     alignment_file, mrca_file, coords_file = infiles
-//     result = {}
-//     observed = {}
-
-//     # add sequences
-//     # TODO: check if MRCA differs from our inferred MRCA
-//     for r in SeqIO.parse(alignment_file, "fasta"):
-//         if r.name == "Node0":
-//             r.name = 'MRCA'
-//         if 'ancestor' in r.name or r.name == 'MRCA':
-//             if 'Ancestors' not in result:
-//                 result['Ancestors'] = {}
-//             result['Ancestors'][r.id] = str(r.seq)
-//         else:
-//             date = name_to_date(r.name)
-//             if date not in observed:
-//                 observed[date] = {}
-//             observed[date][r.id] = str(r.seq)
-//     result['Observed'] = observed
-
-//     # add MRCA
-//     mrca = read_single_record(mrca_file, 'fasta', True)
-//     result['MRCA'] = str(mrca.seq)
-
-//     # add reference
-//     reference = read_single_record(globals_.config.get('Parameters', 'reference_protein'), 'fasta', True)
-//     rstr = str(reference.seq)
-//     with open(coords_file) as handle:
-//         alignment_coords = json.load(handle)['coordinates']
-//     ref_coords = open(globals_.config.get('Parameters', 'reference_coordinates')).read().strip().split()
-//     cmap = dict((c, i) for i, c in enumerate(ref_coords))
-//     ref_result = ''.join(list(rstr[cmap[c]] for c in alignment_coords))
-//     result['Reference'] = ref_result
-
-//     with open(outfile, 'w') as handle:
-//         json.dump(result, handle, separators=(",\\n", ":"))
-
+    shell:
+    '''
+    !{params.hyphy} !{params.hyphy_dir}/runFUBAR.bf \
+      $(pwd)/no_stops $(pwd)/dates $(pwd)/mrca $(pwd) $(pwd)/rates.json
+    '''
+}
 
 /* ************************************************************************** */
 /* DIAGNOSIS SUB-PIPELINE */
 
 // TODO: make this optional
 
-/*
 process diagnose {
     input:
-    file "qcs*" from qcs_final_2.map{ it[0] }.collect()
+    file 'qcs*' from qcs_final_2.map{ it[0] }.collect()
     file 'hqcs' from merged_hqcs_out
+    file 'hqcs_msa' from msa_out
 
     output:
-    file 'pairfile' into hqcs_qcs_pairs_out
+    file 'results/*' into diagnosis_results
 
-    """
+    when:
+    params.do_diagnosis
+
+    shell:
+    '''
     # cat qcs
     cat qcs* > all_qcs
 
     # convert to fasta
-    ${params.python} ${params.script_dir}/filter_fastx.py \
-      convert fastq fasta < all_qcs > qcs_fasta
+    !{params.python} !{params.script_dir}/filter_fastx.py \
+      convert fastq fasta < all_qcs > qcs.fasta
 
     # usearch for pairs
-    ${params.usearch} -usearch_global qcs_fasta -db hqcs \
+    !{params.usearch} -usearch_global qcs.fasta -db hqcs \
       -userout pairfile -userfields query+target \
-      -id ${params.qcs_to_hqcs_identity} \
+      -id !{params.qcs_to_hqcs_identity} \
       -top_hit_only -strand both \
-      -maxaccepts ${params.max_accepts} -maxrejects ${params.max_rejects} \
-      -maxqt ${params.max_qcs_length_ratio} \
-      -threads ${params.threads}
+      -maxaccepts !{params.max_accepts} -maxrejects !{params.max_rejects} \
+      -maxqt !{params.max_qcs_length_ratio} \
+      -threads !{params.threads}
 
     # combine pairs
     mkdir alignments
-    ${params.python} ${params.script_dir}/pairs_to_fasta.py \
-      qcs_fasta hqcs pairfile alignments
+    !{params.python} !{params.script_dir}/pairs_to_fasta.py \
+      qcs.fasta hqcs pairfile alignments
 
     # align and insert gaps
     # TODO: do in parallel
     for f in alignments/*unaligned.fasta; do
-        ${params.bealign} -a codon f ${f}.bam
+        !{params.bealign} -a codon ${f} ${f}.bam
 
         bam2msa ${f}.bam ${f}.bam.fasta
 
-        ${params.python} ${params.script_dir}/insert_gaps.py \
-          ${f}.bam.fasta msa ${f}.bam.fasta.gapped
+        !{params.python} !{params.script_dir}/insert_gaps.py \
+          ${f}.bam.fasta hqcs_msa ${f}.bam.fasta.gapped
     done
 
     # merge all
-    cat alignments/gapped* > qcs_msa
+    cat alignments/*gapped > qcs_msa
 
     # replace gapped codons
+    !{params.python} !{params.script_dir}/filter_fastx.py \
+      gap_codons fasta fasta < qcs_msa > qcs_msa_nogaps
 
-    ${params.python} ${params.script_dir}/filter_fastx.py \
-      gap_godons fasta fasta < infile > outfile
-    ${params.python} ${params.script_dir}/translate.py \
-      TODO
+    !{params.python} !{params.script_dir}/translate.py --gapped \
+      < qcs_msa_nogaps > qcs_msa_aa
 
     # run diagnosis
-    mkdir diagnosis
-    ${params.python} ${params.script_dir}/diagnose.py hqcs qcs cn diagnosis
-    """
+    mkdir results
+    !{params.python} !{params.script_dir}/diagnose.py \
+      hqcs_msa qcs_msa_aa results
+    '''
 }
-*/

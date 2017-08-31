@@ -1,3 +1,7 @@
+import sys
+import os
+from collections import defaultdict
+
 from Bio import SeqIO
 
 
@@ -24,5 +28,4 @@ def main(qcsfile, hqcsfile, pairfile, outdir):
 
 
 if __name__ == "__main__":
-    qcsfile, hqcsfile, pairfile, outdir = sys.argv[1:]
-    main(qcsfile, hqcsfile, pairfile, outdir)
+    main(*(sys.argv[1:]))

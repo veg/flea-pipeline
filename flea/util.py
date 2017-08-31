@@ -437,6 +437,10 @@ def id_to_cn(id_):
     return int(id_.split('_')[-1])
 
 
+def id_to_label(id_):
+    return id_.split('_')[0]
+
+
 def get_date_dict(metafile):
     with open(metafile) as handle:
         parsed = csv.reader(handle, delimiter=' ')
@@ -461,6 +465,13 @@ def replace_stop_codons(record):
     result.name = ""
     result.description = ""
     return result
+
+
+def handle_gap_codon(codon):
+    codon = ''.join(codon)
+    if '-' in codon and codon != '---':
+        return 'NNN'
+    return codon
 
 
 def replace_gapped_codons(record):
