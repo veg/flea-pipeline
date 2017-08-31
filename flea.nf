@@ -5,14 +5,17 @@
  *
  */
 
-// TODO: run on TORQUE
-// TODO: set cpus and threads for each task
+// TODO: run for loops in parallel
+// TODO: parallelize filter_fastx and other scripts
+// TODO: parallelize diagnosis
+// TODO: parallelize hyphy scripts, if possible
+// TODO: fix MDS dissimilarity and parallelism
+// TODO: set cpus, threads, and time for each task
+
 // TODO: allow starting from aligned inputs
-// TODO: sub-pipelines
 // TODO: nextflow repo format
-// TODO: infer singleton proc
 // TODO: add file extensions
-// TODO: Docker container
+// TODO: Singularity container
 
 
 params.infile = "$HOME/flea/data/P018/data/metadata"
@@ -58,6 +61,9 @@ max_qcs_len = reflen_2
 
 
 process quality_pipeline {
+
+    cpus params.threads
+    time params.slow_time
     publishDir params.results_dir
 
     input:
@@ -116,6 +122,10 @@ process quality_pipeline {
 /* CONSENSUS SUB-PIPELINE */
 
 process consensus_pipeline {
+
+    cpus params.threads
+    time params.crazy_time
+
     input:
     set 'qcs', label from qcs_final_1
 
@@ -145,6 +155,7 @@ process consensus_pipeline {
         if [ -s ${f}.sampled ]
         then
             !{params.mafft} --ep 0.5 --quiet --preservecase \
+            --thread !{params.threads} \
             ${f} > ${f}.aligned
 
              number=$(echo $f | cut -d '_' -f 3)
@@ -214,6 +225,7 @@ process consensus_pipeline {
 }
 
 process merge_timepoints {
+
     executor 'local'
 
     publishDir params.results_dir
@@ -223,7 +235,7 @@ process merge_timepoints {
     file 'cn*' from cnfiles.collect()
 
     output:
-    file final_hqcs into merged_hqcs_out
+    file 'hqcs.fasta' into merged_hqcs_out
 
     """
     cat hqcs* > merged_hqcs
@@ -231,7 +243,7 @@ process merge_timepoints {
 
     # add copynumbers to ids, for evo_history
     ${params.python} ${params.script_dir}/add_copynumber_to_id.py \
-      merged_hqcs merged_copynumbers final_hqcs
+      merged_hqcs merged_copynumbers hqcs.fasta
     """
 }
 
@@ -239,13 +251,18 @@ process merge_timepoints {
 /* ALIGNMENT SUB-PIPELINE */
 
 process alignment_pipeline {
+
+    time params.slow_time
+    cpus params.threads
+    time params.slow_time
+
     publishDir params.results_dir
 
     input:
     file 'hqcs' from merged_hqcs_out
 
     output:
-    file msa into msa_out
+    file 'msa.fasta' into msa_out
     file hqcs_protein_aligned into msa_aa_out
 
     """
@@ -253,10 +270,11 @@ process alignment_pipeline {
       < hqcs > hqcs_protein
 
     ${params.mafft} --ep 0.5 --quiet --preservecase \
+      --thread ${params.threads} \
       hqcs_protein > hqcs_protein_aligned
 
     ${params.python} ${params.script_dir}/backtranslate.py \
-      hqcs_protein_aligned hqcs msa
+      hqcs_protein_aligned hqcs msa.fasta
     """
 }
 
@@ -269,6 +287,7 @@ process alignment_pipeline {
 // TODO: .zip file
 
 process dates_json_task {
+
     executor 'local'
 
     publishDir params.results_dir
@@ -292,6 +311,8 @@ process dates_json_task {
 }
 
 process copynumbers_json {
+
+    time params.crazy_time
     publishDir params.results_dir
 
     input:
@@ -315,6 +336,7 @@ process copynumbers_json {
 }
 
 process get_oldest_label {
+
     executor 'local'
 
     input:
@@ -336,6 +358,9 @@ process get_oldest_label {
 
 // TODO: rewrite as filter_fastx with id prefix
 process mrca {
+
+    time params.slow_time
+
     input:
     file 'msa' from msa_out
     val oldest_label
@@ -362,6 +387,7 @@ process mrca {
 
 // TODO: why do we have to duplicate outputs here?
 process add_mrca {
+
     executor 'local'
 
     input:
@@ -375,16 +401,25 @@ process add_mrca {
 }
 
 process fasttree {
+
+    time params.slow_time
+
+    cpus params.threads
+    time params.slow_time
+
     input:
     file 'msa' from msa_with_mrca_1
 
     output:
     file tree
 
-    "${params.fasttree} -gtr -nt msa > tree"
+    "OMP_NUM_THREADS=${params.threads} ${params.fasttree} -gtr -nt msa > tree"
 }
 
 process reroot {
+
+    time params.fast_time
+
     input:
     file tree
 
@@ -410,6 +445,7 @@ process reroot {
 }
 
 process tree_json {
+
     executor 'local'
 
     publishDir params.results_dir
@@ -433,6 +469,9 @@ process tree_json {
 }
 
 process js_divergence {
+
+    time params.slow_time
+
     publishDir params.results_dir
 
     input:
@@ -449,6 +488,9 @@ process js_divergence {
 }
 
 process manifold_embedding {
+
+    time params.crazy_time
+
     publishDir params.results_dir
 
     input:
@@ -462,13 +504,16 @@ process manifold_embedding {
       -format tabbed_pairs
 
     ${params.python} ${params.script_dir}/manifold_embed.py \
-      --n-jobs ${params.threads} dmatrix manifold.json
+      --n-jobs 1 dmatrix manifold.json
     """
 }
 
 // TODO: avoid full paths
 // TODO: why do command line arguments not work here?
 process reconstruct_ancestors {
+
+    time params.slow_time
+
     input:
     file 'msa' from msa_with_mrca_2
     file 'msa_aa' from msa_aa_out
@@ -494,6 +539,12 @@ process reconstruct_ancestors {
 }
 
 process coordinates_json {
+
+    time params.fast_time
+
+    cpus params.threads
+    time params.slow_time
+
     publishDir params.results_dir
 
     input:
@@ -505,6 +556,7 @@ process coordinates_json {
     cat mrca ${params.reference_protein} > pair.fasta
 
     ${params.mafft} --ep 0.5 --quiet --preservecase \
+      --thread ${params.threads} \
       pair.fasta > aligned.fasta
 
     ${params.python} ${params.script_dir}/coordinates_json.py \
@@ -513,6 +565,9 @@ process coordinates_json {
 }
 
 process sequences_json {
+
+    time params.fast_time
+
     publishDir params.results_dir
 
     input:
@@ -533,6 +588,9 @@ process sequences_json {
 }
 
 process replace_stop_codons {
+
+    time params.fast_time
+
     input:
     file 'msa' from msa_out
 
@@ -547,6 +605,9 @@ process replace_stop_codons {
 
 // TODO: why do we need to split output here, but not elsewhere?
 process seq_dates {
+
+    time params.fast_time
+
     input:
     file 'msa' from msa_out
     file 'metadata' from metadata_5
@@ -571,6 +632,9 @@ process seq_dates {
 // FIXME: why does this segfault???
 /*
 process region_coords {
+
+    time params.fast_time
+
     publishDir params.results_dir
 
     input:
@@ -587,6 +651,9 @@ process region_coords {
 }
 
 process evo_history {
+
+    time params.crazy_time
+
     input:
     file 'no_stops' from msa_no_stops
     file 'dates' from seq_dates_1
@@ -603,6 +670,8 @@ process evo_history {
 }
 
 process rates_pheno_json {
+
+    time params.fast_time
     publishDir params.results_dir
 
     input:
@@ -628,6 +697,8 @@ process rates_pheno_json {
 }
 
 process fubar {
+
+    time params.crazy_time
     publishDir params.results_dir
 
     input:
@@ -653,6 +724,10 @@ process fubar {
 // TODO: make this optional
 
 process diagnose {
+
+    cpus params.threads
+    time params.crazy_time
+
     publishDir params.results_dir
 
     input:
@@ -696,7 +771,7 @@ process diagnose {
     for f in alignments/*unaligned.fasta; do
         !{params.bealign} -a codon ${f} ${f}.bam
 
-        bam2msa ${f}.bam ${f}.bam.fasta
+        !{params.bam2msa} ${f}.bam ${f}.bam.fasta
 
         !{params.python} !{params.script_dir}/insert_gaps.py \
           ${f}.bam.fasta hqcs_msa ${f}.bam.fasta.gapped

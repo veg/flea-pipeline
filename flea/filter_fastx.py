@@ -26,7 +26,7 @@ def main(mode, informat, outformat, params):
         if min_n <= n <= max_n:
             result = records
         if n > max_n:
-            records = iter_sample(records, maxsize)
+            records = iter_sample(records, max_n)
     elif mode == "length":
         min_length, max_length = map(int, params)
         result = (r for r in records if min_length <= len(r.seq) <= max_length)

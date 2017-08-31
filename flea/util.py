@@ -14,6 +14,7 @@ from glob import glob
 import sys
 from contextlib import contextmanager
 import csv
+import random
 
 from Bio.Seq import Seq
 from Bio import SeqIO
