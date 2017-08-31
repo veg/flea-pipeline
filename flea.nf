@@ -758,15 +758,14 @@ process diagnose {
       qcs.fasta hqcs pairfile alignments
 
     # align and insert gaps
-    # TODO: do in parallel
-    for f in alignments/*unaligned.fasta; do
-        !{params.bealign} -a codon ${f} ${f}.bam
+    parallel -j !{params.threads} \
+      '!{params.bealign} -a codon {} {}.bam' ::: alignments/*unaligned.fasta
 
-        !{params.bam2msa} ${f}.bam ${f}.bam.fasta
+    parallel -j !{params.threads} \
+      '!{params.bam2msa} {} {}.fasta' ::: alignments/*.bam
 
-        !{params.python} !{params.script_dir}/insert_gaps.py \
-          ${f}.bam.fasta hqcs_msa ${f}.bam.fasta.gapped
-    done
+    parallel -j !{params.threads} \
+      '!{params.python} !{params.script_dir}/insert_gaps.py {} hqcs_msa {}.gapped' ::: alignments/*.bam.fasta
 
     # merge all
     cat alignments/*gapped > qcs_msa
