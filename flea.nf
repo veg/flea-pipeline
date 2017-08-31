@@ -152,7 +152,6 @@ process consensus_pipeline {
         if [ -s ${1}.sampled ]
         then
             !{params.mafft} --ep 0.5 --quiet --preservecase \
-            --thread !{params.threads} \
             ${1} > ${1}.aligned
 
              number=$(echo $1 | cut -d '_' -f 3)
