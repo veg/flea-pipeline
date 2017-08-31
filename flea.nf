@@ -1,9 +1,15 @@
 #!/usr/bin/env nextflow
-
 /*
- * The FLEA pipeline
- *
- */
+vim: syntax=groovy
+-*- mode: groovy;-*-
+========================================================================================
+              FLEA (Full-Length Envelope Analyzer) Pipeline
+========================================================================================
+ FLEA Pipeline. Started March 2016.
+ #### Homepage / Documentation
+ https://github.com/veg/flea-pipeline
+----------------------------------------------------------------------------------------
+*/
 
 // TODO: parallelize filter_fastx and other scripts, if it speeds them up
 // TODO: parallelize hyphy scripts, if possible
