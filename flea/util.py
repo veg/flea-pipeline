@@ -484,3 +484,4 @@ def replace_gapped_codons(record):
     result.name = ""
     result.description = ""
     return result
+
