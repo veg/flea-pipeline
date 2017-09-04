@@ -11,15 +11,14 @@ vim: syntax=groovy
 ----------------------------------------------------------------------------------------
 */
 
-// TODO: get output exactly matching old version of pipeline
-// TODO: tune maxaccepts and maxrejects
-// TODO: combine all time points for inframe db for shift correction
-// TODO: benchmark disk usage; compress more files
+// TODO: hyphy scripts actually slower with MPI???
+// TODO: compress/delete intermediate hyphy files
 // TODO: parallelize filter_fastx and other scripts, if it speeds them up
 // TODO: fix MDS parallelism
-// TODO: hyphy scripts actually slower with MPI???
 // TODO: update tests
 
+// TODO: combine all time points for inframe db for shift correction
+// TODO: tune maxaccepts and maxrejects
 // TODO: allow starting from aligned inputs
 // TODO: Singularity container
 
@@ -656,6 +655,7 @@ process manifold_embedding {
       --n-jobs 1 dmatrix.txt manifold.json
 
     rm -f msa.fasta
+    gzip dmatrix.txt
     """
 }
 
@@ -824,7 +824,7 @@ process region_coords {
 
 process evo_history {
 
-    cpus params.cpus
+    // cpus params.cpus
     time params.crazy_time
 
     input:
@@ -875,7 +875,8 @@ process rates_pheno_json {
 }
 
 process fubar {
-    cpus params.cpus
+
+    // cpus params.cpus
     time params.crazy_time
     publishDir params.results_dir
 
