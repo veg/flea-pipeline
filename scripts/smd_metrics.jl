@@ -44,9 +44,9 @@ function run_metric(true_seqs, true_abn, inf_seqs, inf_abn)
     return distmat, emd1, emd2, emd3
 end
 
-function run_all(true_fasta_file, inf_fasta_file)
-    true_df = read_files(true_fasta_file)
-    inf_df = read_files(inf_fasta_file)
+function run_all(true_fasta_file, true_abn_file, inf_fasta_file, inf_abn_file)
+    true_df = read_files(true_fasta_file, true_abn_file)
+    inf_df = read_files(inf_fasta_file, inf_abn_file)
     results = []
     for timepoint in unique(true_df[:timepoint])
         true_df_sub = true_df[true_df[:timepoint] .== timepoint, :]
@@ -65,10 +65,13 @@ end
 
 function main()
     true_fasta_file = ARGS[1]
-    inf_fasta_file = ARGS[2]
-    outfile = ARGS[3]
+    true_abn_file = ARGS[2]
+    inf_fasta_file = ARGS[3]
+    inf_abn_file = ARGS[4]
+    outfile = ARGS[5]
 
-    results = run_all(true_fasta_file, inf_fasta_file)
+    results = run_all(true_fasta_file, true_abn_file,
+                      inf_fasta_file, inf_abn_file)
     final_df = DataFrame()
     final_df[:timepoint] = [r[1] for r in results]
     final_df[:smd] = [r[2] for r in results]
