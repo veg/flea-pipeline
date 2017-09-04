@@ -78,16 +78,16 @@ process quality_pipeline {
     each maxlen from max_qcs_len
 
     output:
-    set '*qcs.fastq.gz', label into qcs_final_1, qcs_final_2, qcs_final_3
+    set '*qcs.fastq.gz', label into qcs_final_1, qcs_final_2, qcs_final_3, qcs_final_4
 
     shell:
     '''
     # filter by quality score
     !{params.usearch} --fastq_filter ccs.fastq \
+      --fastqout qfiltered.fastq \
       --fastq_maxee_rate !{params.max_error_rate} \
       --fastq_qmax !{params.qmax} \
       --fastq_minlen !{minlen} \
-      --fastqout qfiltered.fastq \
       --relabel "!{label}_ccs_" \
       --threads !{params.cpus}
 
@@ -106,6 +106,7 @@ process quality_pipeline {
       --id !{params.contaminant_identity} \
       --strand both \
       --qmask none \
+      --maxhits 1 \
       --maxrejects !{params.max_rejects} \
       --threads !{params.cpus}
 
@@ -117,6 +118,7 @@ process quality_pipeline {
       --id !{params.reference_identity} \
       --qmask none \
       --strand both \
+      --maxhits 1 \
       --maxrejects !{params.max_rejects} \
       --threads !{params.cpus}
 
@@ -142,7 +144,8 @@ process quality_pipeline {
 /* ************************************************************************** */
 /* CONSENSUS SUB-PIPELINE */
 
-process consensus_pipeline {
+
+process cluster {
 
     cpus params.cpus
     time params.slow_time
@@ -152,7 +155,7 @@ process consensus_pipeline {
     set 'qcs.fastq.gz', label from qcs_final_1
 
     output:
-    set '*.all_consensus.fasta.gz', label into consensus_out
+    set '*.clusters.uc', label into cluster_out
 
     shell:
     '''
@@ -160,14 +163,44 @@ process consensus_pipeline {
 
     # cluster
     !{params.usearch} --cluster_fast qcs.fastq \
-      --clusters cluster_ \
+      -uc !{label}.clusters.uc \
       --id !{params.cluster_identity} \
       --minsl !{params.min_length_ratio} \
+      --sort length \
+      --maxhits 1 \
       --maxaccepts !{params.max_accepts} \
       --maxrejects !{params.max_rejects} \
       --threads !{params.cpus}
 
-    for i in cluster_*; do mv ${i} ${i}_raw.fasta ; done
+    rm -f qcs.fastq
+    '''
+}
+
+
+cluster_out
+  .phase (qcs_final_2) { it[1] }
+  .map { [ it[0][0], it[1][0], it[0][1] ] }
+  .set { consensus_input }
+
+
+  process consensus {
+
+    cpus params.cpus
+    time params.slow_time
+    publishDir params.results_dir
+
+    input:
+    set 'clusters.uc', 'qcs.fastq.gz', label from consensus_input
+
+    output:
+    set '*.all_consensus.fasta.gz', label into consensus_out
+
+    shell:
+    '''
+    zcat qcs.fastq.gz | \
+    !{params.python} !{params.script_dir}/cluster_fastq.py \
+      --minsize !{params.min_cluster_size} --fasta \
+      clusters.uc .
 
     # function sample clusters and do mafft consensus
     doconsensus() {
@@ -265,9 +298,9 @@ process shift_correction {
 }
 
 shift_correction_out
-  .phase (qcs_final_2) { it[1] }
+  .phase (qcs_final_3) { it[1] }
   .map { [ it[0][0], it[1][0], it[0][1] ] }
-  .set { compute_abundances_input}
+  .set { compute_abundances_input }
 
 
 process compute_abundances {
@@ -877,7 +910,7 @@ process diagnose {
     publishDir params.results_dir
 
     input:
-    file 'qcs*.fastq.gz' from qcs_final_3.map{ it[0] }.collect()
+    file 'qcs*.fastq.gz' from qcs_final_4.map{ it[0] }.collect()
     file 'hqcs.fasta.gz' from merged_hqcs_out
     file 'hqcs.msa.fasta.gz' from msa_out
     file 'hqcs.msa.aa.fasta.gz' from msa_aa_out

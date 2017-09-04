@@ -2,10 +2,10 @@
 
 """Write each cluster from a .uc file to a FASTQ or FASTA file.
 
-Each output file is put in <outdir> and named "cluster_{}.fastq".
+Each output file is put in <outdir> and named "cluster_{}_raw.fastq".
 
 Usage:
-  cluster_fastq.py [options] <ucfile> <fastqfile> <outdir>
+  cluster_fastq.py [options] <ucfile> <outdir>
   cluster_fastq.py -h
 
 Options:
@@ -15,6 +15,7 @@ Options:
   -h --help         Show this screen
 
 """
+import sys
 import os
 from collections import defaultdict
 
@@ -54,11 +55,10 @@ def parse_ucfile(infile):
 if __name__ == "__main__":
     args = docopt(__doc__)
     ucfile = args["<ucfile>"]
-    fastqfile = args["<fastqfile>"]
     outdir = args["<outdir>"]
     minsize = int(args["--minsize"])
 
-    records = SeqIO.parse(fastqfile, 'fastq')
+    records = list(SeqIO.parse(sys.stdin, 'fastq'))
     rdict = dict((r.id, r) for r in records)
     cdict = parse_ucfile(ucfile)
 
@@ -68,5 +68,5 @@ if __name__ == "__main__":
         cluster_records = list(rdict[label] for label in labels)
         if len(cluster_records) < minsize:
             continue
-        outfile = os.path.join(outdir, "cluster_{}.raw.{}".format(cluster_id, format))
+        outfile = os.path.join(outdir, "cluster_{}_raw.{}".format(cluster_id, format))
         SeqIO.write(cluster_records, outfile, format)
