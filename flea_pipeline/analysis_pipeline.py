@@ -551,7 +551,7 @@ def make_analysis_pipeline(name=None):
             evo_history_task = pipeline.merge(evo_history,
                                               input=[replace_stop_codons_task,
                                                      dates_task,
-                                                     region_coords_task]
+                                                     region_coords_task],
                                               output=os.path.join(pipeline_dir, 'rates_pheno.tsv'))
 
             rates_pheno_json_task = pipeline.transform(rates_pheno_json,

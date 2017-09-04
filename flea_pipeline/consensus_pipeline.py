@@ -354,7 +354,7 @@ def outframe(infile, outfile):
 @must_work()
 @report_wrapper
 def filter_unique(infile, outfile):
-    cmd = ('{usearch} -derep_fulllength {infile} -fastaout {outfile}'.format(
+    cmd = ('{usearch} -fastx_uniques {infile} -fastaout {outfile}'.format(
             usearch=globals_.config.get('Paths', 'usearch'), infile=infile, outfile=outfile))
     return run_command(cmd, infile, outfiles=outfile, name='filter-unique', run_locally=True)
 
