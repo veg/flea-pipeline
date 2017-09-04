@@ -12,7 +12,7 @@ Usage:
 Options:
   -v --verbose            Print progress to STDERR
   --keep-gaps             Do not ungap the consensus
-  --copynumbers           Seq id ends with copynumber
+  --abundances           Seq id ends with abundance
   --id=<STRING>           Record id for the fasta output
   -o --outfile=<STRING>   Name of output file
   --ambifile=<STRING>
@@ -34,7 +34,7 @@ from Bio import AlignIO
 from Bio.Alphabet import IUPAC
 
 from flea.util import grouper
-from flea.util import id_to_cn
+from flea.util import id_to_abundance
 
 
 def _column_consensus(counter, seed=None, codon=False):
@@ -62,9 +62,9 @@ def consensus(seqs, copies=None, codon=False, seed=None):
     if copies is None:
         copies = [1] * len(seqs)
     counters = list(defaultdict(lambda: 0) for _ in range(len(seqs[0])))
-    for seq, cn in zip(seqs, copies):
+    for seq, abundance in zip(seqs, copies):
         for column, elt in enumerate(seq):
-            counters[column][elt] += cn
+            counters[column][elt] += abundance
     pairs = (_column_consensus(c, seed, codon) for c in counters)
     cons, ambi = zip(*pairs)
     assert(len(cons) == len(ambi))
@@ -74,7 +74,7 @@ def consensus(seqs, copies=None, codon=False, seed=None):
     return cons, ambi
 
 
-def consfile(filename, outfile=None, ambifile=None, do_copynumber=False,
+def consfile(filename, outfile=None, ambifile=None, do_abundance=False,
              id_str=None, codon=False, ungap=True, verbose=False, seed=None):
     """Computes a consensus sequence and writes it to a file.
 
@@ -89,8 +89,8 @@ def consfile(filename, outfile=None, ambifile=None, do_copynumber=False,
     """
     alignment = list(AlignIO.read(filename, "fasta"))
     seqs = list(r.seq for r in alignment)
-    if do_copynumber:
-        copies = list(id_to_cn(r.id) for r in alignment)
+    if do_abundance:
+        copies = list(id_to_abundance(r.id) for r in alignment)
     else:
         copies = None
     _consensus, ambiguous = consensus(seqs, copies, codon=codon, seed=seed)
@@ -131,7 +131,7 @@ def consfile(filename, outfile=None, ambifile=None, do_copynumber=False,
 if __name__ == "__main__":
     args = docopt(__doc__)
     filename = args["<infile>"]
-    do_copynumber = args["--copynumbers"]
+    do_abundance = args["--abundances"]
     verbose = args["--verbose"]
     id_str = args["--id"]
     outfile = args["--outfile"]
@@ -139,6 +139,6 @@ if __name__ == "__main__":
     keep_gap = args["--keep-gaps"]
     codon = args["--codon"]
     ungap = not keep_gap
-    consfile(filename, outfile, do_copynumber=do_copynumber,
+    consfile(filename, outfile, do_abundance=do_abundance,
              ambifile=ambifile, id_str=id_str, codon=codon, ungap=ungap,
              verbose=verbose)

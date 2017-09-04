@@ -11,21 +11,16 @@ vim: syntax=groovy
 ----------------------------------------------------------------------------------------
 */
 
-// TODO: why is diagnosis only getting one cpu?
-// TODO: does evo_history use threads or MPI?
 // TODO: convert usearch to vearch
+// TODO: why is diagnosis only getting one cpu?
 // TODO: combine all time points for inframe db for shift correction
-// TODO: check max_accepts and top_hits_only
-// TODO: MPI for evo history
-// TODO: benchmark gnu parallel and see if it is actually faster
+// TODO: benchmark disk usage; compress more files
 // TODO: parallelize filter_fastx and other scripts, if it speeds them up
 // TODO: fix MDS parallelism
-// TODO: set cpus, threads, and time for each task
-// TODO: compress intermediate files
+// TODO: hyphy scripts actually slower with MPI???
+// TODO: update tests
 
 // TODO: allow starting from aligned inputs
-// TODO: nextflow repo format
-// TODO: add file extensions
 // TODO: Singularity container
 
 
@@ -88,12 +83,13 @@ process quality_pipeline {
     shell:
     '''
     # filter by quality score
-    !{params.usearch} -fastq_filter ccs.fastq \
-      -fastq_maxee_rate !{params.max_error_rate} \
-      -threads !{params.cpus} \
-      -fastq_qmax !{params.qmax} -fastq_minlen !{minlen} \
-      -fastqout qfiltered.fastq \
-      -relabel "!{label}_ccs_"
+    !{params.vsearch} --fastq_filter ccs.fastq \
+      --fastq_maxee_rate !{params.max_error_rate} \
+      --fastq_qmax !{params.qmax} \
+      --fastq_minlen !{minlen} \
+      --fastqout qfiltered.fastq \
+      --relabel "!{label}_ccs_" \
+      --threads !{params.cpus}
 
     # trim ends
     !{params.python} !{params.script_dir}/trim_tails.py \
@@ -104,24 +100,25 @@ process quality_pipeline {
       runs fastq fasta !{params.run_length} < trimmed.fastq > no_runs.fasta
 
     # filter against contaminants
-    !{params.usearch} -usearch_global no_runs.fasta \
-      -qmask none \
-      -db !{params.contaminants_db} -id !{params.contaminant_identity} -strand both \
-      -top_hit_only \
-      -maxrejects !{params.max_rejects} \
-      -threads !{params.cpus} -notmatched uncontam.fasta
+    !{params.vsearch} --usearch_global no_runs.fasta \
+      --db !{params.contaminants_db} \
+      --notmatched uncontam.fasta \
+      --id !{params.contaminant_identity} \
+      --strand both \
+      --qmask none \
+      --maxrejects !{params.max_rejects} \
+      --threads !{params.cpus}
 
     # filter against reference
-    !{params.usearch} -usearch_global uncontam.fasta -db !{params.reference_db} \
-      -qmask none \
-      -id !{params.reference_identity} \
-      -userfields query+qstrand+tstrand+caln \
-      -strand both \
-      -top_hit_only \
-      -maxrejects !{params.max_rejects} \
-      -threads !{params.cpus} \
-      -matched matches_refs.fasta \
-      -userout userout.txt
+    !{params.vsearch} --usearch_global uncontam.fasta \
+      --db !{params.reference_db} \
+      --userout userout.txt \
+      --userfields query+qstrand+tstrand+caln \
+      --id !{params.reference_identity} \
+      --qmask none \
+      --strand both \
+      --maxrejects !{params.max_rejects} \
+      --threads !{params.cpus}
 
     # propagate db search to fastq file. trim terminal gaps.
     # use trimmed.fastq since that was the last fastq file in the pipeline.
@@ -159,17 +156,14 @@ process consensus_pipeline {
 
     shell:
     '''
-    zcat qcs.fastq.gz > qcs.fastq
-
     # cluster
-    !{params.usearch} -cluster_fast qcs.fastq \
-      -id !{params.cluster_identity} \
-      -sort length \
-      -top_hit_only \
-      -maxaccepts !{params.max_accepts} -maxrejects !{params.max_rejects} \
-      -minsl !{params.min_length_ratio} \
-      -threads !{params.cpus} \
-      -clusters cluster_
+    !{params.vsearch} --cluster_fast qcs.fastq.gz \
+      --clusters cluster_ \
+      --id !{params.cluster_identity} \
+      --minsl !{params.min_length_ratio} \
+      --maxaccepts !{params.max_accepts} \
+      --maxrejects !{params.max_rejects} \
+      --threads !{params.cpus}
 
     for i in cluster_*; do mv ${i} ${i}_raw.fasta ; done
 
@@ -202,7 +196,6 @@ process consensus_pipeline {
     cat *.consensus.fasta > !{label}.all_consensus.fasta
 
     # gzip everything
-    rm -f qcs.fastq
     for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
     '''
 }
@@ -221,26 +214,29 @@ process shift_correction {
 
     shell:
     '''
-    zcat consensus.fasta.gz > consensus.fasta
-
     # inframe
+    zcat consensus.fasta.gz | \
     !{params.python} !{params.script_dir}/filter_fastx.py \
-      inframe fasta fasta false < consensus.fasta > consensus.inframe.fasta
+      inframe fasta fasta false > consensus.inframe.fasta
 
     # unique
-    !{params.usearch} -fastx_uniques consensus.inframe.fasta \
-      -threads !{params.cpus} \
-      -fastaout consensus.inframe.unique.fasta
+    !{params.vsearch} --derep_fulllength consensus.inframe.fasta \
+      --output consensus.inframe.unique.fasta \
+      --threads !{params.cpus}
 
     # search
-    !{params.usearch} -usearch_global consensus.fasta -db consensus.inframe.unique.fasta \
-      -qmask none \
-      -id !{params.reference_identity} \
-      -strand both \
-      -top_hit_only \
-      -maxaccepts !{params.max_accepts} -maxrejects !{params.max_rejects} \
-      -threads !{params.cpus} \
-      -fastapairs pairfile.fasta -userout calnfile.txt -userfields caln
+    !{params.vsearch} --usearch_global consensus.fasta.gz \
+      --db consensus.inframe.unique.fasta \
+      --fastapairs pairfile.fasta \
+      --userout calnfile.txt \
+      --userfields caln \
+      --maxhits 1 \
+      --id !{params.reference_identity} \
+      --qmask none \
+      --strand both \
+      --maxaccepts !{params.max_accepts} \
+      --maxrejects !{params.max_rejects} \
+      --threads !{params.cpus}
 
     # shift correction
     !{params.python} !{params.script_dir}/correct_shifts.py \
@@ -253,12 +249,11 @@ process shift_correction {
       inframe fasta fasta true < corrected.fasta > corrected.inframe.fasta
 
     # unique seqs
-    !{params.usearch} -fastx_uniques corrected.inframe.fasta \
-      -fastaout !{label}.corrected.inframe.unique.fasta \
-      -threads !{params.cpus}
+    !{params.vsearch} --derep_fulllength corrected.inframe.fasta \
+      --output !{label}.corrected.inframe.unique.fasta \
+      --threads !{params.cpus}
 
     # gzip everything
-    rm -f !{label}.consensus.fasta
     for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip -f "$i" ; done
     '''
 }
@@ -266,51 +261,52 @@ process shift_correction {
 shift_correction_out
   .phase (qcs_final_2) { it[1] }
   .map { [ it[0][0], it[1][0], it[0][1] ] }
-  .set { compute_copynumbers_input}
+  .set { compute_abundances_input}
 
 
-process compute_copynumbers {
+process compute_abundances {
     cpus params.cpus
     time params.slow_time
 
     input:
-    set 'hqcs.fasta.gz', 'qcs.fastq.gz', label from compute_copynumbers_input
+    set 'hqcs.fasta.gz', 'qcs.fastq.gz', label from compute_abundances_input
 
     output:
     file 'hqcs.filtered.fasta.gz' into hqcs_files
-    file 'cnfile.txt.gz' into cnfiles
+    file 'abundance_file.txt.gz' into abundance_files
 
     shell:
     '''
-    # convert to fasta for usearch
+    # convert to fasta for vsearch
     zcat qcs.fastq.gz | \
       !{params.python} !{params.script_dir}/filter_fastx.py \
       convert fastq fasta > qcs.fasta
 
-    zcat hqcs.fasta.gz > hqcs.fasta
-
-    # usearch for pairs
-    !{params.usearch} -usearch_global qcs.fasta -db hqcs.fasta \
+    # search for pairs
+    !{params.vsearch} --usearch_global qcs.fasta \
+      --db hqcs.fasta.gz \
+      --userout pairfile.txt \
+      --userfields query+target \
+      --maxhits 1 \
+      --id !{params.abundance_identity} \
+      --maxqt !{params.abundance_max_length_ratio} \
       -qmask none \
-      -userout pairfile.txt -userfields query+target \
-      -id !{params.copynumber_identity} \
-      -strand both \
-      -top_hit_only \
-      -maxaccepts !{params.max_accepts} -maxrejects !{params.max_rejects} \
-      -maxqt !{params.cn_max_length_ratio} \
-      -threads !{params.cpus}
+      --strand both \
+      --maxaccepts !{params.max_accepts} \
+      --maxrejects !{params.max_rejects} \
+      --threads !{params.cpus}
 
-    # write copynumber file
-    !{params.python} !{params.script_dir}/write_copynumbers.py \
-      < pairfile.txt > cnfile.txt
+    # write abundance file
+    !{params.python} !{params.script_dir}/write_abundances.py \
+      < pairfile.txt > abundance_file.txt
 
-    # filter out HQCS with 0 copynumber
+    # filter out HQCS with 0 abundance
+    zcat hqcs.fasta.gz | \
     !{params.python} !{params.script_dir}/filter_fastx.py \
-      copynumber fasta fasta cnfile.txt \
-      < hqcs.fasta > hqcs.filtered.fasta
+      abundance fasta fasta abundance_file.txt \
+      > hqcs.filtered.fasta
 
     # gzip everything
-    rm -f hqcs.fasta
     for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
     '''
 }
@@ -322,24 +318,24 @@ process merge_timepoints {
 
     input:
     file 'hqcs*.fastq.gz' from hqcs_files.collect()
-    file 'cn*.txt.gz' from cnfiles.collect()
+    file 'abundance*.txt.gz' from abundance_files.collect()
 
     output:
     file 'all_hqcs.fasta.gz' into merged_hqcs_out
 
     """
     zcat hqcs*.fastq.gz > merged_hqcs.fasta
-    zcat cn*.txt.gz > merged_copynumbers.txt
+    zcat abundance*.txt.gz > merged_abundances.txt
 
-    # add copynumbers to ids, for evo_history
+    # add abundances to ids, for evo_history
     ${params.python} ${params.script_dir}/filter_fastx.py \
-      add_copynumber fasta fasta merged_copynumbers.txt \
+      add_abundance fasta fasta merged_abundances.txt \
       < merged_hqcs.fasta > all_hqcs.fasta
 
     # gzip everything
     gzip merged_hqcs.fasta
     gzip all_hqcs.fasta
-    gzip merged_copynumbers.txt
+    gzip merged_abundances.txt
     """
 }
 
@@ -408,7 +404,7 @@ process dates_json_task {
     """
 }
 
-process copynumbers_json {
+process abundances_json {
 
     time params.crazy_time
     publishDir params.results_dir
@@ -417,7 +413,7 @@ process copynumbers_json {
     file 'msa.fasta.gz' from msa_out
 
     output:
-    file 'copynumbers.json' into copynumbers_json_out
+    file 'abundances.json' into abundances_json_out
 
     """
     #!${params.python}
@@ -425,12 +421,12 @@ process copynumbers_json {
     import gzip
     import json
     from Bio import SeqIO
-    from flea.util import id_to_cn
+    from flea.util import id_to_abundance
 
     with gzip.open('msa.fasta.gz', 'rt') as handle:
         records = SeqIO.parse(handle, 'fasta')
-        outdict = dict((r.id, id_to_cn(r.id)) for r in records)
-    with open('copynumbers.json', 'w') as handle:
+        outdict = dict((r.id, id_to_abundance(r.id)) for r in records)
+    with open('abundances.json', 'w') as handle:
         json.dump(outdict, handle, separators=(",\\n", ":"))
     """
 }
@@ -478,7 +474,7 @@ process mrca {
     !{params.python} !{params.script_dir}/DNAcons.py \
       --keep-gaps --codon --id MRCA \
       -o mrca.fasta \
-      --copynumbers \
+      --abundances \
       oldest_seqs.fasta
 
     !{params.python} !{params.script_dir}/translate.py --gapped \
@@ -892,16 +888,19 @@ process diagnose {
       !{params.python} !{params.script_dir}/filter_fastx.py \
         convert fastq fasta > qcs.fasta
 
-    # usearch for pairs
-    !{params.usearch} -usearch_global qcs.fasta -db hqcs.fasta \
-      -qmask none \
-      -userout pairfile.txt -userfields query+target \
-      -id !{params.qcs_to_hqcs_identity} \
-      -strand both \
-      -top_hit_only \
-      -maxaccepts !{params.max_accepts} -maxrejects !{params.max_rejects} \
-      -maxqt !{params.max_qcs_length_ratio} \
-      -threads !{params.cpus}
+    # search for pairs
+    !{params.vsearch} --usearch_global qcs.fasta \
+      --db hqcs.fasta \
+      --userout pairfile.txt \
+      --userfields query+target \
+      --maxhits 1 \
+      --id !{params.qcs_to_hqcs_identity} \
+      --maxqt !{params.max_qcs_length_ratio} \
+      --qmask none \
+      --strand both \
+      --maxaccepts !{params.max_accepts} \
+      --maxrejects !{params.max_rejects} \
+      --threads !{params.cpus}
 
     # combine pairs
     mkdir alignments

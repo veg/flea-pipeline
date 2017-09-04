@@ -415,7 +415,7 @@ def is_in_frame(seq, allow_stop_codons):
     return True
 
 
-def parse_copynumbers(infile):
+def parse_abundances(infile):
     with open(infile) as handle:
         parsed = csv.reader(handle, delimiter='\t')
         return dict((i, int(n)) for i, n in parsed)
@@ -430,11 +430,11 @@ def replace_id(record, id_):
     return result
 
 
-def id_with_cn(id_, cn):
-    return "{}_cn_{}".format(id_, cn)
+def id_with_abundance(id_, abundance):
+    return "{}_n_{}".format(id_, abundance)
 
 
-def id_to_cn(id_):
+def id_to_abundance(id_):
     return int(id_.split('_')[-1])
 
 
