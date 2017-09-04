@@ -14,7 +14,7 @@ function read_files(fasta_file, abundance_file="")
     fulldf = if abundance_file == "name"
         template_df[:abundance] = [parse(Int, split(s.name, "_")[end]) for s in templates]
         template_df
-    else if length(abundance_file) > 0
+    elseif length(abundance_file) > 0
         abundance_df = readtable(abundance_file, header=false,
                                   names=[:name, :abundance])
         join(template_df, abundance_df, on=:name, kind=:outer)
