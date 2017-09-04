@@ -12,7 +12,6 @@ vim: syntax=groovy
 */
 
 // TODO: convert usearch to vearch
-// TODO: why is diagnosis only getting one cpu?
 // TODO: combine all time points for inframe db for shift correction
 // TODO: benchmark disk usage; compress more files
 // TODO: parallelize filter_fastx and other scripts, if it speeds them up
@@ -845,6 +844,9 @@ process fubar {
     output:
     file 'rates.json' into rates_json
 
+    when:
+    params.do_fubar
+
     shell:
     '''
     zcat msa.no_stops.fasta.gz > msa.no_stops.fasta
@@ -865,9 +867,6 @@ process diagnose {
     time params.crazy_time
     publishDir params.results_dir
 
-    when:
-    params.do_diagnosis
-
     input:
     file 'qcs*.fastq.gz' from qcs_final_3.map{ it[0] }.collect()
     file 'hqcs.fasta.gz' from merged_hqcs_out
@@ -876,6 +875,9 @@ process diagnose {
 
     output:
     file 'diagnosis_results/*' into diagnosis_results
+
+    when:
+    params.do_diagnosis
 
     shell:
     '''
