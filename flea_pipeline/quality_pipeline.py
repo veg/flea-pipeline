@@ -73,12 +73,12 @@ def filter_contaminants(infile, outfile):
     db = globals_.config.get('Parameters', 'contaminants_db')
     id_ = globals_.config.get('Parameters', 'contaminant_identity')
     outfiles = [uncontam, contam]
-    cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
+    cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id} -threads {ppn}'
            ' -notmatchedfq {uncontam} -matchedfq {contam}'
            ' -strand both'.format(usearch=globals_.config.get('Paths', 'usearch'),
-                                  infile=infile, db=db, id=id_,
+                                  infile=infile, db=db, id=id_, ppn=globals_.ppn,
                                   uncontam=uncontam, contam=contam))
-    return run_command(cmd, infile, outfiles=outfiles, name='filter-contaminants')
+    return run_command(cmd, infile, outfiles=outfiles, name='filter-contaminants', ppn=globals_.ppn)
 
 
 @must_work()
@@ -98,15 +98,17 @@ def filter_db(infile, outfile):
     outfiles = [outfile, useroutfile]
 
     cmd = ('{usearch} -usearch_global {infile} -db {db} -id {id}'
+           ' -threads {ppn}'
            ' -matchedfq {outfile} -userout {userout}'
            ' -userfields qstrand+tstrand+caln'
            ' -top_hit_only -strand both'
            ' -maxaccepts {max_accepts} -maxrejects {max_rejects}')
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
                      infile=infile, db=dbfile, id=identity,
+                     ppn=globals_.ppn,
                      outfile=outfile, userout=useroutfile,
                      max_accepts=max_accepts, max_rejects=max_rejects)
-    return run_command(cmd, infile, outfiles=outfile, name="filter-db")
+    return run_command(cmd, infile, outfiles=outfile, name="filter-db", ppn=globals_.ppn)
 
 
 @must_work()
