@@ -106,7 +106,7 @@ process quality_pipeline {
       --id !{params.contaminant_identity} \
       --strand both \
       --qmask none \
-      --maxhits 1 \
+      --top_hit_only \
       --maxrejects !{params.max_rejects} \
       --threads !{params.cpus}
 
@@ -118,7 +118,8 @@ process quality_pipeline {
       --id !{params.reference_identity} \
       --qmask none \
       --strand both \
-      --maxhits 1 \
+      --top_hit_only \
+      --maxaccepts !{params.max_accepts} \
       --maxrejects !{params.max_rejects} \
       --threads !{params.cpus}
 
@@ -167,7 +168,7 @@ process cluster {
       --id !{params.cluster_identity} \
       --minsl !{params.min_length_ratio} \
       --sort length \
-      --maxhits 1 \
+      --top_hit_only \
       --maxaccepts !{params.max_accepts} \
       --maxrejects !{params.max_rejects} \
       --threads !{params.cpus}
@@ -268,7 +269,7 @@ process shift_correction {
       --fastapairs pairfile.fasta \
       --userout calnfile.txt \
       --userfields caln \
-      --maxhits 1 \
+      --top_hit_only \
       --id !{params.reference_identity} \
       --qmask none \
       --strand plus \
@@ -328,7 +329,7 @@ process compute_abundances {
       --db hqcs.fasta \
       --userout pairfile.txt \
       --userfields query+target \
-      --maxhits 1 \
+      --top_hit_only \
       --id !{params.abundance_identity} \
       --maxqt !{params.abundance_max_length_ratio} \
       -qmask none \
@@ -937,7 +938,7 @@ process diagnose {
       --db hqcs.fasta \
       --userout pairfile.txt \
       --userfields query+target \
-      --maxhits 1 \
+      --top_hit_only \
       --id !{params.qcs_to_hqcs_identity} \
       --maxqt !{params.max_qcs_length_ratio} \
       --qmask none \
