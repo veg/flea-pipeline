@@ -36,7 +36,7 @@ def filter_fastq(infile, outfile):
     max_err_rate = globals_.config.get('Parameters', 'max_err_rate')
     cmd = ('{usearch} -fastq_filter {infile} -fastq_maxee_rate {max_err_rate}'
            ' -threads 1 -fastq_qmax {qmax} -fastq_minlen {min_len} -fastqout {outfile}'
-           ' -relabel "{seq_id}_ccs_"'.format(
+           ' '.format(
             usearch=globals_.config.get('Paths', 'usearch'),
             infile=infile, outfile=outfile, qmax=qmax, min_len=min_len(),
             max_err_rate=max_err_rate, seq_id=globals_.key_to_label[infile]))
