@@ -34,16 +34,18 @@ def make_input(infile, outfile):
 def cluster(infile, outfile):
     minsl = globals_.config.get('Parameters', 'min_length_ratio')
     cmd = ('{usearch} -cluster_fast {infile} -id {id}'
+           ' -threads {ppn}'
            ' -uc {outfile} -sort length'
            ' -maxaccepts {max_accepts} -maxrejects {max_rejects}'
            ' -top_hit_only -minsl {minsl}')
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
                      infile=infile, id=globals_.config.get('Parameters', 'cluster_identity'),
                      outfile=outfile,
+                     ppn = globals_.ppn,
                      max_accepts=globals_.config.get('Parameters', 'max_accepts'),
                      max_rejects=globals_.config.get('Parameters', 'max_rejects'),
                      minsl=minsl)
-    return run_command(cmd, infile, outfile, name="cluster")
+    return run_command(cmd, infile, outfile, name="cluster", ppn = globals_.ppn)
 
 
 @must_work(maybe=True)
