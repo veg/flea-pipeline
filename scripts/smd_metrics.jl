@@ -11,12 +11,15 @@ function read_files(fasta_file, abundance_file="")
     template_df[:name] = [s.name for s in templates]
     template_df[:sequence] = [String(s.seq) for s in templates]
 
-    fulldf = if length(abundance_file) > 0
+    fulldf = if abundance_file == "name"
+        template_df[:abundance] = [parse(Int, split(s.name, "_")[end]) for s in templates]
+        template_df
+    else if length(abundance_file) > 0
         abundance_df = readtable(abundance_file, header=false,
                                   names=[:name, :abundance])
         join(template_df, abundance_df, on=:name, kind=:outer)
     else
-        template_df[:abundance] = [parse(Int, split(s.name, "_")[end]) for s in templates]
+        template_df[:abundance] = [1 for s in templates]
         template_df
     end
 

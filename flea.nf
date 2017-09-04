@@ -11,7 +11,8 @@ vim: syntax=groovy
 ----------------------------------------------------------------------------------------
 */
 
-// TODO: convert usearch to vearch
+// TODO: get output exactly matching old version of pipeline
+// TODO: tune maxaccepts and maxrejects
 // TODO: combine all time points for inframe db for shift correction
 // TODO: benchmark disk usage; compress more files
 // TODO: parallelize filter_fastx and other scripts, if it speeds them up
@@ -82,7 +83,7 @@ process quality_pipeline {
     shell:
     '''
     # filter by quality score
-    !{params.vsearch} --fastq_filter ccs.fastq \
+    !{params.usearch} --fastq_filter ccs.fastq \
       --fastq_maxee_rate !{params.max_error_rate} \
       --fastq_qmax !{params.qmax} \
       --fastq_minlen !{minlen} \
@@ -99,7 +100,7 @@ process quality_pipeline {
       runs fastq fasta !{params.run_length} < trimmed.fastq > no_runs.fasta
 
     # filter against contaminants
-    !{params.vsearch} --usearch_global no_runs.fasta \
+    !{params.usearch} --usearch_global no_runs.fasta \
       --db !{params.contaminants_db} \
       --notmatched uncontam.fasta \
       --id !{params.contaminant_identity} \
@@ -109,7 +110,7 @@ process quality_pipeline {
       --threads !{params.cpus}
 
     # filter against reference
-    !{params.vsearch} --usearch_global uncontam.fasta \
+    !{params.usearch} --usearch_global uncontam.fasta \
       --db !{params.reference_db} \
       --userout userout.txt \
       --userfields query+qstrand+tstrand+caln \
@@ -155,8 +156,10 @@ process consensus_pipeline {
 
     shell:
     '''
+    zcat qcs.fastq.gz > qcs.fastq
+
     # cluster
-    !{params.vsearch} --cluster_fast qcs.fastq.gz \
+    !{params.usearch} --cluster_fast qcs.fastq \
       --clusters cluster_ \
       --id !{params.cluster_identity} \
       --minsl !{params.min_length_ratio} \
@@ -195,6 +198,7 @@ process consensus_pipeline {
     cat *.consensus.fasta > !{label}.all_consensus.fasta
 
     # gzip everything
+    rm -f qcs.fastq
     for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
     '''
 }
@@ -213,18 +217,20 @@ process shift_correction {
 
     shell:
     '''
+    zcat consensus.fasta.gz > consensus.fasta
+
     # inframe
-    zcat consensus.fasta.gz | \
     !{params.python} !{params.script_dir}/filter_fastx.py \
-      inframe fasta fasta false > consensus.inframe.fasta
+      inframe fasta fasta false \
+      < consensus.fasta > consensus.inframe.fasta
 
     # unique
-    !{params.vsearch} --derep_fulllength consensus.inframe.fasta \
-      --output consensus.inframe.unique.fasta \
+    !{params.usearch} --fastx_uniques consensus.inframe.fasta \
+      --fastaout consensus.inframe.unique.fasta \
       --threads !{params.cpus}
 
     # search
-    !{params.vsearch} --usearch_global consensus.fasta.gz \
+    !{params.usearch} --usearch_global consensus.fasta \
       --db consensus.inframe.unique.fasta \
       --fastapairs pairfile.fasta \
       --userout calnfile.txt \
@@ -248,11 +254,12 @@ process shift_correction {
       inframe fasta fasta true < corrected.fasta > corrected.inframe.fasta
 
     # unique seqs
-    !{params.vsearch} --derep_fulllength corrected.inframe.fasta \
-      --output !{label}.corrected.inframe.unique.fasta \
+    !{params.usearch} --fastx_uniques corrected.inframe.fasta \
+      --fastaout !{label}.corrected.inframe.unique.fasta \
       --threads !{params.cpus}
 
     # gzip everything
+    rm -f consensus.fasta
     for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip -f "$i" ; done
     '''
 }
@@ -276,14 +283,16 @@ process compute_abundances {
 
     shell:
     '''
-    # convert to fasta for vsearch
+    zcat hqcs.fasta.gz > hqcs.fasta
+
+    # convert to fasta for usearch
     zcat qcs.fastq.gz | \
       !{params.python} !{params.script_dir}/filter_fastx.py \
       convert fastq fasta > qcs.fasta
 
     # search for pairs
-    !{params.vsearch} --usearch_global qcs.fasta \
-      --db hqcs.fasta.gz \
+    !{params.usearch} --usearch_global qcs.fasta \
+      --db hqcs.fasta \
       --userout pairfile.txt \
       --userfields query+target \
       --maxhits 1 \
@@ -300,12 +309,12 @@ process compute_abundances {
       < pairfile.txt > abundance_file.txt
 
     # filter out HQCS with 0 abundance
-    zcat hqcs.fasta.gz | \
     !{params.python} !{params.script_dir}/filter_fastx.py \
       abundance fasta fasta abundance_file.txt \
-      > hqcs.filtered.fasta
+      < hqcs.fasta > hqcs.filtered.fasta
 
     # gzip everything
+    rm -f hqcs.fasta
     for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
     '''
 }
@@ -891,7 +900,7 @@ process diagnose {
         convert fastq fasta > qcs.fasta
 
     # search for pairs
-    !{params.vsearch} --usearch_global qcs.fasta \
+    !{params.usearch} --usearch_global qcs.fasta \
       --db hqcs.fasta \
       --userout pairfile.txt \
       --userfields query+target \
