@@ -271,7 +271,7 @@ process shift_correction {
       --maxhits 1 \
       --id !{params.reference_identity} \
       --qmask none \
-      --strand both \
+      --strand plus \
       --maxaccepts !{params.max_accepts} \
       --maxrejects !{params.max_rejects} \
       --threads !{params.cpus}
@@ -332,7 +332,7 @@ process compute_abundances {
       --id !{params.abundance_identity} \
       --maxqt !{params.abundance_max_length_ratio} \
       -qmask none \
-      --strand both \
+      --strand plus \
       --maxaccepts !{params.max_accepts} \
       --maxrejects !{params.max_rejects} \
       --threads !{params.cpus}
@@ -941,7 +941,7 @@ process diagnose {
       --id !{params.qcs_to_hqcs_identity} \
       --maxqt !{params.max_qcs_length_ratio} \
       --qmask none \
-      --strand both \
+      --strand plus \
       --maxaccepts !{params.max_accepts} \
       --maxrejects !{params.max_rejects} \
       --threads !{params.cpus}
