@@ -842,7 +842,7 @@ process evo_history {
     '''
     zcat msa.no_stops.fasta.gz > msa.no_stops.fasta
 
-    !{params.hyphymp} !{params.hyphy_dir}/obtainEvolutionaryHistory.bf \
+    !{params.hyphy} !{params.hyphy_dir}/obtainEvolutionaryHistory.bf \
       $(pwd)/msa.no_stops.fasta $(pwd)/dates.json $(pwd)/region_coords.json $(pwd)/rates_pheno.tsv
 
     rm -f msa.no_stops.fasta

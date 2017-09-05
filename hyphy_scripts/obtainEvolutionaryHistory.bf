@@ -13,20 +13,20 @@ LoadFunctionLibrary ("tools.bf");
 LoadFunctionLibrary ("BranchLengthFitters");
 
 fprintf(stdout,"\nEnter the alignment file:");
-fscanf  (stdin, "String", _nucSequences);
+fscanf (stdin, "String", _nucSequences);
 
 fprintf(stdout,"\nEnter the dates file:");
-fscanf  (stdin, "String", _dates);
+fscanf (stdin, "String", _dates);
 
 fprintf(stdout,"\nEnter the regions file:");
-fscanf  (stdin, "String", _regions);
+fscanf (stdin, "String", _regions);
 
 fprintf(stdout,"\nEnter the rates file:");
-fscanf  (stdin, "String", _ratesTo);
+fscanf (stdin, "String", _ratesTo);
 
 fprintf(stdout,"\nRunning\n");
 
-DataSet allData  = ReadDataFile (_nucSequences);
+DataSet allData = ReadDataFile (_nucSequences);
 HarvestFrequencies (positionalFrequencies, allData,3,1,1);
 _blStencils = ComputeScalingStencils(0);
 
@@ -36,17 +36,17 @@ PopulateModelMatrix ("MGLocalQ", nuc3x4);
 vectorOfFrequencies = BuildCodonFrequencies(nuc3x4);
 Model MGLocal = (MGLocalQ, vectorOfFrequencies,0);
 
-dateInfo     = _loadDateInfo (_dates);
-uniqueDates  = _getAvailableDates (dateInfo);
+dateInfo = _loadDateInfo (_dates);
+uniqueDates = _getAvailableDates (dateInfo);
 
 headers = {{"Date", "Segment", "s_diversity", "ns_diversity",  "total_diversity",
-                    "ds_diversity", "dn_diversity",
-                    "Length", "PNGS", "IsoelectricPoint",
-                    "s_divergence","ns_divergence","total_divergence",
-                    "ds_divergence", "dn_divergence"}};
+            "ds_diversity", "dn_diversity",
+            "Length", "PNGS", "IsoelectricPoint",
+            "s_divergence","ns_divergence","total_divergence",
+            "ds_divergence", "dn_divergence"}};
 
-fscanf      (_regions, "Raw", parts);
-parts   = Eval (parts);
+fscanf (_regions, "Raw", parts);
+parts = Eval (parts);
 
 all_segments = {};
 all_segments[0] = {{"gp160", ""}};
@@ -57,7 +57,7 @@ for (k = 1; k < Abs (parts); k+=1) {
 }
 
 call_count = 0;
-GetString          (inputSequenceOrder, allData, -1);
+GetString (inputSequenceOrder, allData, -1);
 
 _c2p_mapping = defineCodonToAA ();
 
@@ -72,34 +72,30 @@ for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
 
         fprintf (stdout, "[WORKING ON ", thisRegion[0], " FOR `thisDate`]\n");
 
-        //fprintf (stdout, _selectSequencesByDate (thisDate, dateInfo, inputSequenceOrder), "\n");
-
         timepoint_info = makePartitionBuiltTreeFitMG ("allData", thisRegion[1],
             Join (",",_selectSequencesByDate (thisDate, dateInfo, inputSequenceOrder)),
             "sampled`thisDate`", rootSeq, region == 0);
 
         call_count += 1;
 
-
         if (date_index == 0 && region == 0) {
-
             fprintf (stdout, "[COMPUTING COT SEQUENCE]\n");
 
             UseModel (USE_NO_MODEL);
-            treeString                  = Eval("Format (sampled`thisDate`_tree,1,1)");
-            Tree                                cot_tree_unscaled = treeString;
-            cot_data            = ComputeCOT ("cot_tree_unscaled", 0); // this is the offending line
-            Topology            cot_tree_unscaled = treeString;
+            treeString = Eval("Format (sampled`thisDate`_tree,1,1)");
+            Tree cot_tree_unscaled = treeString;
+            cot_data = ComputeCOT ("cot_tree_unscaled", 0); // this is the offending line
+            Topology cot_tree_unscaled = treeString;
             cot_node_name = "_COT_NODE_";
-                    cot_tree_unscaled + {"WHERE": cot_data["Branch"], "PARENT" : cot_node_name, "LENGTH" : cot_data["Split"], "PARENT_LENGTH": cot_data["Split"]};
+            cot_tree_unscaled + {"WHERE": cot_data["Branch"], "PARENT" : cot_node_name, "LENGTH" : cot_data["Split"], "PARENT_LENGTH": cot_data["Split"]};
 
             UseModel (MGLocal);
-            Tree cot_tree  = cot_tree_unscaled;
+            Tree cot_tree = cot_tree_unscaled;
             ExecuteCommands ("LikelihoodFunction cot_lf = (sampled`thisDate`_filter, cot_tree)");
-            Optimize           (cot_lf_res, cot_lf);
+            Optimize (cot_lf_res, cot_lf);
 
-            DataSet                        ds_a = ReconstructAncestors (cot_lf);
-            DataSetFilter          dsf_a = CreateFilter (ds_a,1);
+            DataSet ds_a = ReconstructAncestors (cot_lf);
+            DataSetFilter dsf_a = CreateFilter (ds_a,1);
             ACCEPT_ROOTED_TREES = 0;
 
             for (sid = 0; sid < dsf_a.species; sid += 1) {
@@ -115,13 +111,10 @@ for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
             fprintf (_ratesTo, CLEAR_FILE, Join ("\t", headers), "\n");
         }
 
-        fprintf     (_ratesTo, thisDate, "\t", thisRegion[0], "\t", Join("\t", timepoint_info["div"]), "\t", Join ("\t", timepoint_info["pheno"]),
+        fprintf (_ratesTo, thisDate, "\t", thisRegion[0], "\t", Join("\t", timepoint_info["div"]), "\t", Join ("\t", timepoint_info["pheno"]),
             "\t", Join ("\t", divergenceForFilter ("sampled`thisDate`_filter", rootSeq)), "\n");
 
         ExecuteCommands ("DeleteObject (sampled`thisDate`_lf);");
-        //date_index = 1000;
-        //break;
-
     }
 }
 
@@ -132,41 +125,40 @@ function makePartitionBuiltTreeFitMG (dataID, sites, sequences, prefix, rootOn, 
 
     UseModel (USE_NO_MODEL);
 
-        DataSetFilter filteredData = CreateFilter(*dataID,1,sites,sequences);
-        Export (fd, filteredData);
-        DataSet reduced = ReadFromString (fd);
+    DataSetFilter filteredData = CreateFilter(*dataID,1,sites,sequences);
+    Export (fd, filteredData);
+    DataSet reduced = ReadFromString (fd);
 
 
-        if (rootOn == None) {
-                njTree = InferTreeTopology (1);
-        } else {
-                DataSet rootSet = ReadFromString (">ROOT_ON_ME\n`rootOn`");
-                DataSetFilter choppedRootSeq = CreateFilter (rootSet, 1, sites);
-                Export (fd, choppedRootSeq);
-                DataSet rootSeq = ReadFromString (fd);
+    if (rootOn == None) {
+        njTree = InferTreeTopology (1);
+    } else {
+        DataSet rootSet = ReadFromString (">ROOT_ON_ME\n`rootOn`");
+        DataSetFilter choppedRootSeq = CreateFilter (rootSet, 1, sites);
+        Export (fd, choppedRootSeq);
+        DataSet rootSeq = ReadFromString (fd);
 
-                DataSet combined = Combine (rootSeq, reduced);
-                DataSetFilter filteredData = CreateFilter (combined, 1);
+	DataSet combined = Combine (rootSeq, reduced);
+	DataSetFilter filteredData = CreateFilter (combined, 1);
 
+	njTree = InferTreeTopology (1);
 
-                njTree = InferTreeTopology (1);
+	Topology T = njTree;
+	njTree_rr = RerootTree (T, "ROOT_ON_ME");
+	Topology T = njTree_rr;
 
-                Topology T = njTree;
-                njTree_rr = RerootTree (T, "ROOT_ON_ME");
-                Topology T = njTree_rr;
+	T - "ROOT_ON_ME";
+	njTree = Format (T,0,0);
+    }
 
-                T - "ROOT_ON_ME";
-                njTree = Format (T,0,0);
-        }
+    DataSetFilter filteredData = CreateFilter(*dataID,1,sites,sequences);
+    Export (fd, filteredData);
 
-        DataSetFilter filteredData = CreateFilter(*dataID,1,sites,sequences);
-        Export (fd, filteredData);
+    njTree = killZeroBranchesBasedOnNucFit ("reduced", njTree);
+    njTree["set_values"][""];
+    njTree = njTree["_collapsed_tree"];
 
-        njTree = killZeroBranchesBasedOnNucFit ("reduced", njTree);
-        njTree["set_values"][""];
-        njTree = njTree["_collapsed_tree"];
-
-        UseModel (MGLocal);
+    UseModel (MGLocal);
 
     ExecuteCommands ("
         Tree `prefix`_tree = njTree;
@@ -195,7 +187,6 @@ function makePartitionBuiltTreeFitMG (dataID, sites, sequences, prefix, rootOn, 
     _makePartitionBuiltTreeFitMG_res ["trees"] = trees;
 
     if (wantSequences) {
-
         _makePartitionBuiltTreeFitMG_res ["seqs"] = {"Observed": {},
                         "Ancestral" : {}};
 
@@ -204,62 +195,57 @@ function makePartitionBuiltTreeFitMG (dataID, sites, sequences, prefix, rootOn, 
             translateFilterToAA ("`prefix`_ancestral_filter", (_makePartitionBuiltTreeFitMG_res["seqs"])["Ancestral"]);
         }
     }
-
     return _makePartitionBuiltTreeFitMG_res;
-
 }
 
 //THIS WAS LEGACY FOR DEBUGGING. WILL LIKELY BE NEEDED IN HERE LATER.
-function                isoElectricPointFIX (seq) {
-        COUNT_GAPS_IN_FREQUENCIES = 0;
+function isoElectricPointFIX (seq) {
+    COUNT_GAPS_IN_FREQUENCIES = 0;
 
-        DataSet                         protSeq = ReadFromString ("$BASESET:BASE20\n>1\n" + seq);
-        DataSetFilter           protFil = CreateFilter   (protSeq,1);
+    DataSet protSeq = ReadFromString ("$BASESET:BASE20\n>1\n" + seq);
+    DataSetFilter protFil = CreateFilter   (protSeq,1);
 
-        HarvestFrequencies (freqs,protFil,1,1,1);
+    HarvestFrequencies (freqs,protFil,1,1,1);
 
-        freqs = freqs*protFil.sites;
+    freqs = freqs*protFil.sites;
 
-        expression = "0+"  + freqs[6 ] + "/(1+10^(pH-6.04))"  + /* H */
-                                 "+" + freqs[8 ] + "/(1+10^(pH-10.54))" + /* K */
-                                 "+" + freqs[14] + "/(1+10^(pH-12.48))" + /* R */
+    expression = "0+"  + freqs[6 ] + "/(1+10^(pH-6.04))"  + /* H */
+      "+" + freqs[8 ] + "/(1+10^(pH-10.54))" + /* K */
+      "+" + freqs[14] + "/(1+10^(pH-12.48))" + /* R */
 
-                                 "-" + freqs[2 ] + "/(1+10^(3.9-pH))"   + /* D */
-                                 "-" + freqs[3 ] + "/(1+10^(4.07-pH))"   + /* E */
-                                 "-" + freqs[1 ] + "/(1+10^(8.18-pH))"   + /* C */
-                                 "-" + freqs[19] + "/(1+10^(10.46-pH))"   ; /* Y */
+      "-" + freqs[2 ] + "/(1+10^(3.9-pH))"   + /* D */
+      "-" + freqs[3 ] + "/(1+10^(4.07-pH))"   + /* E */
+      "-" + freqs[1 ] + "/(1+10^(8.18-pH))"   + /* C */
+      "-" + freqs[19] + "/(1+10^(10.46-pH))"   ; /* Y */
 
-        pH :> 0;
-        pH :< 14;
-        pH = 6.5;
+      pH :> 0;
+      pH :< 14;
+      pH = 6.5;
 
 
-        ExecuteCommands ("function ComputePI (pH){ return -Abs(`expression`); }");
-        Optimize                (res, ComputePI(pH));
+    ExecuteCommands ("function ComputePI (pH){ return -Abs(`expression`); }");
+    Optimize (res, ComputePI(pH));
 
-        return res[0][0];
+    return res[0][0];
 }
 
 //----------------------------------------------------------------------------------------
 
 function translateFilterToAA (filtername, store_here) {
-        upto_translateFilterToAA = Eval ("`filtername`.species");
-        for (_i_translateFilterToAA = 0; _i_translateFilterToAA < upto_translateFilterToAA; _i_translateFilterToAA+=1) {
-
-                GetDataInfo (aa_seq, *filtername, _i_translateFilterToAA);
-                GetString   (aa_name, *filtername, _i_translateFilterToAA);
-
-                store_here[aa_name] = translateCodonToAA (aa_seq, _c2p_mapping, 0);
-
-        }
+    upto_translateFilterToAA = Eval ("`filtername`.species");
+    for (_i_translateFilterToAA = 0; _i_translateFilterToAA < upto_translateFilterToAA; _i_translateFilterToAA+=1) {
+        GetDataInfo (aa_seq, *filtername, _i_translateFilterToAA);
+	GetString (aa_name, *filtername, _i_translateFilterToAA);
+	store_here[aa_name] = translateCodonToAA (aa_seq, _c2p_mapping, 0);
+    }
 }
 
 //----------------------------------------------------------------------------------------
 
 function set_values (k,v) {
-        if (Type (v) == "Number") {
-                Eval ("`k` = " + v);
-        }
+    if (Type (v) == "Number") {
+        Eval ("`k` = " + v);
+    }
 }
 
 //----------------------------------------------------------------------------------------
@@ -273,14 +259,14 @@ function treeDiv (treeiD,dS,dN,store) {
     if (Type (store) == "AssociativeList") {
         store ["Synonymous only"] = Eval ("Format (`treeiD`, 1, 1)");
     }
-        divInfo                 =        computeTotalDivergence (treeiD);
-        syn                     =       2*divInfo[0]/leafCount/(leafCount-1);
-        BRANCH_LENGTH_STENCIL = _blStencils["NonSyn"];
+    divInfo = computeTotalDivergence (treeiD);
+    syn = 2*divInfo[0]/leafCount/(leafCount-1);
+    BRANCH_LENGTH_STENCIL = _blStencils["NonSyn"];
     if (Type (store) == "AssociativeList") {
         store ["Nonsynonymous only"] = Eval ("Format (`treeiD`, 1, 1)");
     }
-        divInfo                 =        computeTotalDivergence (treeiD);
-        ns                      =       2*divInfo[0]/leafCount/(leafCount-1);
+    divInfo = computeTotalDivergence (treeiD);
+    ns = 2*divInfo[0]/leafCount/(leafCount-1);
     BRANCH_LENGTH_STENCIL = 0;
     return {{syn__,ns__,syn__+ns__,syn__*dS__,ns__*dN}};
 }
@@ -318,7 +304,7 @@ function divergenceForFilter (filterID, rootSeq) {
 //----------------------------------------------------------------------------------------
 
 function pairwiseCodon (seq1, seq2) {
-        twoSeqAlignment = ">1\n`seq1`\n>2\n`seq2`";
+    twoSeqAlignment = ">1\n`seq1`\n>2\n`seq2`";
     DataSet pair = ReadFromString (twoSeqAlignment);
 
     DataSetFilter pairFilter = CreateFilter (pair, 3, "", "", GeneticCodeExclusions);
@@ -367,7 +353,7 @@ lfunction phenotypeAFilter (filterName) {
     codon_2_aa = defineCodonToAA ();
 
     upper_limit = ^"`filterName`.species";
-    all_phenotypes  = {upper_limit, 3};
+    all_phenotypes = {upper_limit, 3};
     counts = {upper_limit,1};
     mean_phenotypes = {1, 3};
 
@@ -377,7 +363,7 @@ lfunction phenotypeAFilter (filterName) {
         GetString   (this_seq_name, ^filterName,seq_id);
 
         aa_seq = translateCodonToAA(this_sequence,codon_2_aa,0);
-        region_pheno             = phenotypeASequence(aa_seq);
+        region_pheno = phenotypeASequence(aa_seq);
         all_phenotypes [seq_id][0] = region_pheno["Length"];
         all_phenotypes [seq_id][1] = region_pheno["PNGS"];
         all_phenotypes [seq_id][2] = region_pheno["Isoelectric Point"];
@@ -397,41 +383,38 @@ lfunction phenotypeAFilter (filterName) {
 
 function computeMultFactorsWeighted (treeID)
 {
-        treeAVL2  = (^treeID)^ 0;
-        leafCount = Max(2,TipCount(^treeID));
+    treeAVL2 = (^treeID)^ 0;
+    leafCount = Max(2,TipCount(^treeID));
 
-        multFactors = {};
-        total_copies = 0;
+    multFactors = {};
+    total_copies = 0;
 
-        for (_k=1; _k<Abs(treeAVL2); _k += 1) {
-                aNode                   = treeAVL2[_k];
-                aNodeName               = aNode["Name"];
-                parentIndex             = aNode["Parent"];
-                _k2                             = Abs(aNode["Children"]);
-                if (_k2) {
-                        currentDepth               = aNode["Below"];
-                        multFactors[aNodeName] = currentDepth;
-                        if (parentIndex > 0)
-                        {
-                                (treeAVL2[parentIndex])["Below"] += currentDepth;
-                        }
-                }
-                else {
-                        multFactors[aNodeName]          = get_copy_number (aNodeName);
-                        total_copies += multFactors[aNodeName];
-                        (treeAVL2[parentIndex])["Below"] += multFactors[aNodeName];
-                }
+    for (_k=1; _k<Abs(treeAVL2); _k += 1) {
+        aNode = treeAVL2[_k];
+	aNodeName = aNode["Name"];
+	parentIndex = aNode["Parent"];
+	_k2 = Abs(aNode["Children"]);
+	if (_k2) {
+	    currentDepth = aNode["Below"];
+	    multFactors[aNodeName] = currentDepth;
+	    if (parentIndex > 0) {
+	        (treeAVL2[parentIndex])["Below"] += currentDepth;
+	    }
+	}
+	else {
+	    multFactors[aNodeName] = get_copy_number (aNodeName);
+	    total_copies += multFactors[aNodeName];
+	    (treeAVL2[parentIndex])["Below"] += multFactors[aNodeName];
+	}
+    }
 
-        }
-
-        pKeys                   = Rows(multFactors);
-        if (total_copies < 2) {
-            total_copies = 2;
-        }
-        for (_k=0; _k<Columns(pKeys); _k=_k+1) {
-                aNodeName = pKeys[_k];
-                multFactors[aNodeName] = multFactors[aNodeName] * (total_copies-multFactors[aNodeName]);
-        }
-
-        return total_copies;
+    pKeys = Rows(multFactors);
+    if (total_copies < 2) {
+        total_copies = 2;
+    }
+    for (_k=0; _k<Columns(pKeys); _k=_k+1) {
+        aNodeName = pKeys[_k];
+	multFactors[aNodeName] = multFactors[aNodeName] * (total_copies-multFactors[aNodeName]);
+    }
+    return total_copies;
 }
