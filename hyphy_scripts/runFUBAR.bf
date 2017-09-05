@@ -1,10 +1,7 @@
 LoadFunctionLibrary ("HXB2Mapper", {"0": "Universal"});
-LoadFunctionLibrary ("dates.bf");
-LoadFunctionLibrary ("DescriptiveStatistics");
-LoadFunctionLibrary ("CodonTools");
 LoadFunctionLibrary ("NJ");
-LoadFunctionLibrary ("ReadDelimitedFiles");
-LoadFunctionLibrary ("tools.bf");
+LoadFunctionLibrary ("libv3/IOFunctions.bf");
+LoadFunctionLibrary ("dates.bf");
 
 /* important -- specify as absolute paths, otherwise FUBAR breaks */
 fprintf(stdout,"\nEnter the alignment file:");
@@ -22,7 +19,7 @@ fscanf  (stdin, "String", _fubar_directory);
 fprintf(stdout,"\nEnter the rates output file:");
 fscanf  (stdin, "String", _rates_to);
 
-fprintf(stdout,"\nRunning\n");
+//fprintf(stdout,"\nRunning\n");
 
 _c2p_mapping = defineCodonToAA ();
 COUNT_GAPS_IN_FREQUENCIES = 0;
@@ -49,12 +46,6 @@ call_count = 0;
 GetString          (inputSequenceOrder, allData, -1);
 COUNT_GAPS_IN_FREQUENCIES     = 0;
 
-/*
-GetDataInfo (cons, nucData, "CONSENSUS");
-cons = translateCodonToAA (cons, defineCodonToAA(), 0);
-hxb2coord = mapSequenceToHXB2Aux (cons, _HXB2_AA_ENV_, 1);
-*/
-
 
 byDate = {}; // the JSON output with rates
 
@@ -68,6 +59,8 @@ for (date_index = -1; date_index < Abs (uniqueDates); date_index += 1) {
         thisDate                    = uniqueDates["INDEXORDER"][date_index];
         sequences                   = _selectSequencesByDate (thisDate, dateInfo, inputSequenceOrder);
     }
+
+    fprintf(stdout,"\nWorking on '`thisDate`'\n");
 
     DataSetFilter filteredData  = CreateFilter (allData,1,"",Join(",",sequences));
 
@@ -115,42 +108,46 @@ for (date_index = -1; date_index < Abs (uniqueDates); date_index += 1) {
 
     } else {
         IS_TREE_PRESENT_IN_DATA     = 1;
+        fprintf(stdout,"Inferring NJ tree\n");
         DATAFILE_TREE               = InferTreeTopology (1);
         fprintf                       (_date_slice, CLEAR_FILE, filteredData);
+        fprintf(stdout,"Running FUBAR\n");
+
         ExecuteAFile                  (HYPHY_LIB_DIRECTORY + "TemplateBatchFiles" +
+                                       DIRECTORY_SEPARATOR + "SelectionAnalyses" +
                                        DIRECTORY_SEPARATOR + "FUBAR.bf",
                                       {
                                        "00" : "Universal",
                                        "01" : "1",
                                        "02" : _date_slice,
-                                       "03" : "12",
-                                       "04" : "2",
-                                       "05" : "510000",
-                                       "06" : "255000",
+                                       "03" : "20",
+                                       "04" : "5",
+                                       "05" : "2000000",
+                                       "06" : "1000000",
                                        "07" : "100",
                                        "08" : "0.5"});
     }
 
 
 
-    fubar_rates = (ReadCSVTable (_date_FUBAR,1))[1];
+    fubar_rates = ((fubar.json [terms.fit.MLE])[terms.json.content])[0];
     n_sites   = Rows(fubar_rates);
     fubar_rates_n = {n_sites,5};
-    mean_alpha = (+(fubar_rates[-1][1]))/n_sites;
+    mean_alpha = (+(fubar_rates[-1][0]))/n_sites;
 
     for (k = 0; k < n_sites; k += 1) {
-        fubar_rates_n [k][0] = fubar_rates[k][1] / mean_alpha;
-        fubar_rates_n [k][1] = fubar_rates[k][2] / mean_alpha;
-        fubar_rates_n [k][2] = fubar_rates[k][4];
-        fubar_rates_n [k][3] = fubar_rates[k][5];
+        fubar_rates_n [k][0] = fubar_rates[k][0] / mean_alpha;
+        fubar_rates_n [k][1] = fubar_rates[k][1] / mean_alpha;
+        fubar_rates_n [k][2] = fubar_rates[k][3];
+        fubar_rates_n [k][3] = fubar_rates[k][4];
         fubar_rates_n [k][4] = entropies  [k];
     }
 
-    byDate [thisDate] = tools.matrix_to_JSON (fubar_rates_n);
+    byDate [thisDate] = fubar_rates_n;
 }
 
 //SetDialogPrompt ("Save to file (rates.json):");
-fprintf (_rates_to, CLEAR_FILE, byDate);
+io.SpoolJSON (byDate, _rates_to);
 //SetDialogPrompt ("Save to file (sequences.json):");
 //fprintf (PROMPT_FOR_FILE, CLEAR_FILE, sequences_by_date);
 

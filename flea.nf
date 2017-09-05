@@ -67,9 +67,10 @@ max_qcs_len = reflen_2
 
 process quality_pipeline {
 
+    publishDir params.results_dir
+
     cpus params.cpus
     time params.slow_time
-    publishDir params.results_dir
 
     input:
     set 'ccs.fastq', label from input_channel
@@ -146,10 +147,10 @@ process quality_pipeline {
 
 
 process cluster {
+    publishDir params.results_dir
 
     cpus params.cpus
     time params.slow_time
-    publishDir params.results_dir
 
     input:
     set 'qcs.fastq.gz', label from qcs_final_1
@@ -183,11 +184,12 @@ cluster_out
   .set { consensus_input }
 
 
-  process consensus {
+process consensus {
+
+    publishDir params.results_dir
 
     cpus params.cpus
     time params.slow_time
-    publishDir params.results_dir
 
     input:
     set 'clusters.uc', 'qcs.fastq.gz', label from consensus_input
@@ -238,9 +240,10 @@ cluster_out
 
 process shift_correction {
 
+    publishDir params.results_dir
+
     cpus params.cpus
     time params.slow_time
-    publishDir params.results_dir
 
     input:
     set 'consensus.fasta.gz', label from consensus_out
@@ -354,8 +357,9 @@ process compute_abundances {
 
 process merge_timepoints {
 
-    executor 'local'
     publishDir params.results_dir
+
+    executor 'local'
 
     input:
     file 'hqcs*.fastq.gz' from hqcs_files.collect()
@@ -385,11 +389,11 @@ process merge_timepoints {
 
 process alignment_pipeline {
 
+    publishDir params.results_dir
+
     time params.slow_time
     cpus params.cpus
     time params.slow_time
-
-    publishDir params.results_dir
 
     input:
     file 'hqcs.fasta.gz' from merged_hqcs_out
@@ -423,9 +427,9 @@ process alignment_pipeline {
 
 process dates_json_task {
 
-    executor 'local'
-
     publishDir params.results_dir
+
+    executor 'local'
 
     input:
     file 'metadata' from metadata_1
@@ -447,8 +451,9 @@ process dates_json_task {
 
 process abundances_json {
 
-    time params.crazy_time
     publishDir params.results_dir
+
+    time params.crazy_time
 
     input:
     file 'msa.fasta.gz' from msa_out
@@ -589,9 +594,9 @@ process reroot {
 
 process tree_json {
 
-    executor 'local'
-
     publishDir params.results_dir
+
+    executor 'local'
 
     input:
     file 'tree.txt' from rooted_tree_1
@@ -613,9 +618,9 @@ process tree_json {
 
 process js_divergence {
 
-    time params.slow_time
-
     publishDir params.results_dir
+
+    time params.slow_time
 
     input:
     file 'msa.aa.fasta.gz' from msa_aa_out
@@ -636,9 +641,9 @@ process js_divergence {
 
 process manifold_embedding {
 
-    time params.crazy_time
-
     publishDir params.results_dir
+
+    time params.crazy_time
 
     input:
     file 'msa.fasta.gz' from msa_out
@@ -698,12 +703,12 @@ process reconstruct_ancestors {
 
 process coordinates_json {
 
+    publishDir params.results_dir
+
     time params.fast_time
 
     cpus params.cpus
     time params.slow_time
-
-    publishDir params.results_dir
 
     input:
     file 'mrca.aa.fasta.gz' from mrca_translated_1
@@ -727,10 +732,9 @@ process coordinates_json {
 }
 
 process sequences_json {
+    publishDir params.results_dir
 
     time params.fast_time
-
-    publishDir params.results_dir
 
     input:
     file 'msa.fasta.gz' from msa_aa_ancestors_out
@@ -802,9 +806,9 @@ process seq_dates {
 
 process region_coords {
 
-    time params.fast_time
-
     publishDir params.results_dir
+
+    time params.fast_time
 
     input:
     file 'mrca.fasta.gz' from mrca_2
@@ -824,7 +828,6 @@ process region_coords {
 
 process evo_history {
 
-    // cpus params.cpus
     time params.crazy_time
 
     input:
@@ -839,17 +842,18 @@ process evo_history {
     '''
     zcat msa.no_stops.fasta.gz > msa.no_stops.fasta
 
-    !{params.hyphympi} !{params.hyphy_dir}/obtainEvolutionaryHistory.bf \
+    !{params.hyphymp} !{params.hyphy_dir}/obtainEvolutionaryHistory.bf \
       $(pwd)/msa.no_stops.fasta $(pwd)/dates.json $(pwd)/region_coords.json $(pwd)/rates_pheno.tsv
 
-    rm -f msa.no_stops.fasta XXX
+    rm -f msa.no_stops.fasta
     '''
 }
 
 process rates_pheno_json {
 
-    time params.fast_time
     publishDir params.results_dir
+
+    time params.fast_time
 
     input:
     file 'rates_pheno.tsv' from rates_pheno
@@ -876,9 +880,10 @@ process rates_pheno_json {
 
 process fubar {
 
-    // cpus params.cpus
-    time params.crazy_time
     publishDir params.results_dir
+
+    cpus params.cpus
+    time params.crazy_time
 
     input:
     file 'msa.no_stops.fasta.gz' from msa_no_stops
@@ -897,7 +902,7 @@ process fubar {
     zcat mrca.fasta.gz > mrca.fasta
 
     !{params.hyphympi} !{params.hyphy_dir}/runFUBAR.bf \
-      $(pwd)/msa.no_stops.fasta $(pwd)/dates.json $(pwd)/mrca.fasta $(pwd) $(pwd)/rates.json
+      $(pwd)/msa.no_stops.fasta $(pwd)/dates.json $(pwd)/mrca.fasta $(pwd)/ $(pwd)/rates.json
 
     rm -f msa.no_stops.fasta mrca.fasta
     '''
@@ -907,9 +912,11 @@ process fubar {
 /* DIAGNOSIS SUB-PIPELINE */
 
 process diagnose {
+
+    publishDir params.results_dir
+
     cpus params.cpus
     time params.crazy_time
-    publishDir params.results_dir
 
     input:
     file 'qcs*.fastq.gz' from qcs_final_4.map{ it[0] }.collect()
