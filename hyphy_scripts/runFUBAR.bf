@@ -19,13 +19,10 @@ fscanf (stdin, "String", _fubar_directory);
 fprintf(stdout,"\nEnter the rates output file:");
 fscanf (stdin, "String", _rates_to);
 
-//fprintf(stdout,"\nRunning\n");
-
 _c2p_mapping = defineCodonToAA ();
 COUNT_GAPS_IN_FREQUENCIES = 0;
 
 sequences_by_date = {};
-
 
 DataSet         allData         = ReadDataFile (_nucSequences);
 DataSetFilter   codonData       = CreateFilter (allData,3,"","",GeneticCodeExclusions);
@@ -46,10 +43,7 @@ call_count = 0;
 GetString (inputSequenceOrder, allData, -1);
 COUNT_GAPS_IN_FREQUENCIES = 0;
 
-
 byDate = {}; // the JSON output with rates
-
-
 
 for (date_index = -1; date_index < Abs (uniqueDates); date_index += 1) {
     if (date_index < 0) {
@@ -128,8 +122,6 @@ for (date_index = -1; date_index < Abs (uniqueDates); date_index += 1) {
                                        "08" : "0.5"});
     }
 
-
-
     fubar_rates = ((fubar.json [terms.fit.MLE])[terms.json.content])[0];
     n_sites = Rows (fubar_rates);
     fubar_rates_n = {n_sites,5};
@@ -146,10 +138,7 @@ for (date_index = -1; date_index < Abs (uniqueDates); date_index += 1) {
     byDate [thisDate] = fubar_rates_n;
 }
 
-//SetDialogPrompt ("Save to file (rates.json):");
 io.SpoolJSON (byDate, _rates_to);
-//SetDialogPrompt ("Save to file (sequences.json):");
-//fprintf (PROMPT_FOR_FILE, CLEAR_FILE, sequences_by_date);
 
 /*----------------------------------------------------------------------------------------------------------*/
 

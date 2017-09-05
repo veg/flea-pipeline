@@ -30,7 +30,6 @@ DataSet allData = ReadDataFile (_nucSequences);
 HarvestFrequencies (positionalFrequencies, allData,3,1,1);
 _blStencils = ComputeScalingStencils(0);
 
-
 nuc3x4 = CF3x4 (positionalFrequencies,GeneticCodeExclusions);
 PopulateModelMatrix ("MGLocalQ", nuc3x4);
 vectorOfFrequencies = BuildCodonFrequencies(nuc3x4);
@@ -61,7 +60,6 @@ GetString (inputSequenceOrder, allData, -1);
 
 _c2p_mapping = defineCodonToAA ();
 
-
 rootSeq = None;
 
 for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
@@ -84,7 +82,7 @@ for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
             UseModel (USE_NO_MODEL);
             treeString = Eval("Format (sampled`thisDate`_tree,1,1)");
             Tree cot_tree_unscaled = treeString;
-            cot_data = ComputeCOT ("cot_tree_unscaled", 0); // this is the offending line
+            cot_data = ComputeCOT ("cot_tree_unscaled", 0);
             Topology cot_tree_unscaled = treeString;
             cot_node_name = "_COT_NODE_";
             cot_tree_unscaled + {"WHERE": cot_data["Branch"], "PARENT" : cot_node_name, "LENGTH" : cot_data["Split"], "PARENT_LENGTH": cot_data["Split"]};
@@ -119,7 +117,6 @@ for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
 }
 
 //----------------------------------------------------------------------------------------
-
 
 function makePartitionBuiltTreeFitMG (dataID, sites, sequences, prefix, rootOn, wantSequences) {
 
@@ -327,12 +324,15 @@ lfunction phenotypeASequence (seq) {
     if(l>0)
     {
         pngs = countPNGS (seq);
-        //fprintf(stdout,seq,"\n");
         iep = isoElectricPoint (seq);
 
+	//HACK ALERT: JUST RETURNING NEUTRAL ISOELECTRIC POINT FOR
+	//"------" STRINGS. SHOULD RATHER HAVE THEM NOT COUNTED IN THE AVERAGE
+	//LATER.
         return {"Length": l, "PNGS": pngs, "Isoelectric Point": iep};
-//HACK ALERT: JUST RETURNING NEUTRAL ISOELECTRIC POINT FOR "------" STRINGS. SHOULD RATHER HAVE THEM NOT COUNTED IN THE AVERAGE LATER.
-    }else {return {"Length": 0, "PNGS": 0, "Isoelectric Point": 7};}
+    } else {
+        return {"Length": 0, "PNGS": 0, "Isoelectric Point": 7};
+    }
 }
 
 //----------------------------------------------------------------------------------------
@@ -341,7 +341,6 @@ lfunction get_copy_number (seq_id) {
     if (Type (seq_id) == "String") {
         match = seq_id $ "\_[0-9]+$";
         if (match[0] >= 0) {
-            //fprintf (stdout, seq_id, ":", 0 + seq_id[match[0]+1][match[1]], "\n");
             return 0 + seq_id[match[0]+1][match[1]];
         }
     }
