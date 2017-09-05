@@ -5,19 +5,19 @@ LoadFunctionLibrary ("dates.bf");
 
 /* important -- specify as absolute paths, otherwise FUBAR breaks */
 fprintf(stdout,"\nEnter the alignment file:");
-fscanf  (stdin, "String", _nucSequences);
+fscanf (stdin, "String", _nucSequences);
 
 fprintf(stdout,"\nEnter the dates file:");
-fscanf  (stdin, "String", _dates);
+fscanf (stdin, "String", _dates);
 
 fprintf(stdout,"\nEnter the mrca file:");
-fscanf  (stdin, "String", _mrca_from);
+fscanf (stdin, "String", _mrca_from);
 
 fprintf(stdout,"\nEnter the working directory:");
-fscanf  (stdin, "String", _fubar_directory);
+fscanf (stdin, "String", _fubar_directory);
 
 fprintf(stdout,"\nEnter the rates output file:");
-fscanf  (stdin, "String", _rates_to);
+fscanf (stdin, "String", _rates_to);
 
 //fprintf(stdout,"\nRunning\n");
 
@@ -31,20 +31,20 @@ DataSet         allData         = ReadDataFile (_nucSequences);
 DataSetFilter   codonData       = CreateFilter (allData,3,"","",GeneticCodeExclusions);
 DataSetFilter   nucData         = CreateFilter (allData,1);
 
-DataSet         mrca             = ReadDataFile  (_mrca_from);
-DataSetFilter   mrcaFilter       = CreateFilter (allData,3,"","",mrca);
+DataSet         mrca            = ReadDataFile  (_mrca_from);
+DataSetFilter   mrcaFilter      = CreateFilter (allData,3,"","",mrca);
 
-GetDataInfo     (mrcaSequence, mrcaFilter, 0);
+GetDataInfo (mrcaSequence, mrcaFilter, 0);
 sequences_by_date ["MRCA"] =   translateCodonToAA (mrcaSequence, _c2p_mapping, 0);
 
 GetDataInfo (codonMap, codonData);
 
-dateInfo     = _loadDateInfo (_dates);
-uniqueDates  = _getAvailableDates (dateInfo);
+dateInfo = _loadDateInfo (_dates);
+uniqueDates = _getAvailableDates (dateInfo);
 
 call_count = 0;
-GetString          (inputSequenceOrder, allData, -1);
-COUNT_GAPS_IN_FREQUENCIES     = 0;
+GetString (inputSequenceOrder, allData, -1);
+COUNT_GAPS_IN_FREQUENCIES = 0;
 
 
 byDate = {}; // the JSON output with rates
@@ -56,16 +56,16 @@ for (date_index = -1; date_index < Abs (uniqueDates); date_index += 1) {
         thisDate = "Combined";
         sequences = "";
     } else {
-        thisDate                    = uniqueDates["INDEXORDER"][date_index];
-        sequences                   = _selectSequencesByDate (thisDate, dateInfo, inputSequenceOrder);
+        thisDate = uniqueDates["INDEXORDER"][date_index];
+        sequences = _selectSequencesByDate (thisDate, dateInfo, inputSequenceOrder);
     }
 
-    fprintf(stdout,"\nWorking on '`thisDate`'\n");
+    fprintf (stdout,"\nWorking on '`thisDate`'\n");
 
-    DataSetFilter filteredData  = CreateFilter (allData,1,"",Join(",",sequences));
+    DataSetFilter filteredData = CreateFilter (allData,1,"",Join(",",sequences));
 
     if (date_index < 0) {
-        aa_seqs      = {};
+        aa_seqs = {};
 
         for (s_id = 0; s_id < filteredData.species; s_id += 1) {
             GetString (seq_name, filteredData, s_id);
@@ -79,17 +79,17 @@ for (date_index = -1; date_index < Abs (uniqueDates); date_index += 1) {
 
         DataSet aa_data = ReadFromString (buffer);
         aa_sequences = "";
-        GetString          (inputSequenceOrder_aa, aa_data, -1);
+        GetString (inputSequenceOrder_aa, aa_data, -1);
 
     } else {
-        aa_sequences    = _selectSequencesByDate (thisDate, dateInfo, inputSequenceOrder_aa);
+        aa_sequences = _selectSequencesByDate (thisDate, dateInfo, inputSequenceOrder_aa);
     }
 
-    DataSetFilter aa_filter  = CreateFilter (aa_data,1,"",Join(",",aa_sequences));
+    DataSetFilter aa_filter = CreateFilter (aa_data,1,"",Join(",",aa_sequences));
     if (date_index >= 0) {
          sequences_by_date [thisDate] = {};
          for (s = 0; s < aa_filter.species; s += 1) {
-            GetString   (s_name, aa_filter, s);
+            GetString (s_name, aa_filter, s);
             GetDataInfo (s_data, aa_filter, s);
             (sequences_by_date [thisDate])[s_name] = s_data;
          }
@@ -101,19 +101,19 @@ for (date_index = -1; date_index < Abs (uniqueDates); date_index += 1) {
         entropies[s] = entropy (site_freqs);
     }
 
-    _date_slice                 = _fubar_directory + thisDate + ".nex";
-    _date_FUBAR                 = _date_slice + ".fubar.csv";
+    _date_slice = _fubar_directory + thisDate + ".nex";
+    _date_FUBAR = _date_slice + ".fubar.csv";
 
     if (!_date_FUBAR) {
 
     } else {
-        IS_TREE_PRESENT_IN_DATA     = 1;
-        fprintf(stdout,"Inferring NJ tree\n");
-        DATAFILE_TREE               = InferTreeTopology (1);
-        fprintf                       (_date_slice, CLEAR_FILE, filteredData);
-        fprintf(stdout,"Running FUBAR\n");
+        IS_TREE_PRESENT_IN_DATA = 1;
+        fprintf (stdout,"Inferring NJ tree\n");
+        DATAFILE_TREE = InferTreeTopology (1);
+        fprintf (_date_slice, CLEAR_FILE, filteredData);
+        fprintf (stdout,"Running FUBAR\n");
 
-        ExecuteAFile                  (HYPHY_LIB_DIRECTORY + "TemplateBatchFiles" +
+        ExecuteAFile (HYPHY_LIB_DIRECTORY + "TemplateBatchFiles" +
                                        DIRECTORY_SEPARATOR + "SelectionAnalyses" +
                                        DIRECTORY_SEPARATOR + "FUBAR.bf",
                                       {
@@ -131,7 +131,7 @@ for (date_index = -1; date_index < Abs (uniqueDates); date_index += 1) {
 
 
     fubar_rates = ((fubar.json [terms.fit.MLE])[terms.json.content])[0];
-    n_sites   = Rows(fubar_rates);
+    n_sites = Rows (fubar_rates);
     fubar_rates_n = {n_sites,5};
     mean_alpha = (+(fubar_rates[-1][0]))/n_sites;
 
