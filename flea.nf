@@ -838,6 +838,9 @@ process evo_history {
     output:
     file 'rates_pheno.tsv' into rates_pheno
 
+    when:
+    params.do_evo_history
+
     shell:
     '''
     zcat msa.no_stops.fasta.gz > msa.no_stops.fasta
