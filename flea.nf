@@ -11,8 +11,11 @@ vim: syntax=groovy
 ----------------------------------------------------------------------------------------
 */
 
-// TODO: hyphy scripts actually slower with MPI???
+// TODO: MPI for evo_history
 // TODO: compress/delete intermediate hyphy files
+// TODO: storeDir for final results
+// TODO: use scratch directive for intermediate files
+// TODO: dynamic computing resources
 // TODO: parallelize filter_fastx and other scripts, if it speeds them up
 // TODO: fix MDS parallelism
 // TODO: update tests
@@ -66,6 +69,8 @@ max_qcs_len = reflen_2
 
 
 process quality_pipeline {
+
+    tag { label }
 
     publishDir params.results_dir
 
@@ -147,6 +152,9 @@ process quality_pipeline {
 
 
 process cluster {
+
+    tag { label }
+
     publishDir params.results_dir
 
     cpus params.cpus
@@ -185,6 +193,8 @@ cluster_out
 
 
 process consensus {
+
+    tag { label }
 
     publishDir params.results_dir
 
@@ -239,6 +249,8 @@ process consensus {
 }
 
 process shift_correction {
+
+    tag { label }
 
     publishDir params.results_dir
 
@@ -307,6 +319,9 @@ shift_correction_out
 
 
 process compute_abundances {
+
+    tag { label }
+
     cpus params.cpus
     time params.slow_time
 
