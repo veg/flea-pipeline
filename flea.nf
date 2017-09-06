@@ -885,7 +885,7 @@ process fubar {
 
     publishDir params.results_dir
 
-    cpus params.cpus
+    cpus params.crazy_cpus
     time params.crazy_time
 
     input:
