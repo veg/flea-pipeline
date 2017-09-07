@@ -11,19 +11,10 @@ vim: syntax=groovy
 ----------------------------------------------------------------------------------------
 */
 
-// TODO: MPI for evo_history
-// TODO: compress/delete intermediate hyphy files
-// TODO: storeDir for final results
-// TODO: use scratch directive for intermediate files
-// TODO: dynamic computing resources
-// TODO: parallelize filter_fastx and other scripts, if it speeds them up
-// TODO: fix MDS parallelism
-// TODO: update tests
 
-// TODO: combine all time points for inframe db for shift correction
+// TODO: update tests
 // TODO: tune maxaccepts and maxrejects
-// TODO: allow starting from aligned inputs
-// TODO: Singularity container
+// TODO: combine all time points for inframe db for shift correction
 
 
 params.infile = "$HOME/flea/data/P018/data/metadata"
