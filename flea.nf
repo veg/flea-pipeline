@@ -149,7 +149,7 @@ process cluster {
     publishDir params.results_dir
 
     cpus params.cpus
-    time params.slow_time
+    time params.crazy_time
 
     input:
     set 'qcs.fastq.gz', label from qcs_final_1
@@ -459,7 +459,7 @@ process abundances_json {
 
     publishDir params.results_dir
 
-    time params.crazy_time
+    time params.slow_time
 
     input:
     file 'msa.fasta.gz' from msa_out
@@ -649,7 +649,7 @@ process manifold_embedding {
 
     publishDir params.results_dir
 
-    time params.crazy_time
+    time params.slow_time
 
     input:
     file 'msa.fasta.gz' from msa_out
@@ -891,8 +891,10 @@ process fubar {
 
     publishDir params.results_dir
 
-    cpus params.crazy_cpus
-    time params.crazy_time
+    module params.mpi_module
+
+    cpus params.cpus
+    time params.slow_time
 
     input:
     file 'msa.no_stops.fasta.gz' from msa_no_stops
