@@ -891,6 +891,8 @@ process fubar {
 
     publishDir params.results_dir
 
+    // need to make module command available on compute node
+    beforeScript 'source /etc/profile.d/modules.sh'
     module params.mpi_module
 
     cpus params.cpus
