@@ -149,7 +149,7 @@ process cluster {
     publishDir params.results_dir
 
     cpus params.cpus
-    time params.crazy_time
+    time params.slow_time
 
     input:
     set 'qcs.fastq.gz', label from qcs_final_1
