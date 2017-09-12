@@ -12,6 +12,8 @@ function _getAvailableDates (info) {
 }
 
 function _selectSequencesByDate (date, dates, inputOrder) {
+
+
     set = {};
     dates ["_accessor2"][""];
     return mapSets (Rows (set), inputOrder);
@@ -22,13 +24,13 @@ function _selectSequencesByDate (date, dates, inputOrder) {
 
 function _accessor1 (key, value) {
     if (_toReturn[value] == 0) {
-        _toReturn[value] = 1; 
+        _toReturn[value] = 1;
     }
     return 0;
 }
 
 function _accessor2 (key, value) {
-    if (value == date) {
+    if ("" + value == date) {
         set [key] = 1;
     }
     return 0;

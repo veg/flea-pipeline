@@ -9,8 +9,15 @@ LoadFunctionLibrary ("TreeFunctions");
 LoadFunctionLibrary ("dSdNTreeTools");
 LoadFunctionLibrary ("DescriptiveStatistics");
 LoadFunctionLibrary ("CodonTools");
-LoadFunctionLibrary ("tools.bf");
+//LoadFunctionLibrary ("tools.bf");
 LoadFunctionLibrary ("BranchLengthFitters");
+
+LoadFunctionLibrary ("libv3/all-terms.bf");
+
+LoadFunctionLibrary ("libv3/IOFunctions.bf");
+LoadFunctionLibrary ("libv3/UtilityFunctions.bf");
+LoadFunctionLibrary ("libv3/tasks/mpi.bf");
+
 
 fprintf(stdout,"\nEnter the alignment file:");
 fscanf (stdin, "String", _nucSequences);
@@ -27,6 +34,10 @@ fscanf (stdin, "String", _ratesTo);
 fprintf(stdout,"\nRunning\n");
 
 DataSet allData = ReadDataFile (_nucSequences);
+
+DataSetFilter for_export = CreateFilter (allData,1);
+Export (all_data_as_text, for_export);
+
 HarvestFrequencies (positionalFrequencies, allData,3,1,1);
 _blStencils = ComputeScalingStencils(0);
 
@@ -34,6 +45,8 @@ nuc3x4 = CF3x4 (positionalFrequencies,GeneticCodeExclusions);
 PopulateModelMatrix ("MGLocalQ", nuc3x4);
 vectorOfFrequencies = BuildCodonFrequencies(nuc3x4);
 Model MGLocal = (MGLocalQ, vectorOfFrequencies,0);
+
+
 
 dateInfo = _loadDateInfo (_dates);
 uniqueDates = _getAvailableDates (dateInfo);
@@ -55,32 +68,42 @@ for (k = 1; k < Abs (parts); k+=1) {
     all_segments + {{_HXB_env_region_name[k__-1],"" + (3*(parts[k__-1])) + "-" + (3*parts[k__]-1)}};
 }
 
-call_count = 0;
 GetString (inputSequenceOrder, allData, -1);
 
 _c2p_mapping = defineCodonToAA ();
 
 rootSeq = None;
 
+Export (mglocal_model_definition, MGLocal);
+queue  = mpi.CreateQueue ({terms.mpi.Headers : utility.GetListOfLoadedModules ("libv3/"),
+                          terms.mpi.Functions : {{"InferTreeTopology"}},
+                           terms.mpi.Variables : {{"_hyphyAAOrdering", "mglocal_model_definition","_Genetic_Code", "vectorOfFrequencies","GeneticCodeExclusions","_c2p_mapping", "_nucSequences"}}
+                          });
+
+VERBOSITY_LEVEL = 0;
+
 for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
     thisDate = uniqueDates["INDEXORDER"][date_index];
 
     for (region = 0; region < Abs (all_segments); region += 1) {
         thisRegion = all_segments [region];
+        sequence_subset = _selectSequencesByDate (thisDate, dateInfo, inputSequenceOrder);
+        assert (Abs (sequence_subset) > 0, "Empty sequence subset selected for `thisDate`");
 
-        fprintf (stdout, "[WORKING ON ", thisRegion[0], " FOR `thisDate`]\n");
 
-        timepoint_info = makePartitionBuiltTreeFitMG ("allData", thisRegion[1],
-            Join (",",_selectSequencesByDate (thisDate, dateInfo, inputSequenceOrder)),
-            "sampled`thisDate`", rootSeq, region == 0);
+        fprintf (stdout, "[WORKING ON ", thisRegion[0], " FOR `thisDate` with `utility.Array1D(sequence_subset)` sequences]\n");
 
-        call_count += 1;
+
 
         if (date_index == 0 && region == 0) {
+            timepoint_info = makePartitionBuiltTreeFitMG ("allData", thisRegion,
+                Join (",",sequence_subset),
+                "sampled`thisDate`", rootSeq, region == 0, 0, FALSE);
+
             fprintf (stdout, "[COMPUTING COT SEQUENCE]\n");
 
             UseModel (USE_NO_MODEL);
-            treeString = Eval("Format (sampled`thisDate`_tree,1,1)");
+             treeString = Eval("Format (sampled`thisDate`_tree,1,1)");
             Tree cot_tree_unscaled = treeString;
             cot_data = ComputeCOT ("cot_tree_unscaled", 0);
             Topology cot_tree_unscaled = treeString;
@@ -88,8 +111,12 @@ for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
             cot_tree_unscaled + {"WHERE": cot_data["Branch"], "PARENT" : cot_node_name, "LENGTH" : cot_data["Split"], "PARENT_LENGTH": cot_data["Split"]};
 
             UseModel (MGLocal);
+            USE_LAST_RESULTS = 0;
+            USE_DISTANCES = 0;
+            GLOBAL_STARTING_POINT = 0.01;
+
             Tree cot_tree = cot_tree_unscaled;
-            ExecuteCommands ("LikelihoodFunction cot_lf = (sampled`thisDate`_filter, cot_tree)");
+            LikelihoodFunction cot_lf = (^"sampled`thisDate`_filter", cot_tree);
             Optimize (cot_lf_res, cot_lf);
 
             DataSet ds_a = ReconstructAncestors (cot_lf);
@@ -107,70 +134,109 @@ for (date_index = 0; date_index < Abs (uniqueDates); date_index += 1) {
             DeleteObject (cot_lf);
 
             fprintf (_ratesTo, CLEAR_FILE, Join ("\t", headers), "\n");
+            fprintf (_ratesTo, thisDate, "\t", thisRegion[0], "\t", Join("\t", timepoint_info["div"]), "\t", Join ("\t", timepoint_info["pheno"]),
+                "\t", Join ("\t", divergenceForFilter ("sampled`thisDate`_filter", rootSeq, FALSE)), "\n");
+
+            DeleteObject (^"sampled`thisDate`_lf");
+       } else {
+            mpi.QueueJob (queue, "makePartitionBuiltTreeFitMG",
+                                          {"0" : "",
+                                           "1" : thisRegion,
+                                           "2" : Join (",",sequence_subset),
+                                           "3" : "sampled`thisDate`",
+                                           "4" : rootSeq,
+                                           "5" : region == 0,
+                                           "6" : 0,
+                                           "7" : TRUE},
+                                           "result_handler");
         }
 
-        fprintf (_ratesTo, thisDate, "\t", thisRegion[0], "\t", Join("\t", timepoint_info["div"]), "\t", Join ("\t", timepoint_info["pheno"]),
-            "\t", Join ("\t", divergenceForFilter ("sampled`thisDate`_filter", rootSeq)), "\n");
 
-        ExecuteCommands ("DeleteObject (sampled`thisDate`_lf);");
     }
 }
 
+mpi.QueueComplete (queue);
+
+
 //----------------------------------------------------------------------------------------
 
-function makePartitionBuiltTreeFitMG (dataID, sites, sequences, prefix, rootOn, wantSequences) {
+function result_handler (node, result, arguments) {
+    fprintf (_ratesTo, thisDate, "\t", (arguments[1])[0], "\t", Join("\t", result["div"]), "\t", Join ("\t", result["pheno"]),
+        "\t", Join ("\t", result["divergence"]), "\n");
+}
+//----------------------------------------------------------------------------------------
+
+function makePartitionBuiltTreeFitMG (dataID, sites, sequences, prefix, rootOn, wantSequences, call_count, delete_lf) {
+    /*
+    console.log (dataID);
+    console.log (sites);
+    console.log (sequences);
+    console.log (prefix);
+    console.log (rootOn);
+    console.log (wantSequences);
+    console.log (call_count);
+    console.log (delete_lf);
+    */
 
     UseModel (USE_NO_MODEL);
 
-    DataSetFilter filteredData = CreateFilter(*dataID,1,sites,sequences);
+    if (Abs(dataID) == 0) { // reread the dataset
+        DataSet allData = ReadDataFile (_nucSequences);
+        dataID = "allData";
+    }
+
+    DataSetFilter filteredData = CreateFilter(*dataID,1,sites[1],sequences);
     Export (fd, filteredData);
     DataSet reduced = ReadFromString (fd);
 
-
     if (rootOn == None) {
         njTree = InferTreeTopology (1);
+
     } else {
         DataSet rootSet = ReadFromString (">ROOT_ON_ME\n`rootOn`");
-        DataSetFilter choppedRootSeq = CreateFilter (rootSet, 1, sites);
+        DataSetFilter choppedRootSeq = CreateFilter (rootSet, 1, sites[1]);
         Export (fd, choppedRootSeq);
-        DataSet rootSeq = ReadFromString (fd);
+        DataSet rootSeqSet = ReadFromString (fd);
+        DataSet combined = Combine (rootSeqSet, reduced);
+        DataSetFilter filteredData = CreateFilter (combined, 1);
 
-	DataSet combined = Combine (rootSeq, reduced);
-	DataSetFilter filteredData = CreateFilter (combined, 1);
+        njTree = InferTreeTopology (1);
 
-	njTree = InferTreeTopology (1);
+        Topology T = njTree;
+        njTree_rr = RerootTree (T, "ROOT_ON_ME");
+        Topology T = njTree_rr;
 
-	Topology T = njTree;
-	njTree_rr = RerootTree (T, "ROOT_ON_ME");
-	Topology T = njTree_rr;
-
-	T - "ROOT_ON_ME";
-	njTree = Format (T,0,0);
+        T - "ROOT_ON_ME";
+        njTree = Format (T,0,0);
     }
 
-    DataSetFilter filteredData = CreateFilter(*dataID,1,sites,sequences);
+    DataSetFilter filteredData = CreateFilter(*dataID,1,sites[1],sequences);
     Export (fd, filteredData);
 
+    //console.log ("killZeroBranchesBasedOnNucFit");
+
     njTree = killZeroBranchesBasedOnNucFit ("reduced", njTree);
+
+    ExecuteCommands (mglocal_model_definition);
+    UseModel (MGLocal);
+
     njTree["set_values"][""];
     njTree = njTree["_collapsed_tree"];
 
-    UseModel (MGLocal);
-
-    ExecuteCommands ("
-        Tree `prefix`_tree = njTree;
-        DataSetFilter `prefix`_filter = CreateFilter(reduced,3,,,GeneticCodeExclusions);
-        USE_LAST_RESULTS = 1;
-        LikelihoodFunction `prefix`_lf = (`prefix`_filter,`prefix`_tree);
-        unconstrainGlobalParameters(\"`prefix`_lf\");
-        Optimize (res, `prefix`_lf);
-        //fprintf (stdout, `prefix`_lf, \"\\n\");
-        if (wantSequences && `prefix`_filter.species > 2) {
-                DataSet `prefix`_ancestors = ReconstructAncestors (`prefix`_lf);
-                DataSetFilter `prefix`_ancestral_filter = CreateFilter(`prefix`_ancestors,3,,,GeneticCodeExclusions);
-        }
-        fixGlobalParameters (\"`prefix`_lf\");
-    ");
+    Tree ^"`prefix`_tree" = njTree;
+    DataSetFilter ^"`prefix`_filter" = CreateFilter(reduced,3,,,GeneticCodeExclusions);
+    USE_LAST_RESULTS = 0;
+    USE_DISTANCES = 0;
+    GLOBAL_STARTING_POINT = 0.01;
+    LikelihoodFunction ^"`prefix`_lf" = (^"`prefix`_filter",^"`prefix`_tree");
+    unconstrainGlobalParameters("`prefix`_lf");
+    Optimize (res, ^"`prefix`_lf");
+    if (wantSequences && ^"`prefix`_filter.species" > 2) {
+            DataSet ^"`prefix`_ancestors" = ReconstructAncestors (^"`prefix`_lf");
+            DataSetFilter ^"`prefix`_ancestral_filter" = CreateFilter(^"`prefix`_ancestors",3,,,GeneticCodeExclusions);
+    }
+    fixGlobalParameters ("`prefix`_lf");
+    //console.log ("fixGlobalParameters");
 
     dSdN = _computeSNSSites ("`prefix`_filter", _Genetic_Code, vectorOfFrequencies, call_count);
     dS = dSdN["Sites"]/dSdN ["SSites"];
@@ -183,6 +249,8 @@ function makePartitionBuiltTreeFitMG (dataID, sites, sequences, prefix, rootOn, 
     _makePartitionBuiltTreeFitMG_res ["pheno"] = phenotypeAFilter ("`prefix`_filter");
     _makePartitionBuiltTreeFitMG_res ["trees"] = trees;
 
+    //console.log (_makePartitionBuiltTreeFitMG_res);
+
     if (wantSequences) {
         _makePartitionBuiltTreeFitMG_res ["seqs"] = {"Observed": {},
                         "Ancestral" : {}};
@@ -191,6 +259,13 @@ function makePartitionBuiltTreeFitMG (dataID, sites, sequences, prefix, rootOn, 
         if (Eval ("`prefix`_filter.species") > 2) {
             translateFilterToAA ("`prefix`_ancestral_filter", (_makePartitionBuiltTreeFitMG_res["seqs"])["Ancestral"]);
         }
+    }
+
+    call_count += 1;
+
+    if (delete_lf) {
+        _makePartitionBuiltTreeFitMG_res ["divergence"] = divergenceForFilter ("`prefix`_filter", rootOn, 0);
+        DeleteObject (^"`prefix`_lf");
     }
     return _makePartitionBuiltTreeFitMG_res;
 }
@@ -250,17 +325,17 @@ function set_values (k,v) {
 function treeDiv (treeiD,dS,dN,store) {
     leafCount = computeMultFactorsWeighted  (treeiD);
     if (Type (store) == "AssociativeList") {
-        store ["Total"] = Eval ("Format (`treeiD`, 1, 1)");
+        store ["Total"] = Format (^treeiD, 1, 1);
     }
         BRANCH_LENGTH_STENCIL = _blStencils["Syn"];
     if (Type (store) == "AssociativeList") {
-        store ["Synonymous only"] = Eval ("Format (`treeiD`, 1, 1)");
+        store ["Synonymous only"] = Format (^treeiD, 1, 1);
     }
     divInfo = computeTotalDivergence (treeiD);
     syn = 2*divInfo[0]/leafCount/(leafCount-1);
     BRANCH_LENGTH_STENCIL = _blStencils["NonSyn"];
     if (Type (store) == "AssociativeList") {
-        store ["Nonsynonymous only"] = Eval ("Format (`treeiD`, 1, 1)");
+        store ["Nonsynonymous only"] = Format (^treeiD, 1, 1);
     }
     divInfo = computeTotalDivergence (treeiD);
     ns = 2*divInfo[0]/leafCount/(leafCount-1);
@@ -270,15 +345,22 @@ function treeDiv (treeiD,dS,dN,store) {
 
 //----------------------------------------------------------------------------------------
 
-function divergenceForFilter (filterID, rootSeq) {
+function divergenceForFilter (filterID, rootSeq, call_model) {
 
     total = {{0,0,0,0,0}};
     filter_root = *"filteredData.site_map";
     abridged_rootSeq = ""; abridged_rootSeq * 128;
+    fname = "/tmp/hyphy." + MPI_NODE_ID;
+    fprintf (fname, CLEAR_FILE, filter_root, "\n", rootSeq, "\n");
     for (k = 0; k < Columns(filter_root); k+=1) {
         abridged_rootSeq * rootSeq[filter_root[k]];
     }
     abridged_rootSeq * 0;
+
+    if (call_model) {
+        ExecuteCommands (mglocal_model_definition);
+        UseModel (MGLocal);
+    }
 
     copy_count = 0;
 
@@ -310,7 +392,7 @@ function pairwiseCodon (seq1, seq2) {
     pairTree.2.synRate :< 10;
     pairTree.2.nonSynRate :< 10;
     Optimize (res, pairFunction);
-    dSdN = _computeSNSSites ("pairFilter", _Genetic_Code, vectorOfFrequencies, call_count);
+    dSdN = _computeSNSSites ("pairFilter", _Genetic_Code, vectorOfFrequencies, 1);
     dS = dSdN["Sites"]/dSdN ["SSites"];
     dN = dSdN["Sites"]/dSdN ["NSSites"];
     return treeDiv ("pairTree",dS,dN, 0);

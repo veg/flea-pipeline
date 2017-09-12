@@ -834,7 +834,12 @@ process region_coords {
 
 process evo_history {
 
-    time params.crazy_time
+    // need to make module command available on compute node
+    beforeScript 'source /etc/profile.d/modules.sh'
+    module params.mpi_module
+
+    cpus params.cpus
+    time params.slow_time
 
     input:
     file 'msa.no_stops.fasta.gz' from msa_no_stops
@@ -851,7 +856,7 @@ process evo_history {
     '''
     zcat msa.no_stops.fasta.gz > msa.no_stops.fasta
 
-    !{params.hyphy} !{params.hyphy_dir}/obtainEvolutionaryHistory.bf \
+    !{params.hyphympi} !{params.hyphy_dir}/obtainEvolutionaryHistory.bf \
       $(pwd)/msa.no_stops.fasta $(pwd)/dates.json $(pwd)/region_coords.json $(pwd)/rates_pheno.tsv
 
     rm -f msa.no_stops.fasta
