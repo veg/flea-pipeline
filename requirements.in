@@ -1,9 +1,4 @@
 biopython
-Cython
-docopt
-matplotlib
 numpy
-ruffus
-drmaa
 scipy
 scikit-learn
