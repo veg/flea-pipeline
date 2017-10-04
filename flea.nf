@@ -12,6 +12,8 @@ vim: syntax=groovy
 */
 
 
+// TODO: how launch with web ui and monitor progress
+// TODO: progressively retry with longer times, if there is a timeout
 // TODO: update tests
 // TODO: tune maxaccepts and maxrejects
 // TODO: combine all time points for inframe db for shift correction
@@ -835,8 +837,8 @@ process region_coords {
 process evo_history {
 
     // need to make module command available on compute node
-    beforeScript 'source /etc/profile.d/modules.sh'
-    module params.mpi_module
+    beforeScript params.module_script
+    module params.modules
 
     cpus params.cpus
     time params.slow_time
@@ -897,11 +899,11 @@ process fubar {
     publishDir params.results_dir
 
     // need to make module command available on compute node
-    beforeScript 'source /etc/profile.d/modules.sh'
-    module params.mpi_module
+    beforeScript params.module_script
+    module params.modules
 
     cpus params.cpus
-    time params.slow_time
+    time params.crazy_time
 
     input:
     file 'msa.no_stops.fasta.gz' from msa_no_stops
