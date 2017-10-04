@@ -1,4 +1,5 @@
 biopython
+Cython
 numpy
 scipy
 scikit-learn
