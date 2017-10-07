@@ -61,6 +61,7 @@ max_qcs_len = reflen_2
     .map { n -> Math.round(n * (2.0 - params.qcs_length_coeff.toBigDecimal())) }
 
 
+// TODO: train head/tail HMM on all sequences from all time points
 process quality_pipeline {
 
     tag { label }

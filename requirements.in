@@ -1,7 +1,9 @@
 biopython
 Cython
 docopt
+networkx==1.9
 numpy
 pandas
+pomegranate
 scipy
 scikit-learn

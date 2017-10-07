@@ -12,115 +12,61 @@ Usage:
 
 Options:
   --fastq  Treat input and output files as FASTQ.
-  --jobs <INT>  Run in parallel.
+  --jobs <INT>  Run in parallel.  [default: 1]
+  --max-iters <INT>  Max EM iterations.  [default: 16]
   -h --help
 
 """
-import warnings
+import os
 import multiprocessing
 
+from docopt import docopt
 import numpy as np
 from Bio import SeqIO
-from docopt import docopt
+from pomegranate import DiscreteDistribution, State, HiddenMarkovModel
 
 from flea.util import new_record_seq_str
 
-# FIXME: do not hardcode these values
-
-# STATES
-A_HEAD = 0
-T_HEAD = 1
-BODY = 2
-A_TAIL = 3
-T_TAIL = 4
-
-HEAD_SELF = 0.99
-BODY_SELF = 0.99
-TO_TAIL = (1 - BODY_SELF) / 2
-TAIL_SELF = 1
-TRANSMAT = np.array([[HEAD_SELF, 0, 1 - HEAD_SELF, 0, 0],
-                     [0, HEAD_SELF, 1 - HEAD_SELF, 0, 0],
-                     [0, 0, BODY_SELF, TO_TAIL, TO_TAIL],
-                     [0, 0, 0, TAIL_SELF, 0],
-                     [0, 0, 0, 0, TAIL_SELF]])
-
-P_NO_HEAD = 0.8
-P_HEAD = (1 - P_NO_HEAD) / 2
-STARTPROB = np.array([P_HEAD, P_HEAD, P_NO_HEAD, 0, 0])
-
-# SYMBOLS
-# 0 : A
-# 1 : C
-# 2 : G
-# 3 : T
+# states
 P = 0.985
 Q = 0.005
-E = 0.25
-EMISSIONPROB = np.array([[P, Q, Q, Q],
-                         [Q, Q, Q, P],
-                         [E, E, E, E],
-                         [P, Q, Q, Q],
-                         [Q, Q, Q, P]])
+head_tail_dist_A = DiscreteDistribution({'A': P, 'C': Q, 'G': Q, 'T': Q})
+head_tail_dist_T = DiscreteDistribution({'A': Q, 'C': Q, 'G': Q, 'T': P})
 
+# freeze the body distribution
+body_dist = DiscreteDistribution({'A': 0.25, 'C': 0.25, 'G': 0.25, 'T': 0.25}, frozen=True)
 
+# heads and tails get same Python object for their distribution, which
+# ties them together.
+# TODO: how to also tie the P and Q values inside each distribution?
+HEAD_A = State(head_tail_dist_A, name='head_a')
+HEAD_T = State(head_tail_dist_T, name='head_t')
+BODY = State(body_dist, name='body')
+TAIL_A = State(head_tail_dist_A, name='tail_a')
+TAIL_T = State(head_tail_dist_T, name='tail_t')
 
-def decode(obs, transmat, emissionprob, startprob):
-    """Viterbi algorithm.
+# model
+hmm = HiddenMarkovModel()
+hmm.add_states(HEAD_A, HEAD_T, BODY, TAIL_A, TAIL_T)
 
-    transmat: (n_states x n_states) [i, j]: transition from i to j
-    emissionprob: (n_states x n_symbols)
-    startprob: (n_states,)
+# start probs
+hmm.add_transition(hmm.start, HEAD_A, 0.1, group='a')
+hmm.add_transition(hmm.start, HEAD_T, 0.1, group='a')
+hmm.add_transition(hmm.start, BODY, 0.8)
 
-    """
-    startprob = startprob.ravel()
-    n_states = transmat.shape[0]
-    n_symbols = emissionprob.shape[1]
-    if transmat.shape != (n_states, n_states):
-        raise Exception('Transmission matrix shape {} is not square.'.format(transmat.shape))
-    if len(startprob) != n_states:
-        raise Exception('Wrong number of starting probabilities.'
-                        ' Expected {} and got {}.'.format(n_states, len(startprob)))
-    if emissionprob.shape != (n_states, n_symbols):
-        raise Exception('Emission matrix has wrong number of states.'
-                        ' Expected {} and got {}.'.format(n_states, emissionprob.shape[0]))
+# transitions
+# tie head and tail transitions together
+hmm.add_transition(HEAD_A, HEAD_A, 0.99)
+hmm.add_transition(HEAD_T, HEAD_T, 0.99)
+hmm.add_transition(HEAD_A, BODY, 0.01, group='b')
+hmm.add_transition(HEAD_T, BODY, 0.01, group='b')
+hmm.add_transition(BODY, BODY, 0.99)
+hmm.add_transition(BODY, TAIL_A, 0.005, group='c')
+hmm.add_transition(BODY, TAIL_T, 0.005, group='c')
+hmm.add_transition(TAIL_A, TAIL_A, 1.0)
+hmm.add_transition(TAIL_T, TAIL_T, 1.0)
 
-    if not np.all(np.sum(transmat, axis=1) == 1):
-        raise Exception('Transmission probabilities do not sum to 1.')
-    if not np.sum(startprob) == 1:
-        raise Exception('Starting probabilities do not sum to 1.')
-    if not np.all(np.sum(emissionprob, axis=1) == 1):
-        raise Exception('Emission probabilities do not sum to 1.')
-
-    if np.max(obs) > n_symbols:
-        raise Exception('Observation contains an invalid state: {}'.format(np.max(obs)))
-
-    with warnings.catch_warnings():
-        # already checked probabilities, so should be safe to ignoring warnings
-        warnings.simplefilter("ignore")
-        logtrans = np.log(transmat)
-        logstart = np.log(startprob)
-        logemission = np.log(emissionprob)
-
-    # heavily adapted from:
-    # http://phvu.net/2013/12/06/sweet-implementation-of-viterbi-in-python/
-
-    # dynamic programming matrix
-    trellis = np.zeros((n_states, len(obs)))
-    # back pointers
-    backpt = np.ones((n_states, len(obs)), np.int) * -1
-
-    trellis[:, 0] = logstart + logemission[:, obs[0]]
-    for t in range(1, len(obs)):
-        logprobs = trellis[:, t - 1].reshape(-1, 1) + logtrans + logemission[:, obs[t]].reshape(1, -1)
-        trellis[:, t] = logprobs.max(axis=0)
-        backpt[:, t] = logprobs.argmax(axis=0)
-    result = [trellis[:, -1].argmax()]
-    # this looks wrong, but it is right.
-    # backpt[i] contains the state at i-1, so i ranges from n to 1.
-    for i in range(len(obs)-1, 0, -1):
-        result.append(backpt[result[-1], i])
-    result = result[::-1]
-    return result
+hmm.bake()
 
 
 def trim(seq):
@@ -133,16 +79,15 @@ def trim(seq):
     ('', 'TTCTTCCCA', '')
 
     """
-    nuc_map = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
-    obs = np.array(list(nuc_map[c.upper()] for c in seq))
-    states = decode(obs, TRANSMAT, EMISSIONPROB, STARTPROB)
+    states = hmm.predict(np.array(list(seq)))
     head, body, tail = [], [], []
-    for s, c in zip(states, seq):
-        if s in [A_HEAD, T_HEAD]:
+    for s_id, c in zip(states, seq):
+        s = hmm.states[s_id]
+        if s in [HEAD_A, HEAD_T]:
             head.append(c)
         elif s == BODY:
             body.append(c)
-        elif s in [A_TAIL, T_TAIL]:
+        elif s in [TAIL_A, TAIL_T]:
             tail.append(c)
         else:
             raise Exception('unknown state: {}'.format(s))
@@ -170,23 +115,32 @@ def _notempty(rs):
     return (r for r in rs if len(r.seq))
 
 
-def trim_file(infile, outfile, fastq=False, jobs=1):
-    if jobs < 1:
-        jobs = 1
+def trim_file(infile, outfile, max_iters=16, fastq=False, n_jobs=1):
     filetype = 'fastq' if fastq else 'fasta'
-    records = SeqIO.parse(infile, filetype)
-    if jobs > 1:
-        pool = multiprocessing.Pool(jobs)
+    records = list(SeqIO.parse(infile, filetype))
+
+    # train model
+    seqs = list(str(rec.seq).upper() for rec in records)
+    hmm.fit(seqs, max_iterations=16, verbose=False, n_jobs=n_jobs)
+
+    if n_jobs > 1:
+        pool = multiprocessing.Pool(n_jobs)
         results = pool.map(trim_record, records)
     else:
-        results = (trim_record(r) for r in records)
+        results = list(trim_record(rec) for rec in records)
+
     heads, bodies, tails = zip(*results)
 
-    head_file = "{}.heads".format(outfile)
-    tail_file = "{}.tails".format(outfile)
+    basename, ext = os.path.splitext(outfile)
+    head_file = "{}.heads{}".format(basename, ext)
+    tail_file = "{}.tails{}".format(basename, ext)
     SeqIO.write(_notempty(heads), head_file, filetype)
     SeqIO.write(_notempty(bodies), outfile, filetype)
     SeqIO.write(_notempty(tails), tail_file, filetype)
+
+    model_json = hmm.to_json()
+    with open("{}.hmm.json".format(basename), 'w') as handle:
+        handle.write(model_json)
 
 
 if __name__ == "__main__":
@@ -194,5 +148,6 @@ if __name__ == "__main__":
     filename = args["<infile>"]
     outfile = args["<outfile>"]
     fastq = args['--fastq']
-    jobs = int(args['--jobs'])
-    trim_file(filename, outfile, fastq=fastq, jobs=jobs)
+    n_jobs = int(args['--jobs'])
+    max_iters = int(args['--max-iters'])
+    trim_file(filename, outfile, max_iters=max_iters, fastq=fastq, n_jobs=n_jobs)
