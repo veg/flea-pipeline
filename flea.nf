@@ -661,14 +661,13 @@ process manifold_embedding {
 
     """
     zcat msa.fasta.gz > msa.fasta
-    ${params.usearch} -calc_distmx msa.fasta -distmxout dmatrix.txt \
-      -format tabbed_pairs
+    ${params.tn93} -t ${params.tn93_threshold} -o dmatrix.dst msa.fasta
 
     ${params.python} ${params.script_dir}/manifold_embed.py \
-      --n-jobs 1 dmatrix.txt manifold.json
+      --n-jobs 1 dmatrix.dst manifold.json
 
     rm -f msa.fasta
-    gzip dmatrix.txt
+    gzip dmatrix.dst
     """
 }
 

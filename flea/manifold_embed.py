@@ -12,27 +12,25 @@ Options:
 
 """
 import json
-import numpy as np
+
 from docopt import docopt
+import numpy as np
+import pandas as pd
 from sklearn.manifold import MDS
 
 
 def parse_file(infile):
-    with open(infile) as f:
-        lines = f.read().strip().split('\n')
+    df = pd.read_csv(infile)
     labels = set()
-    for line in lines:
-        label1, label2, val = line.split()
-        labels.add(label1)
-        labels.add(label2)
+    labels.update(df['ID1'])
+    labels.update(df['ID2'])
     nseqs = len(labels)
     labels = list(labels)
     label_idx = dict((label, i) for i, label in enumerate(labels))
     X = np.zeros((nseqs, nseqs))
-    for line in lines:
-        label1, label2, val = line.split()
-        X[label_idx[label1], label_idx[label2]] = float(val)
-        X[label_idx[label2], label_idx[label1]] = float(val)
+    for _, row in df.iterrows():
+        X[label_idx[row['ID1']], label_idx[row['ID2']]] = row['Distance']
+        X[label_idx[row['ID2']], label_idx[row['ID1']]] = row['Distance']
     return labels, X
 
 
