@@ -26,7 +26,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from flea.util import column_count, prob, js_divergence
-from flea.util import id_to_label, id_to_abundance
+from flea.util import id_to_label, id_to_copynumber
 
 
 np.set_printoptions(suppress=True)
@@ -44,7 +44,7 @@ def diagnose(hqcsfile, qcsfile, result_path, cutoff):
     hqcs = list(sorted(SeqIO.parse(hqcsfile, format), key=lambda r: r.id))
     hqcs_array = np.array(list(list(str(rec.seq)) for rec in hqcs))
     hqcs_labels = np.array(list(id_to_label(rec.id) for rec in hqcs))
-    abundance_array = np.array(list(id_to_abundance(rec.id) for rec in hqcs))
+    copynumber_array = np.array(list(id_to_copynumber(rec.id) for rec in hqcs))
 
     # import qcs seqs
     qcs = list(SeqIO.parse(qcsfile, format))
@@ -69,10 +69,10 @@ def diagnose(hqcsfile, qcsfile, result_path, cutoff):
             hqcs_bools = hqcs_labels == label
             qcs_bools = qcs_labels == label
 
-        hqcs_counts = column_count(hqcs_array[hqcs_bools], keys, weights=abundance_array[hqcs_bools])
+        hqcs_counts = column_count(hqcs_array[hqcs_bools], keys, weights=copynumber_array[hqcs_bools])
         qcs_counts = column_count(qcs_array[qcs_bools], keys)
 
-        if np.all(hqcs_counts.sum(axis=0) != abundance_array[hqcs_bools].sum()):
+        if np.all(hqcs_counts.sum(axis=0) != copynumber_array[hqcs_bools].sum()):
             raise Exception('bad hqcs counts')
 
         if np.all(qcs_counts.sum(axis=0) != qcs_bools.sum()):

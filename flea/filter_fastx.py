@@ -6,10 +6,10 @@ import re
 from Bio import SeqIO
 
 from flea.util import run_regexp, iter_sample, is_in_frame
-from flea.util import parse_abundances
+from flea.util import parse_copynumbers
 from flea.util import handle_codon, replace_stop_codons, replace_gapped_codons
 from flea.util import update_record_seq
-from flea.util import replace_id, id_with_abundance
+from flea.util import replace_id, id_with_copynumber
 
 
 caln_pattern = r'[0-9]*[IDM]'
@@ -105,10 +105,10 @@ def main(mode, informat, outformat, params):
         # filter out-of-frame sequences
         allow_stops = True if params[0] == 'true' else False
         result = (r for r in records if is_in_frame(r.seq, allow_stops))
-    elif mode == "abundance":
-        # filter out 0-abundance sequences
+    elif mode == "copynumber":
+        # filter out 0-copynumber sequences
         abfile = params[0]
-        abdict = parse_abundances(abfile)
+        abdict = parse_copynumbers(abfile)
         result = (r for r in records if r.id in abdict and abdict[r.id] > 0)
     elif mode == "stop_codons":
         # replace stop codons
@@ -128,10 +128,10 @@ def main(mode, informat, outformat, params):
         userfile = params[0]
         ud = parse_userfile(userfile)
         result = (handle_record(r, ud[r.id]) for r in records if r.id in ud)
-    elif mode == "add_abundance":
+    elif mode == "add_copynumber":
         abfile = params[0]
-        abdict = parse_abundances(abfile)
-        result = (replace_id(r, id_with_abundance(r.id, abdict[r.id])) for r in records)
+        abdict = parse_copynumbers(abfile)
+        result = (replace_id(r, id_with_copynumber(r.id, abdict[r.id])) for r in records)
     else:
         raise Exception('unknown mode: {}'.format(mode))
     SeqIO.write(result, sys.stdout, outformat)

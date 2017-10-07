@@ -29,7 +29,7 @@ setup(name='flea',
         'flea/sequences_json.py',
         'flea/translate.py',
         'flea/trim_tails.py',
-        'flea/write_abundances.py',
+        'flea/write_copynumbers.py',
         'scripts/publish.py',
         ],
       )

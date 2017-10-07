@@ -9,7 +9,7 @@ from flea.util import js_divergence
 from flea.util import column_count
 from flea.util import prob
 from flea.util import get_date_dict
-from flea.util import id_to_abundance, id_to_label
+from flea.util import id_to_copynumber, id_to_label
 
 
 def main(infile, metafile, outfile):
@@ -17,8 +17,8 @@ def main(infile, metafile, outfile):
     
     records = list(SeqIO.parse(infile, 'fasta'))
     seq_array = np.array(list(list(str(r.seq)) for r in records))
-    # assume id has "<timepoint>_<misc>_n_<abundance>" pattern
-    abundance_array = np.array(list(id_to_abundance(r.id) for r in records))
+    # assume id has "<timepoint>_<misc>_n_<copynumber>" pattern
+    copynumber_array = np.array(list(id_to_copynumber(r.id) for r in records))
     date_array = np.array(list(date_dict[id_to_label(r.id)] for r in records))
 
     # FIXME: labels must sort according to date!!!
@@ -31,7 +31,7 @@ def main(infile, metafile, outfile):
     for date in dates:
         bools = (date_array == date)
         counts = column_count(seq_array[bools], alphabet,
-                              weights=abundance_array[bools])
+                              weights=copynumber_array[bools])
         ps[date] = prob(counts, axis=0).T
 
     result = {}

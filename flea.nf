@@ -308,10 +308,10 @@ process shift_correction {
 shift_correction_out
   .phase (qcs_final_3) { it[1] }
   .map { [ it[0][0], it[1][0], it[0][1] ] }
-  .set { compute_abundances_input }
+  .set { compute_copynumbers_input }
 
 
-process compute_abundances {
+process compute_copynumbers {
 
     tag { label }
 
@@ -319,11 +319,11 @@ process compute_abundances {
     time params.slow_time
 
     input:
-    set 'hqcs.fasta.gz', 'qcs.fastq.gz', label from compute_abundances_input
+    set 'hqcs.fasta.gz', 'qcs.fastq.gz', label from compute_copynumbers_input
 
     output:
     file 'hqcs.filtered.fasta.gz' into hqcs_files
-    file 'abundance_file.txt.gz' into abundance_files
+    file 'copynumber_file.txt.gz' into copynumber_files
 
     shell:
     '''
@@ -340,21 +340,21 @@ process compute_abundances {
       --userout pairfile.txt \
       --userfields query+target \
       --top_hit_only \
-      --id !{params.abundance_identity} \
-      --maxqt !{params.abundance_max_length_ratio} \
+      --id !{params.copynumber_identity} \
+      --maxqt !{params.copynumber_max_length_ratio} \
       -qmask none \
       --strand plus \
       --maxaccepts !{params.max_accepts} \
       --maxrejects !{params.max_rejects} \
       --threads !{params.cpus}
 
-    # write abundance file
-    !{params.python} !{params.script_dir}/write_abundances.py \
-      < pairfile.txt > abundance_file.txt
+    # write copynumber file
+    !{params.python} !{params.script_dir}/write_copynumbers.py \
+      < pairfile.txt > copynumber_file.txt
 
-    # filter out HQCS with 0 abundance
+    # filter out HQCS with 0 copynumber
     !{params.python} !{params.script_dir}/filter_fastx.py \
-      abundance fasta fasta abundance_file.txt \
+      copynumber fasta fasta copynumber_file.txt \
       < hqcs.fasta > hqcs.filtered.fasta
 
     # gzip everything
@@ -371,24 +371,24 @@ process merge_timepoints {
 
     input:
     file 'hqcs*.fastq.gz' from hqcs_files.collect()
-    file 'abundance*.txt.gz' from abundance_files.collect()
+    file 'copynumber*.txt.gz' from copynumber_files.collect()
 
     output:
     file 'all_hqcs.fasta.gz' into merged_hqcs_out
 
     """
     zcat hqcs*.fastq.gz > merged_hqcs.fasta
-    zcat abundance*.txt.gz > merged_abundances.txt
+    zcat copynumber*.txt.gz > merged_copynumbers.txt
 
-    # add abundances to ids, for evo_history
+    # add copynumbers to ids, for evo_history
     ${params.python} ${params.script_dir}/filter_fastx.py \
-      add_abundance fasta fasta merged_abundances.txt \
+      add_copynumber fasta fasta merged_copynumbers.txt \
       < merged_hqcs.fasta > all_hqcs.fasta
 
     # gzip everything
     gzip merged_hqcs.fasta
     gzip all_hqcs.fasta
-    gzip merged_abundances.txt
+    gzip merged_copynumbers.txt
     """
 }
 
@@ -457,7 +457,7 @@ process dates_json_task {
     """
 }
 
-process abundances_json {
+process copynumbers_json {
 
     publishDir params.results_dir
 
@@ -467,7 +467,7 @@ process abundances_json {
     file 'msa.fasta.gz' from msa_out
 
     output:
-    file 'abundances.json' into abundances_json_out
+    file 'copynumbers.json' into copynumbers_json_out
 
     """
     #!${params.python}
@@ -475,12 +475,12 @@ process abundances_json {
     import gzip
     import json
     from Bio import SeqIO
-    from flea.util import id_to_abundance
+    from flea.util import id_to_copynumber
 
     with gzip.open('msa.fasta.gz', 'rt') as handle:
         records = SeqIO.parse(handle, 'fasta')
-        outdict = dict((r.id, id_to_abundance(r.id)) for r in records)
-    with open('abundances.json', 'w') as handle:
+        outdict = dict((r.id, id_to_copynumber(r.id)) for r in records)
+    with open('copynumbers.json', 'w') as handle:
         json.dump(outdict, handle, separators=(",\\n", ":"))
     """
 }
@@ -528,7 +528,7 @@ process mrca {
     !{params.python} !{params.script_dir}/DNAcons.py \
       --keep-gaps --codon --id MRCA \
       -o mrca.fasta \
-      --abundances \
+      --copynumbers \
       oldest_seqs.fasta
 
     !{params.python} !{params.script_dir}/translate.py --gapped \

@@ -3,7 +3,7 @@ using Glob
 using BeNGS
 
 
-function read_files(fasta_file, abundance_file="")
+function read_files(fasta_file, copynumber_file="")
     templates = BeNGS.read_fasta_records(fasta_file)
 
     template_df = DataFrame()
@@ -11,22 +11,22 @@ function read_files(fasta_file, abundance_file="")
     template_df[:name] = [s.name for s in templates]
     template_df[:sequence] = [String(s.seq) for s in templates]
 
-    fulldf = if abundance_file == "name"
-        template_df[:abundance] = [parse(Int, split(s.name, "_")[end]) for s in templates]
+    fulldf = if copynumber_file == "name"
+        template_df[:copynumber] = [parse(Int, split(s.name, "_")[end]) for s in templates]
         template_df
-    elseif length(abundance_file) > 0
-        abundance_df = readtable(abundance_file, header=false,
-                                  names=[:name, :abundance])
-        join(template_df, abundance_df, on=:name, kind=:outer)
+    elseif length(copynumber_file) > 0
+        copynumber_df = readtable(copynumber_file, header=false,
+                                  names=[:name, :copynumber])
+        join(template_df, copynumber_df, on=:name, kind=:outer)
     else
-        template_df[:abundance] = [1 for s in templates]
+        template_df[:copynumber] = [1 for s in templates]
         template_df
     end
 
     incomplete = ~completecases(fulldf)
     if any(incomplete)
         missing_seqnames = fulldf[incomplete, :name]
-        error("different sequences in fasta and abundance files: $(missing_seqnames)")
+        error("different sequences in fasta and copynumber files: $(missing_seqnames)")
     end
 
     nrows, _ = size(fulldf)
@@ -54,11 +54,11 @@ function run_all(true_fasta_file, true_abn_file, inf_fasta_file, inf_abn_file)
     for timepoint in unique(true_df[:timepoint])
         true_df_sub = true_df[true_df[:timepoint] .== timepoint, :]
         true_seqs = true_df_sub[:sequence]
-        true_abn = convert(Array{Float64}, true_df_sub[:abundance])
+        true_abn = convert(Array{Float64}, true_df_sub[:copynumber])
 
         inf_df_sub = inf_df[inf_df[:timepoint] .== timepoint, :]
         inf_seqs = inf_df_sub[:sequence]
-        inf_abn = convert(Array{Float64}, inf_df_sub[:abundance])
+        inf_abn = convert(Array{Float64}, inf_df_sub[:copynumber])
 
         distmatrix, smd1, smd2, smd3 = run_metric(true_seqs, true_abn, inf_seqs, inf_abn)
         push!(results, [timepoint, smd1, smd2, smd3])
