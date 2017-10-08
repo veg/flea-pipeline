@@ -5,9 +5,9 @@
 #    pip-compile --output-file requirements.txt requirements.in
 #
 biopython==1.70
+click==6.7
 cython==0.27.1
 decorator==4.1.2          # via networkx
-docopt==0.6.2
 joblib==0.11              # via pomegranate
 networkx==1.9
 numpy==1.13.3

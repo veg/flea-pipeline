@@ -2,18 +2,11 @@
 """
 Translate DNA reads from a fasta file.
 
-Usage:
-  translate.py [options] < infile  > outfile
-  translate.py -h | --help
-
-Options:
-  -g --gapped   Allow gaps.  [default: False]
-  -h --help     Show this screen.
-
 """
 
 import sys
-import argparse
+
+import click
 
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -42,13 +35,11 @@ def translate(infile, outfile, gapped=False):
     SeqIO.write(result, outfile, "fasta")
 
 
+@click.command()
+@click.option('-g', '--gapped', is_flag=True, help='allow gaps')
+def main(gapped):
+    translate(sys.stdin, sys.stdout, gapped)
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="My parser")
-
-    parser.add_argument('--gapped', dest='gapped', action='store_true')
-    parser.add_argument('--no-gapped', dest='gapped', action='store_false')
-    parser.set_defaults(feature=False)
-
-    parsed = parser.parse_args()
-    
-    translate(sys.stdin, sys.stdout, parsed.gapped)
+    main()

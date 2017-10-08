@@ -3,20 +3,12 @@
 """
 Compare HQCS frequencies to QCS frequencies.
 
-Usage:
-  diagnose.py [options] <hqcs_file> <qcs_file> <result_path>
-  diagnose.py -h | --help
-
-Options:
-  -c <FLOAT>  Cutoff for JS distance [default: 0.01]
-  -h --help   Show this screen
-
 """
 
 import csv
 import os
 
-from docopt import docopt
+import click
 import numpy as np
 from Bio import SeqIO
 
@@ -32,6 +24,11 @@ from flea.util import id_to_label, id_to_copynumber
 np.set_printoptions(suppress=True)
 
 
+@click.command()
+@click.argument('hqcsfile')
+@click.argument('qcsfile')
+@click.argument('result_path')
+@click.option('-c', '--cutoff', default=0.1)
 def diagnose(hqcsfile, qcsfile, result_path, cutoff):
     def out(f):
         return os.path.join(result_path, f)
@@ -146,9 +143,4 @@ def diagnose(hqcsfile, qcsfile, result_path, cutoff):
 
 
 if __name__ == "__main__":
-    args = docopt(__doc__)
-    hqcs_file = args["<hqcs_file>"]
-    qcs_file = args["<qcs_file>"]
-    result_path = args["<result_path>"]
-    cutoff = float(args["-c"])
-    diagnose(hqcs_file, qcs_file, result_path, cutoff)
+    diagnose()

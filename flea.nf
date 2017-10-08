@@ -93,7 +93,7 @@ process quality_pipeline {
 
     # trim ends
     !{params.python} !{params.script_dir}/trim_tails.py \
-      --jobs !{params.cpus} --fastq \
+      --n-jobs !{params.cpus} --fastq \
       !{hmm_train_flag} --max-iters !{params.train_hmm_max_iters} \
       qfiltered.fastq trimmed.fastq
 
@@ -140,7 +140,7 @@ process quality_pipeline {
       < filtered.fastq > !{label}.qcs.fastq
 
     # compress all files
-    for i in `find . 1 ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
+    for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
     '''
 }
 
@@ -228,7 +228,8 @@ process consensus {
 
             !{params.python} !{params.script_dir}/DNAcons.py \
 	      -o ${1}.consensus.fasta \
-              --id !{label}_consensus_${number} ${1}.sampled.aligned.fasta
+              --name !{label}_consensus_${number} \
+	      ${1}.sampled.aligned.fasta
         fi
 
     }
@@ -290,7 +291,7 @@ process shift_correction {
 
     # shift correction
     !{params.python} !{params.script_dir}/correct_shifts.py \
-      --del-strategy=reference \
+      --deletion-strategy=reference \
       --calns=calnfile.txt \
       pairfile.fasta corrected.fasta
 
@@ -530,9 +531,10 @@ process mrca {
       > oldest_seqs.fasta
 
     !{params.python} !{params.script_dir}/DNAcons.py \
-      --keep-gaps --codon --id MRCA \
-      -o mrca.fasta \
+      --keep-gaps --codon \
       --copynumbers \
+      --name MRCA \
+      -o mrca.fasta \
       oldest_seqs.fasta
 
     !{params.python} !{params.script_dir}/translate.py --gapped \

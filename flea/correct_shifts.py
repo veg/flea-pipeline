@@ -8,19 +8,6 @@ The input file should contain pairs of aligned sequences and references.
 Discards sequences that cannot be corrected, because they contain
 insertions of length >3 that is not a multiple of three.
 
-Usage:
-  correct_shifts.py [options] <infile> <outfile>
-  correct_shifts.py -h
-
-Options:
-  --keep              Do not discard sequences, even with bad inserts [default: True]
-  --del-strategy=<X>  Correct single deletions [default: 'reference']
-  --calns=<FILE>      File with run-length encoded alignment summaries
-  --discard=<FILE>    File to print discarded alignments
-  --summary=<FILE>    File to print correction summaries
-  -v --verbose        Print summary [default: False]
-  -h --help           Show this screen
-
 """
 
 from itertools import groupby, repeat
@@ -28,7 +15,7 @@ from itertools import zip_longest
 from functools import partial
 import re
 
-from docopt import docopt
+import click
 
 from Bio import SeqIO
 
@@ -232,17 +219,21 @@ def write_correction_result(n_seqs, n_fixed, outfile):
         handle.write('discarded {}/{} ({:.2f}%)'
                      ' sequences\n'.format(n_dropped, n_seqs, percent))
 
+@click.command()
+@click.argument('infile')
+@click.argument('outfile')
+@click.option('--keep', help='eo not discard sequences, even with bad inserts')
+@click.option('--deletion-strategy', help='correct single deletions')
+@click.option('--calns', help='file with run-length encoded alignment summaries')
+@click.option('--discard', help='file to print discarded alignments')
+@click.option('--summary', help='file to print correction summaries')
+def main(infile, outfile, keep, deletion_strategy, calns, discard, summary):
+    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, discardfile=discard,
+                                           calnfile=calns, keep=keep,
+                                           deletion_strategy=deletion_strategy)
+    if summary:
+        write_correction_result(n_seqs, n_fixed, summary)
+
 
 if __name__ == "__main__":
-    args = docopt(__doc__)
-    infile = args["<infile>"]
-    outfile = args["<outfile>"]
-    keep = args['--keep']
-    deletion_strategy = args['--del-strategy']
-    calnfile = args['--calns']
-    discardfile = args['--discard']
-    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, discardfile=discardfile,
-                                           calnfile=calnfile, keep=keep,
-                                           deletion_strategy=deletion_strategy)
-    if args['--summary']:
-        write_correction_result(n_seqs, n_fixed, args['--summary'])
+    main()

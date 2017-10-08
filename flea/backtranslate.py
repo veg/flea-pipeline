@@ -7,19 +7,11 @@ Assumes sequences have the same id in each input file.
 Tolerate stop codons in DNA as long as matching '*' appears in
 protein.
 
-Usage:
-  backtranslate.py [options] <aligned_protein> <dna> <outfile>
-  backtranslate.py -h | --help
-
-Options:
-  --in-order      Match sequences by order, instead of by name.
-  -h --help       Show this screen.
-
 """
 
 import sys
 
-from docopt import docopt
+import click
 
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -70,12 +62,18 @@ def back_translate_gapped(protein_record, dna_record):
     return result
 
 
-def backtranslate(protein_filename, dna_filename, outfile, inorder=False):
+@click.command()
+@click.argument('protein_filename')
+@click.argument('dna_filename')
+@click.argument('outfile')
+@click.option('--in-order', is_flag=True,
+              help='Match sequences by order, instead of by name.')
+def backtranslate(protein_filename, dna_filename, outfile, in_order=False):
     protein_records = SeqIO.parse(protein_filename, "fasta",
                                   alphabet=Gapped(IUPAC.protein))
     dna_records = SeqIO.parse(dna_filename, "fasta",
                               alphabet=Gapped(IUPAC.unambiguous_dna))
-    if inorder:
+    if in_order:
         result_iter = (back_translate_gapped(p, d)
                        for p, d in zip(protein_records, dna_records))
     else:
@@ -99,10 +97,4 @@ def backtranslate(protein_filename, dna_filename, outfile, inorder=False):
 
 
 if __name__ == "__main__":
-    args = docopt(__doc__)
-    protein_filename = args["<aligned_protein>"]
-    dna_filename = args["<dna>"]
-    outfile = args["<outfile>"]
-    inorder = args["--in-order"]
-    backtranslate(protein_filename, dna_filename, outfile,
-                  inorder=inorder)
+    backtranslate()

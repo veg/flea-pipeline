@@ -2,18 +2,10 @@
 """
 Embedding based on precomputed distances.
 
-Usage:
-  mds_cluster.py [options] <infile> <outfile>
-  mds_cluster.py -h | --help
-
-Options:
-  --n-jobs <N>  Number of jobs [default: 1]
-  -h --help     Show this screen.
-
 """
 import json
 
-from docopt import docopt
+import click
 import numpy as np
 import pandas as pd
 from sklearn.manifold import MDS
@@ -34,6 +26,10 @@ def parse_file(infile):
     return labels, X
 
 
+@click.command()
+@click.argument('infile')
+@click.argument('outfile')
+@click.option('--n-jobs', default=1)
 def mds_cluster_file(infile, outfile, n_jobs):
     labels, X = parse_file(infile)
     model = MDS(dissimilarity='precomputed',
@@ -45,8 +41,4 @@ def mds_cluster_file(infile, outfile, n_jobs):
 
 
 if __name__ == '__main__':
-    args = docopt(__doc__)
-    infile = args["<infile>"]
-    outfile = args["<outfile>"]
-    n_jobs = int(args['--n-jobs'])
-    mds_cluster_file(infile, outfile, n_jobs)
+    mds_cluster_file()

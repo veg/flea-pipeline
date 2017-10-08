@@ -6,22 +6,11 @@ Trim poly-A and poly-T heads and tails. Uses a simple HMM.
 Supports both FASTA and FASTQ files. Default is FASTA; use --fastq
 flag to switch.
 
-Usage:
-  trim_tails.py [options] <infile> <outfile>
-  trim_tails.py -h | --help
-
-Options:
-  --fastq  Treat input and output files as FASTQ.
-  --train  Run Baum-Welch training.
-  --jobs <INT>  Run in parallel.  [default: 1]
-  --max-iters <INT>  Max EM iterations.  [default: 16]
-  -h --help
-
 """
 import os
 import multiprocessing
 
-from docopt import docopt
+import click
 import numpy as np
 from Bio import SeqIO
 from pomegranate import DiscreteDistribution, State, HiddenMarkovModel
@@ -115,7 +104,13 @@ def trim_record(r):
 def _notempty(rs):
     return (r for r in rs if len(r.seq))
 
-
+@click.command()
+@click.argument('infile')
+@click.argument('outfile')
+@click.option('--fastq', is_flag=True, help='treat input and output files as FASTQ')
+@click.option('--train', is_flag=True, help='run Baum-Welch training.')
+@click.option('--n-jobs', default=1, help='number of parallel jobs')
+@click.option('--max-iters', default=16, help='max EM iterations')
 def trim_file(infile, outfile, fastq=False, train=False, max_iters=16, n_jobs=1):
     filetype = 'fastq' if fastq else 'fasta'
     records = list(SeqIO.parse(infile, filetype))
@@ -146,12 +141,4 @@ def trim_file(infile, outfile, fastq=False, train=False, max_iters=16, n_jobs=1)
 
 
 if __name__ == "__main__":
-    args = docopt(__doc__)
-    filename = args["<infile>"]
-    outfile = args["<outfile>"]
-    fastq = args['--fastq']
-    train = args['--train']
-    max_iters = int(args['--max-iters'])
-    n_jobs = int(args['--jobs'])
-    trim_file(filename, outfile, fastq=fastq, train=train,
-              max_iters=max_iters, n_jobs=n_jobs)
+    trim_file()
