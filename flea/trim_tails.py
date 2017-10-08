@@ -72,8 +72,8 @@ hmm.bake()
 def trim(seq):
     """Split into head, body, and tail.
 
-    >>> trim("AAAAAGTACTTTTT")
-    ('AAAAA', 'GTAC', 'TTTTT')
+    >>> trim("AAAAAAGTACTTTTT")
+    ('AAAAAA', 'GTAC', 'TTTTT')
 
     >>> trim("TTCTTCCCA")
     ('', 'TTCTTCCCA', '')

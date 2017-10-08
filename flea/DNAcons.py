@@ -37,7 +37,7 @@ from flea.util import grouper
 from flea.util import id_to_copynumber
 
 
-def _column_consensus(counter, seed=None, codon=False):
+def _column_consensus(counter, seed=None):
     r = random
     if seed is not None:
         r = random.Random(seed)
@@ -65,7 +65,7 @@ def consensus(seqs, copies=None, codon=False, seed=None):
     for seq, copynumber in zip(seqs, copies):
         for column, elt in enumerate(seq):
             counters[column][elt] += copynumber
-    pairs = (_column_consensus(c, seed, codon) for c in counters)
+    pairs = (_column_consensus(c, seed) for c in counters)
     cons, ambi = zip(*pairs)
     assert(len(cons) == len(ambi))
     for i, elt in enumerate(cons):
