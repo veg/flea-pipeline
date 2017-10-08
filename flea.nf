@@ -71,6 +71,7 @@ process quality_pipeline {
 
     cpus params.cpus
     time params.slow_time
+    queue params.queue
 
     input:
     set 'ccs.fastq', label from input_channel
@@ -156,6 +157,7 @@ process cluster {
 
     cpus params.cpus
     time params.slow_time
+    queue params.queue
 
     input:
     set 'qcs.fastq.gz', label from qcs_final_1
@@ -197,6 +199,7 @@ process consensus {
 
     cpus params.cpus
     time params.slow_time
+    queue params.queue
 
     input:
     set 'clusters.uc', 'qcs.fastq.gz', label from consensus_input
@@ -254,6 +257,7 @@ process shift_correction {
 
     cpus params.cpus
     time params.slow_time
+    queue params.queue
 
     input:
     set 'consensus.fasta.gz', label from consensus_out
@@ -322,6 +326,7 @@ process compute_copynumbers {
 
     cpus params.cpus
     time params.slow_time
+    queue params.queue
 
     input:
     set 'hqcs.fasta.gz', 'qcs.fastq.gz', label from compute_copynumbers_input
@@ -404,9 +409,9 @@ process alignment_pipeline {
 
     publishDir params.results_dir
 
-    time params.slow_time
     cpus params.cpus
     time params.slow_time
+    queue params.queue
 
     input:
     file 'hqcs.fasta.gz' from merged_hqcs_out
@@ -565,6 +570,7 @@ process infer_tree {
 
     cpus params.cpus
     time params.slow_time
+    queue params.queue
 
     input:
     file 'msa.fasta.gz' from msa_with_mrca_1
@@ -722,6 +728,7 @@ process coordinates_json {
 
     cpus params.cpus
     time params.slow_time
+    queue params.queue
 
     input:
     file 'mrca.aa.fasta.gz' from mrca_translated_1
@@ -847,6 +854,7 @@ process evo_history {
 
     cpus params.cpus
     time params.slow_time
+    queue params.queue
 
     input:
     file 'msa.no_stops.fasta.gz' from msa_no_stops
@@ -909,6 +917,7 @@ process fubar {
 
     cpus params.cpus
     time params.crazy_time
+    queue params.queue
 
     input:
     file 'msa.no_stops.fasta.gz' from msa_no_stops
@@ -942,6 +951,7 @@ process diagnose {
 
     cpus params.cpus
     time params.crazy_time
+    queue params.queue
 
     input:
     file 'qcs*.fastq.gz' from qcs_final_4.map{ it[0] }.collect()
