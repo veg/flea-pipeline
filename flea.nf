@@ -62,6 +62,7 @@ max_qcs_len = reflen_2
 
 
 // TODO: train head/tail HMM on all sequences from all time points
+hmm_train_flag = (params.train_hmm ? '--train' : '')
 process quality_pipeline {
 
     tag { label }
@@ -92,7 +93,9 @@ process quality_pipeline {
 
     # trim ends
     !{params.python} !{params.script_dir}/trim_tails.py \
-      --jobs !{params.cpus} --fastq qfiltered.fastq trimmed.fastq
+      --jobs !{params.cpus} --fastq \
+      !{hmm_train_flag} --max-iters !{params.train_hmm_max_iters} \
+      qfiltered.fastq trimmed.fastq
 
     # filter runs
     !{params.python} !{params.script_dir}/filter_fastx.py \

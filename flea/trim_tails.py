@@ -12,6 +12,7 @@ Usage:
 
 Options:
   --fastq  Treat input and output files as FASTQ.
+  --train  Run Baum-Welch training.
   --jobs <INT>  Run in parallel.  [default: 1]
   --max-iters <INT>  Max EM iterations.  [default: 16]
   -h --help
@@ -115,13 +116,14 @@ def _notempty(rs):
     return (r for r in rs if len(r.seq))
 
 
-def trim_file(infile, outfile, max_iters=16, fastq=False, n_jobs=1):
+def trim_file(infile, outfile, fastq=False, train=False, max_iters=16, n_jobs=1):
     filetype = 'fastq' if fastq else 'fasta'
     records = list(SeqIO.parse(infile, filetype))
 
     # train model
-    seqs = list(str(rec.seq).upper() for rec in records)
-    hmm.fit(seqs, max_iterations=16, verbose=False, n_jobs=n_jobs)
+    if train:
+        seqs = list(str(rec.seq).upper() for rec in records)
+        hmm.fit(seqs, max_iterations=16, verbose=False, n_jobs=n_jobs)
 
     if n_jobs > 1:
         pool = multiprocessing.Pool(n_jobs)
@@ -148,6 +150,8 @@ if __name__ == "__main__":
     filename = args["<infile>"]
     outfile = args["<outfile>"]
     fastq = args['--fastq']
-    n_jobs = int(args['--jobs'])
+    train = args['--train']
     max_iters = int(args['--max-iters'])
-    trim_file(filename, outfile, max_iters=max_iters, fastq=fastq, n_jobs=n_jobs)
+    n_jobs = int(args['--jobs'])
+    trim_file(filename, outfile, fastq=fastq, train=train,
+              max_iters=max_iters, n_jobs=n_jobs)
