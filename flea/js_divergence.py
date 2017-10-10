@@ -2,6 +2,7 @@ import sys
 import csv
 import json
 
+import click
 from Bio import SeqIO
 import numpy as np
 
@@ -12,6 +13,10 @@ from flea.util import get_date_dict
 from flea.util import id_to_copynumber, id_to_label
 
 
+@click.command()
+@click.argument('infile')
+@click.argument('metafile')
+@click.argument('outfile')
 def main(infile, metafile, outfile):
     date_dict = get_date_dict(metafile)
     
@@ -47,7 +52,4 @@ def main(infile, metafile, outfile):
 
 
 if __name__ == "__main__":
-    infile = sys.argv[1]
-    metafile = sys.argv[2]
-    outfile = sys.argv[3]
-    main(infile, metafile, outfile)
+    main()

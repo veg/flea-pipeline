@@ -1,12 +1,19 @@
 import sys
 import json
 
+import click
+
 from Bio import SeqIO
 
 from flea.util import extend_coordinates
 from flea.util import read_single_record
 
 
+@click.command()
+@click.argument('mrca')
+@click.argument('aligned')
+@click.argument('ref_coords')
+@click.argument('outfile')
 def main(mrca, aligned, ref_coords, outfile):
     pairwise_mrca, pairwise_ref = list(SeqIO.parse(aligned, 'fasta'))
     ref_coords = open(ref_coords).read().strip().split()
@@ -27,4 +34,4 @@ def main(mrca, aligned, ref_coords, outfile):
 
 
 if __name__ == "__main__":
-    main(*(sys.argv[1:]))
+    main()

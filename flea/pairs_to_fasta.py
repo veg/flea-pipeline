@@ -2,9 +2,15 @@ import sys
 import os
 from collections import defaultdict
 
+import click
 from Bio import SeqIO
 
 
+@click.command()
+@click.argument('qcsfile')
+@click.argument('hqcsfile')
+@click.argument('pairfile')
+@click.argument('outdir')
 def main(qcsfile, hqcsfile, pairfile, outdir):
     with open(pairfile) as handle:
         pairs = list(line.strip().split("\t") for line in handle.readlines())
@@ -28,4 +34,4 @@ def main(qcsfile, hqcsfile, pairfile, outdir):
 
 
 if __name__ == "__main__":
-    main(*(sys.argv[1:]))
+    main()

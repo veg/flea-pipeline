@@ -1,12 +1,22 @@
 import sys
 import json
 
+import click
 from Bio import SeqIO
 
 from flea.util import id_to_label
 from flea.util import read_single_record
 from flea.util import get_date_dict
 
+
+@click.command()
+@click.argument('aln_file')
+@click.argument('mrca_file')
+@click.argument('coords_file')
+@click.argument('metadata')
+@click.argument('ref_protein')
+@click.argument('ref_coords')
+@click.argument('outfile')
 def main(aln_file, mrca_file, coords_file, metadata,
          ref_protein, ref_coords, outfile):
 
@@ -50,4 +60,4 @@ def main(aln_file, mrca_file, coords_file, metadata,
 
 
 if __name__ == "__main__":
-    main(*(sys.argv[1:]))
+    main()
