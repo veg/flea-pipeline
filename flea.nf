@@ -368,6 +368,7 @@ process merge_timepoints {
     publishDir params.results_dir
 
     executor 'local'
+    cpus 1
 
     input:
     file 'hqcs*.fastq.gz' from hqcs_files.collect()
@@ -436,6 +437,7 @@ process dates_json_task {
     publishDir params.results_dir
 
     executor 'local'
+    cpus 1
 
     input:
     file 'metadata' from metadata_1
@@ -460,6 +462,7 @@ process copynumbers_json {
     publishDir params.results_dir
 
     executor 'local'
+    cpus 1
 
     input:
     file 'msa.fasta.gz' from msa_out
@@ -486,6 +489,7 @@ process copynumbers_json {
 process get_oldest_label {
 
     executor 'local'
+    cpus 1
 
     input:
     file 'metadata' from metadata_2
@@ -541,6 +545,7 @@ process mrca {
 process add_mrca {
 
     executor 'local'
+    cpus 1
 
     input:
     file 'mrca.fasta.gz' from mrca_1
@@ -571,6 +576,7 @@ process infer_tree {
 process reroot {
 
     executor 'local'
+    cpus 1
 
     input:
     file 'tree.txt' from tree_out
@@ -601,6 +607,7 @@ process tree_json {
     publishDir params.results_dir
 
     executor 'local'
+    cpus 1
 
     input:
     file 'tree.txt' from rooted_tree_1
