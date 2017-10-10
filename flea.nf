@@ -243,7 +243,7 @@ process consensus {
     '''
 }
 
-process frame_correction {
+process inframe_unique_hqcs {
 
     tag { label }
 
@@ -255,7 +255,7 @@ process frame_correction {
     set 'consensus.fasta.gz', label from consensus_out
 
     output:
-    set '*.corrected.inframe.unique.fasta.gz', label into frame_correction_out
+    set '*.inframe.unique.fasta.gz', label into inframe_unique_out
 
     shell:
     '''
@@ -268,45 +268,48 @@ process frame_correction {
 
     # unique
     !{params.usearch} --fastx_uniques consensus.inframe.fasta \
-      --fastaout consensus.inframe.unique.fasta \
+      --fastaout consensus.inframe.unique.db.fasta \
       --threads !{params.cpus}
 
     # search
-    !{params.usearch} --usearch_global consensus.fasta \
-      --db consensus.inframe.unique.fasta \
-      --fastapairs pairfile.fasta \
-      --userout calnfile.txt \
-      --userfields caln \
-      --top_hit_only \
-      --id !{params.reference_identity} \
-      --qmask none \
-      --strand plus \
-      --maxaccepts !{params.max_accepts} \
-      --maxrejects !{params.max_rejects} \
-      --threads !{params.cpus}
+    if [ '!{params.do_frame_correction}' = 'true' ]; then
+        !{params.usearch} --usearch_global consensus.fasta \
+          --db consensus.inframe.unique.db.fasta \
+          --fastapairs pairfile.fasta \
+          --userout calnfile.txt \
+          --userfields caln \
+          --top_hit_only \
+          --id !{params.reference_identity} \
+          --qmask none \
+          --strand plus \
+          --maxaccepts !{params.max_accepts} \
+          --maxrejects !{params.max_rejects} \
+          --threads !{params.cpus}
 
-    # frame correction
-    !{params.python} !{params.script_dir}/frame_correction.py \
-      --deletion-strategy=reference \
-      --calns=calnfile.txt \
-      pairfile.fasta corrected.fasta
+        # frame correction
+        !{params.python} !{params.script_dir}/frame_correction.py \
+          --deletion-strategy=reference \
+          --calns=calnfile.txt \
+          pairfile.fasta corrected.fasta
 
-    # compute inframe
-    !{params.python} !{params.script_dir}/filter_fastx.py \
-      inframe fasta fasta true < corrected.fasta > corrected.inframe.fasta
+        # compute inframe
+        !{params.python} !{params.script_dir}/filter_fastx.py \
+          inframe fasta fasta true < corrected.fasta > corrected.inframe.fasta
 
-    # unique seqs
-    !{params.usearch} --fastx_uniques corrected.inframe.fasta \
-      --fastaout !{label}.corrected.inframe.unique.fasta \
-      --threads !{params.cpus}
-
+        # unique seqs
+        !{params.usearch} --fastx_uniques corrected.inframe.fasta \
+          --fastaout !{label}.inframe.unique.fasta \
+          --threads !{params.cpus}
+    else
+        mv consensus.inframe.unique.db.fasta !{label}.inframe.unique.fasta
+    fi
     # gzip everything
     rm -f consensus.fasta
     for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip -f "$i" ; done
     '''
 }
 
-frame_correction_out
+inframe_unique_out
   .phase (qcs_final_3) { it[1] }
   .map { [ it[0][0], it[1][0], it[0][1] ] }
   .set { compute_copynumbers_input }
