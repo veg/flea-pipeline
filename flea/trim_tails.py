@@ -18,10 +18,10 @@ from pomegranate import DiscreteDistribution, State, HiddenMarkovModel
 from flea.util import new_record_seq_str
 
 # states
-P = 0.985
-Q = 0.005
-head_tail_dist_A = DiscreteDistribution({'A': P, 'C': Q, 'G': Q, 'T': Q})
-head_tail_dist_T = DiscreteDistribution({'A': Q, 'C': Q, 'G': Q, 'T': P})
+P = 0.97
+Q = 0.01
+head_tail_dist_A = DiscreteDistribution({'A': P, 'C': Q, 'G': Q, 'T': Q}, frozen=True)
+head_tail_dist_T = DiscreteDistribution({'A': Q, 'C': Q, 'G': Q, 'T': P}, frozen=True)
 
 # freeze the body distribution
 body_dist = DiscreteDistribution({'A': 0.25, 'C': 0.25, 'G': 0.25, 'T': 0.25}, frozen=True)
@@ -40,19 +40,19 @@ hmm = HiddenMarkovModel()
 hmm.add_states(HEAD_A, HEAD_T, BODY, TAIL_A, TAIL_T)
 
 # start probs
-hmm.add_transition(hmm.start, HEAD_A, 0.1, group='a')
-hmm.add_transition(hmm.start, HEAD_T, 0.1, group='a')
-hmm.add_transition(hmm.start, BODY, 0.8)
+hmm.add_transition(hmm.start, HEAD_A, 0.001, group='a')
+hmm.add_transition(hmm.start, HEAD_T, 0.001, group='a')
+hmm.add_transition(hmm.start, BODY, 0.998)
 
 # transitions
 # tie head and tail transitions together
-hmm.add_transition(HEAD_A, HEAD_A, 0.99)
-hmm.add_transition(HEAD_T, HEAD_T, 0.99)
-hmm.add_transition(HEAD_A, BODY, 0.01, group='b')
-hmm.add_transition(HEAD_T, BODY, 0.01, group='b')
-hmm.add_transition(BODY, BODY, 0.99)
-hmm.add_transition(BODY, TAIL_A, 0.005, group='c')
-hmm.add_transition(BODY, TAIL_T, 0.005, group='c')
+hmm.add_transition(HEAD_A, HEAD_A, 0.995)
+hmm.add_transition(HEAD_T, HEAD_T, 0.995)
+hmm.add_transition(HEAD_A, BODY, 0.005, group='b')
+hmm.add_transition(HEAD_T, BODY, 0.005, group='b')
+hmm.add_transition(BODY, BODY, 0.99998)
+hmm.add_transition(BODY, TAIL_A, 0.00001, group='c')
+hmm.add_transition(BODY, TAIL_T, 0.00001, group='c')
 hmm.add_transition(TAIL_A, TAIL_A, 1.0)
 hmm.add_transition(TAIL_T, TAIL_T, 1.0)
 
@@ -111,14 +111,16 @@ def _notempty(rs):
 @click.option('--train', is_flag=True, help='run Baum-Welch training.')
 @click.option('--n-jobs', default=1, help='number of parallel jobs')
 @click.option('--max-iters', default=16, help='max EM iterations')
-def trim_file(infile, outfile, fastq=False, train=False, max_iters=16, n_jobs=1):
+@click.option('-v', '--verbose', is_flag=True)
+def trim_file(infile, outfile, fastq=False, train=False,
+              max_iters=16, n_jobs=1, verbose=False):
     filetype = 'fastq' if fastq else 'fasta'
     records = list(SeqIO.parse(infile, filetype))
 
     # train model
     if train:
         seqs = list(str(rec.seq).upper() for rec in records)
-        hmm.fit(seqs, max_iterations=16, verbose=False, n_jobs=n_jobs)
+        hmm.fit(seqs, max_iterations=16, n_jobs=n_jobs, verbose=verbose)
 
     if n_jobs > 1:
         pool = multiprocessing.Pool(n_jobs)
