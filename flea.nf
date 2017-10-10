@@ -442,6 +442,9 @@ process dates_json_task {
     executor 'local'
     cpus 1
 
+    when:
+    params.do_analysis
+
     input:
     file 'metadata' from metadata_1
 
@@ -466,6 +469,9 @@ process copynumbers_json {
 
     executor 'local'
     cpus 1
+
+    when:
+    params.do_analysis
 
     input:
     file 'msa.fasta.gz' from msa_out
@@ -494,6 +500,9 @@ process get_oldest_label {
     executor 'local'
     cpus 1
 
+    when:
+    params.do_analysis
+
     input:
     file 'metadata' from metadata_2
 
@@ -514,6 +523,9 @@ process get_oldest_label {
 process mrca {
 
     time params.slow_time
+
+    when:
+    params.do_analysis
 
     input:
     file 'msa.fasta.gz' from msa_out
@@ -550,6 +562,9 @@ process add_mrca {
     executor 'local'
     cpus 1
 
+    when:
+    params.do_analysis
+
     input:
     file 'mrca.fasta.gz' from mrca_1
     file 'msa.fasta.gz' from msa_out
@@ -563,6 +578,9 @@ process add_mrca {
 process infer_tree {
 
     time params.slow_time
+
+    when:
+    params.do_analysis
 
     input:
     file 'msa.fasta.gz' from msa_with_mrca_1
@@ -580,6 +598,9 @@ process reroot {
 
     executor 'local'
     cpus 1
+
+    when:
+    params.do_analysis
 
     input:
     file 'tree.txt' from tree_out
@@ -612,6 +633,9 @@ process tree_json {
     executor 'local'
     cpus 1
 
+    when:
+    params.do_analysis
+
     input:
     file 'tree.txt' from rooted_tree_1
 
@@ -636,6 +660,9 @@ process js_divergence {
 
     time params.slow_time
 
+    when:
+    params.do_analysis
+
     input:
     file 'msa.aa.fasta.gz' from msa_aa_out
     file 'metadata' from metadata_3
@@ -658,6 +685,9 @@ process manifold_embedding {
     publishDir params.results_dir
 
     time params.slow_time
+
+    when:
+    params.do_analysis
 
     input:
     file 'msa.fasta.gz' from msa_out
@@ -682,6 +712,9 @@ process manifold_embedding {
 process reconstruct_ancestors {
 
     time params.slow_time
+
+    when:
+    params.do_analysis
 
     input:
     file 'msa.fasta.gz' from msa_with_mrca_2
@@ -718,6 +751,9 @@ process coordinates_json {
 
     publishDir params.results_dir
 
+    when:
+    params.do_analysis
+
     input:
     file 'mrca.aa.fasta.gz' from mrca_translated_1
 
@@ -742,6 +778,9 @@ process coordinates_json {
 process sequences_json {
     publishDir params.results_dir
 
+    when:
+    params.do_analysis
+
     input:
     file 'msa.fasta.gz' from msa_aa_ancestors_out
     file 'mrca.fasta.gz' from mrca_translated_2
@@ -765,6 +804,9 @@ process sequences_json {
 
 process replace_stop_codons {
 
+    when:
+    params.do_analysis
+
     input:
     file 'msa.fasta.gz' from msa_out
 
@@ -780,6 +822,9 @@ process replace_stop_codons {
 
 // TODO: why do we need to split output here, but not elsewhere?
 process seq_dates {
+
+    when:
+    params.do_analysis
 
     input:
     file 'msa.fasta.gz' from msa_out
@@ -810,6 +855,9 @@ process region_coords {
 
     publishDir params.results_dir
 
+    when:
+    params.do_analysis
+
     input:
     file 'mrca.fasta.gz' from mrca_2
 
@@ -834,6 +882,9 @@ process evo_history {
 
     time params.slow_time
 
+    when:
+    params.do_analysis && params.do_evo_history
+
     input:
     file 'msa.no_stops.fasta.gz' from msa_no_stops
     file 'dates.json' from seq_dates_1
@@ -841,9 +892,6 @@ process evo_history {
 
     output:
     file 'rates_pheno.tsv' into rates_pheno
-
-    when:
-    params.do_evo_history
 
     shell:
     '''
@@ -859,6 +907,9 @@ process evo_history {
 process rates_pheno_json {
 
     publishDir params.results_dir
+
+    when:
+    params.do_analysis && params.do_evo_history
 
     input:
     file 'rates_pheno.tsv' from rates_pheno
@@ -893,6 +944,9 @@ process fubar {
 
     time params.crazy_time
 
+    when:
+    params.do_analysis && params.do_evo_history
+
     input:
     file 'msa.no_stops.fasta.gz' from msa_no_stops
     file 'dates.json' from seq_dates_2
@@ -900,9 +954,6 @@ process fubar {
 
     output:
     file 'rates.json' into rates_json
-
-    when:
-    params.do_fubar
 
     shell:
     '''
