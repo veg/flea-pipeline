@@ -3,6 +3,8 @@
 import sys
 import re
 
+import click
+
 from Bio import SeqIO
 
 from flea.util import run_regexp, iter_sample, is_in_frame
@@ -75,6 +77,11 @@ def parse_userfile(userfile):
     return result
 
 
+@click.command()
+@click.argument('mode')
+@click.argument('informat')
+@click.argument('outformat')
+@click.argument('params', nargs=-1)
 def main(mode, informat, outformat, params):
     records = SeqIO.parse(sys.stdin, informat)
     result = ()
@@ -138,8 +145,4 @@ def main(mode, informat, outformat, params):
     
 
 if __name__ == '__main__':
-    mode = sys.argv[1]
-    informat = sys.argv[2]
-    outformat = sys.argv[3]
-    params = sys.argv[4:]
-    main(mode, informat, outformat, params)
+    main()
