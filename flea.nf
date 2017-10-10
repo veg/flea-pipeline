@@ -69,9 +69,7 @@ process quality_pipeline {
 
     publishDir params.results_dir
 
-    cpus params.cpus
     time params.slow_time
-    queue params.queue
 
     input:
     set 'ccs.fastq', label from input_channel
@@ -155,9 +153,7 @@ process cluster {
 
     publishDir params.results_dir
 
-    cpus params.cpus
     time params.slow_time
-    queue params.queue
 
     input:
     set 'qcs.fastq.gz', label from qcs_final_1
@@ -197,9 +193,7 @@ process consensus {
 
     publishDir params.results_dir
 
-    cpus params.cpus
     time params.slow_time
-    queue params.queue
 
     input:
     set 'clusters.uc', 'qcs.fastq.gz', label from consensus_input
@@ -255,9 +249,7 @@ process shift_correction {
 
     publishDir params.results_dir
 
-    cpus params.cpus
     time params.slow_time
-    queue params.queue
 
     input:
     set 'consensus.fasta.gz', label from consensus_out
@@ -324,9 +316,7 @@ process compute_copynumbers {
 
     tag { label }
 
-    cpus params.cpus
     time params.slow_time
-    queue params.queue
 
     input:
     set 'hqcs.fasta.gz', 'qcs.fastq.gz', label from compute_copynumbers_input
@@ -409,9 +399,7 @@ process alignment_pipeline {
 
     publishDir params.results_dir
 
-    cpus params.cpus
     time params.slow_time
-    queue params.queue
 
     input:
     file 'hqcs.fasta.gz' from merged_hqcs_out
@@ -471,7 +459,7 @@ process copynumbers_json {
 
     publishDir params.results_dir
 
-    time params.slow_time
+    executor 'local'
 
     input:
     file 'msa.fasta.gz' from msa_out
@@ -568,10 +556,6 @@ process infer_tree {
 
     time params.slow_time
 
-    cpus params.cpus
-    time params.slow_time
-    queue params.queue
-
     input:
     file 'msa.fasta.gz' from msa_with_mrca_1
 
@@ -586,7 +570,7 @@ process infer_tree {
 
 process reroot {
 
-    time params.fast_time
+    executor 'local'
 
     input:
     file 'tree.txt' from tree_out
@@ -724,12 +708,6 @@ process coordinates_json {
 
     publishDir params.results_dir
 
-    time params.fast_time
-
-    cpus params.cpus
-    time params.slow_time
-    queue params.queue
-
     input:
     file 'mrca.aa.fasta.gz' from mrca_translated_1
 
@@ -754,8 +732,6 @@ process coordinates_json {
 process sequences_json {
     publishDir params.results_dir
 
-    time params.fast_time
-
     input:
     file 'msa.fasta.gz' from msa_aa_ancestors_out
     file 'mrca.fasta.gz' from mrca_translated_2
@@ -779,8 +755,6 @@ process sequences_json {
 
 process replace_stop_codons {
 
-    time params.fast_time
-
     input:
     file 'msa.fasta.gz' from msa_out
 
@@ -796,8 +770,6 @@ process replace_stop_codons {
 
 // TODO: why do we need to split output here, but not elsewhere?
 process seq_dates {
-
-    time params.fast_time
 
     input:
     file 'msa.fasta.gz' from msa_out
@@ -828,8 +800,6 @@ process region_coords {
 
     publishDir params.results_dir
 
-    time params.fast_time
-
     input:
     file 'mrca.fasta.gz' from mrca_2
 
@@ -852,9 +822,7 @@ process evo_history {
     beforeScript params.module_script
     module params.modules
 
-    cpus params.cpus
     time params.slow_time
-    queue params.queue
 
     input:
     file 'msa.no_stops.fasta.gz' from msa_no_stops
@@ -881,8 +849,6 @@ process evo_history {
 process rates_pheno_json {
 
     publishDir params.results_dir
-
-    time params.fast_time
 
     input:
     file 'rates_pheno.tsv' from rates_pheno
@@ -915,9 +881,7 @@ process fubar {
     beforeScript params.module_script
     module params.modules
 
-    cpus params.cpus
     time params.crazy_time
-    queue params.queue
 
     input:
     file 'msa.no_stops.fasta.gz' from msa_no_stops
@@ -949,9 +913,7 @@ process diagnose {
 
     publishDir params.results_dir
 
-    cpus params.cpus
     time params.crazy_time
-    queue params.queue
 
     input:
     file 'qcs*.fastq.gz' from qcs_final_4.map{ it[0] }.collect()
