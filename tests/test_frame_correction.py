@@ -1,14 +1,14 @@
 import unittest
 
-from flea.correct_shifts import correct_shifts
+from flea.correct_frames import correct_frame
 
-class TestCorrectShifts(unittest.TestCase):
+class TestCorrectFrames(unittest.TestCase):
 
     def _test(self, seq, ref, expected, keep=False, deletion_strategy='discard'):
-        self.assertEquals(correct_shifts(seq, ref, keep=keep,
+        self.assertEquals(correct_frame(seq, ref, keep=keep,
                                          deletion_strategy=deletion_strategy)[0], expected)
 
-    def test_correct_shifts(self):
+    def test_correct_frames(self):
         cases = (
             # deletions
             ('AC---T', 'ACGACG', 'ACT'),
@@ -55,12 +55,12 @@ class TestCorrectShifts(unittest.TestCase):
     def test_mismatched_lengths(self):
         seq = 'AC'
         ref = 'ACC'
-        self.assertRaises(ValueError, correct_shifts, seq, ref)
+        self.assertRaises(ValueError, correct_frames, seq, ref)
 
     def test_reference_length(self):
         seq = 'AC'
         ref = 'ACCC'
-        self.assertRaises(ValueError, correct_shifts, seq, ref)
+        self.assertRaises(ValueError, correct_frames, seq, ref)
 
 
 if __name__ == '__main__':

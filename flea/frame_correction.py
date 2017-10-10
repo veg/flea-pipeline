@@ -105,7 +105,7 @@ def alignment_slice(caln):
     return start, stop
 
 
-def correct_shifts(seq, ref, caln=None, gap_char=None, keep=True, deletion_strategy=None):
+def correct_frame(seq, ref, caln=None, gap_char=None, keep=True, deletion_strategy=None):
     """Correct frameshifts relative to a reference.
 
     keep: bool
@@ -177,7 +177,7 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=True, deletion_strat
     return result, -1
 
 
-def correct_shifts_fasta(infile, outfile, calnfile=None,
+def correct_frames_fasta(infile, outfile, calnfile=None,
                          discardfile=None,
                          alphabet=None, keep=True, deletion_strategy=None):
     """Correct all the pairs in a fasta file.
@@ -191,8 +191,8 @@ def correct_shifts_fasta(infile, outfile, calnfile=None,
     else:
         with open(calnfile) as handle:
             calns = handle.read().strip().split()
-    results = list(correct_shifts(seq.seq, ref.seq, caln,
-                                  keep=keep, deletion_strategy=deletion_strategy)
+    results = list(correct_frame(seq.seq, ref.seq, caln,
+                                 keep=keep, deletion_strategy=deletion_strategy)
                    for (seq, ref), caln in zip(pairs, calns))
 
     keep = list(new_record_seq_str(seq, result)
@@ -228,7 +228,7 @@ def write_correction_result(n_seqs, n_fixed, outfile):
 @click.option('--discard', help='file to print discarded alignments')
 @click.option('--summary', help='file to print correction summaries')
 def main(infile, outfile, keep, deletion_strategy, calns, discard, summary):
-    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, discardfile=discard,
+    n_seqs, n_fixed = correct_frames_fasta(infile, outfile, discardfile=discard,
                                            calnfile=calns, keep=keep,
                                            deletion_strategy=deletion_strategy)
     if summary:

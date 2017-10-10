@@ -16,7 +16,7 @@ vim: syntax=groovy
 // TODO: progressively retry with longer times, if there is a timeout
 // TODO: update tests
 // TODO: tune maxaccepts and maxrejects
-// TODO: combine all time points for inframe db for shift correction
+// TODO: combine all time points for inframe db for frame correction
 
 
 params.infile = "$HOME/flea/data/P018/data/metadata"
@@ -243,7 +243,7 @@ process consensus {
     '''
 }
 
-process shift_correction {
+process frame_correction {
 
     tag { label }
 
@@ -255,7 +255,7 @@ process shift_correction {
     set 'consensus.fasta.gz', label from consensus_out
 
     output:
-    set '*.corrected.inframe.unique.fasta.gz', label into shift_correction_out
+    set '*.corrected.inframe.unique.fasta.gz', label into frame_correction_out
 
     shell:
     '''
@@ -285,8 +285,8 @@ process shift_correction {
       --maxrejects !{params.max_rejects} \
       --threads !{params.cpus}
 
-    # shift correction
-    !{params.python} !{params.script_dir}/correct_shifts.py \
+    # frame correction
+    !{params.python} !{params.script_dir}/frame_correction.py \
       --deletion-strategy=reference \
       --calns=calnfile.txt \
       pairfile.fasta corrected.fasta
@@ -306,7 +306,7 @@ process shift_correction {
     '''
 }
 
-shift_correction_out
+frame_correction_out
   .phase (qcs_final_3) { it[1] }
   .map { [ it[0][0], it[1][0], it[0][1] ] }
   .set { compute_copynumbers_input }
