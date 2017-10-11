@@ -169,7 +169,7 @@ process cluster {
 
     # sort by error rate and length
     !{params.python} !{params.script_dir}/filter_fastx.py \
-      sort fastq fastq \
+      shuffle fastq fastq \
       < qcs.fastq > qcs.sorted.fastq
 
     # cluster
@@ -177,7 +177,6 @@ process cluster {
       -uc !{label}.clusters.uc \
       --id !{params.cluster_identity} \
       --minsl !{params.min_length_ratio} \
-      --sort length \
       --top_hit_only \
       --maxaccepts !{params.max_accepts} \
       --maxrejects !{params.max_rejects} \

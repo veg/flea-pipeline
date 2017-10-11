@@ -97,7 +97,7 @@ def main(mode, informat, outformat, params):
         result = (r for r in records if cregexp.search(str(r.seq)) is None)
     elif mode == 'sample':
         # random sample of inputs
-        min_n, max_n = map(int, params)        
+        min_n, max_n = map(int, params)
         records = list(records)
         n = len(records)
         if min_n <= n <= max_n:
@@ -144,7 +144,12 @@ def main(mode, informat, outformat, params):
         result = (replace_id(r, id_with_copynumber(r.id, abdict[r.id])) for r in records)
     elif mode == "sort":
         # sort by errors
-        result = sorted(records, key=record_key)
+        result = sorted(records, reverse=True, key=record_key)
+    elif mode == "shuffle":
+        # sort first, to ensure seeded shuffle is deterministic
+        result = sorted(records, reverse=True, key=record_key)
+        state = np.random.RandomState(seed=0)
+        state.shuffle(result)
     else:
         raise Exception('unknown mode: {}'.format(mode))
     SeqIO.write(result, sys.stdout, outformat)
