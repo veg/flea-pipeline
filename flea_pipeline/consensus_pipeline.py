@@ -28,6 +28,20 @@ def make_input(infile, outfile):
         os.unlink(outfile)
     os.symlink(infile, outfile)
 
+def phred_to_p(q):
+    return 10 ** (-q / 10.0)
+
+
+def record_key(r):
+    errors = list(phred_to_p(q) for q in r.letter_annotations['phred_quality'])
+    return (sum(errors), max(errors), np.mean(errors))
+
+
+def sort_seqs(infile, outfile):
+    format = get_format(infile)
+    records = list(SeqIO.parse(infile, format))
+    result = sorted(records, key=record_key)
+    SeqIO.write(result, outfile, format)
 
 @must_work()
 @report_wrapper
@@ -35,7 +49,7 @@ def cluster(infile, outfile):
     minsl = globals_.config.get('Parameters', 'min_length_ratio')
     cmd = ('{usearch} -cluster_fast {infile} -id {id}'
            ' -threads {ppn}'
-           ' -uc {outfile} -sort length'
+           ' -uc {outfile} '
            ' -maxaccepts {max_accepts} -maxrejects {max_rejects}'
            ' -top_hit_only -minsl {minsl}')
     cmd = cmd.format(usearch=globals_.config.get('Paths', 'usearch'),
@@ -180,7 +194,8 @@ def sample_clusters(infile, outfile):
     records = SeqIO.parse(infile, format)
     maxsize = int(globals_.config.get('Parameters', 'max_cluster_size'))
     if n > maxsize:
-        records = iter_sample(records, maxsize)
+        # records = iter_sample(records, maxsize)
+        records = list(records)[:maxsize]
     SeqIO.write(records, outfile, format)
 
 
@@ -520,10 +535,15 @@ def make_consensus_pipeline(name=None):
                                           output=os.path.join(pipeline_dir, '{NAME[0]}.ccs.fastq'))
     make_inputs_task.mkdir(pipeline_dir)
 
+    sort_seqs_task = pipeline.transform(sort_seqs,
+                                        input=make_inputs_task,
+                                        filter=suffix('.fastq'),
+                                        output='.sorted.fastq')
+
     cluster_task = pipeline.transform(cluster,
-                                      input=make_inputs_task,
-                                      filter=formatter(basename_regex),
-                                      output=os.path.join(pipeline_dir, '{NAME[0]}.clustered.uc'))
+                                      input=sort_seqs_task,
+                                      filter=suffix('.fastq'),
+                                      output='.clustered.uc')
 
     use_rifraf = globals_.config.getboolean('Parameters', 'use_rifraf')
     if use_rifraf:
@@ -536,7 +556,7 @@ def make_consensus_pipeline(name=None):
                                                  extras=[os.path.join(pipeline_dir, '{NAME[0]}.clusters'),
                                                          'cluster_[0-9]+.raw.fastq'])
         fastq_clusters_task.mkdir(cluster_task,
-                                 formatter(r'.*/(?P<NAME>.+).clustered.uc'),
+                                 formatter(r'.*/(?P<NAME>.+).ccs.sorted.clustered.uc'),
                                  '{path[0]}/{NAME[0]}.clusters')
 
         # next few tasks: find cluster consensus without reference
@@ -618,7 +638,7 @@ def make_consensus_pipeline(name=None):
                                                  extras=[os.path.join(pipeline_dir, '{NAME[0]}.clusters'),
                                                          'cluster_[0-9]+.raw.fasta'])
         fasta_clusters_task.mkdir(cluster_task,
-                                 formatter(r'.*/(?P<NAME>.+).clustered.uc'),
+                                 formatter(r'.*/(?P<NAME>.+).ccs.sorted.clustered.uc'),
                                  '{path[0]}/{NAME[0]}.clusters')
 
         sample_clusters_task = pipeline.transform(sample_clusters,
