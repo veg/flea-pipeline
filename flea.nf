@@ -169,7 +169,7 @@ process cluster {
 
     # sort by error rate and length
     !{params.python} !{params.script_dir}/filter_fastx.py \
-      shuffle fastq fastq \
+      !{params.before_cluster} fastq fastq \
       < qcs.fastq > qcs.sorted.fastq
 
     # cluster
