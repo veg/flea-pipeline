@@ -257,7 +257,7 @@ process inframe_unique_hqcs {
     set 'consensus.fasta.gz', label from consensus_out
 
     output:
-    set 'consensus.fasta.gz', 'consensus.db.fasta.gz', label into inframe_unique_out
+    set '*.consensus.fasta.gz', '*.hqcs.fasta.gz', label into inframe_unique_out_1, inframe_unique_out_2
 
     shell:
     '''
@@ -270,8 +270,10 @@ process inframe_unique_hqcs {
 
     # unique
     !{params.usearch} --fastx_uniques consensus.inframe.fasta \
-      --fastaout consensus.db.fasta \
+      --fastaout !{label}.hqcs.fasta \
       --threads !{params.cpus}
+
+    cp consensus.fasta !{label}.consensus.fasta
 
     rm -f consensus.fasta
     '''
@@ -287,60 +289,69 @@ process frame_correction {
 
     afterScript compress_cmd
 
+    when:
+    params.do_frame_correction
+
     input:
-    set 'consensus.fasta.gz', 'consensus.db.fasta.gz', label from inframe_unique_out
+    set 'consensus.fasta.gz', 'consensus.db.fasta.gz', label from inframe_unique_out_1
 
     output:
-    set '*.hqcs.fasta.gz', label into frame_correction_out
+    set '*.hqcs.corrected.fasta.gz', label into frame_correction_out
 
     shell:
-    if( params.do_frame_correction )
-        '''
-        zcat consensus.fasta.gz > consensus.fasta
-        zcat consensus.db.fasta.gz > consensus.db.fasta
+    '''
+    zcat consensus.fasta.gz > consensus.fasta
+    zcat consensus.db.fasta.gz > consensus.db.fasta
 
-        # search
-        !{params.usearch} --usearch_global consensus.fasta \
-          --db consensus.db.fasta \
-          --fastapairs pairfile.fasta \
-          --userout calnfile.txt \
-          --userfields caln \
-          --top_hit_only \
-          --id !{params.reference_identity} \
-          --qmask none \
-          --strand plus \
-          --maxaccepts !{params.max_accepts} \
-          --maxrejects !{params.max_rejects} \
-          --threads !{params.cpus}
+    # search
+    !{params.usearch} --usearch_global consensus.fasta \
+      --db consensus.db.fasta \
+      --fastapairs pairfile.fasta \
+      --userout calnfile.txt \
+      --userfields caln \
+      --top_hit_only \
+      --id !{params.reference_identity} \
+      --qmask none \
+      --strand plus \
+      --maxaccepts !{params.max_accepts} \
+      --maxrejects !{params.max_rejects} \
+      --threads !{params.cpus}
 
-        # frame correction
-        !{params.python} !{params.script_dir}/frame_correction.py \
-          --deletion-strategy=reference \
-          --calns=calnfile.txt \
-          pairfile.fasta corrected.fasta
+    # frame correction
+    !{params.python} !{params.script_dir}/frame_correction.py \
+      --deletion-strategy=reference \
+      --calns=calnfile.txt \
+      pairfile.fasta corrected.fasta
 
-        # filter inframe
-        !{params.python} !{params.script_dir}/filter_fastx.py \
-          inframe fasta fasta true < corrected.fasta > corrected.inframe.fasta
+    # filter inframe
+    !{params.python} !{params.script_dir}/filter_fastx.py \
+      inframe fasta fasta true < corrected.fasta > corrected.inframe.fasta
 
-        # deduplicate
-        !{params.usearch} --fastx_uniques corrected.inframe.fasta \
-          --fastaout !{label}.hqcs.fasta \
-          --threads !{params.cpus}
+    # deduplicate
+    !{params.usearch} --fastx_uniques corrected.inframe.fasta \
+      --fastaout !{label}.hqcs.corrected.fasta \
+      --threads !{params.cpus}
 
-        rm -f consensus.fasta
-        rm -f consensus.db.fasta
-        '''
-    else
-        '''
-        zcat consensus.db.fasta.gz > !{label}.hqcs.fasta
-        '''
+    rm -f consensus.fasta
+    rm -f consensus.db.fasta
+    '''
 }
 
-frame_correction_out
-  .phase (qcs_final_3) { it[1] }
-  .map { [ it[0][0], it[1][0], it[0][1] ] }
-  .set { compute_copynumbers_input }
+
+// NOTE: if previous steps are cached for both values of
+// `do_frame_correction`, changing the value of `do_frame_correction`
+// doesn't update the symlinks downstream.
+if( params.do_frame_correction ) {
+    frame_correction_out
+      .phase (qcs_final_3) { it[1] }
+      .map { [ it[0][0], it[1][0], it[0][1] ] }
+      .set { compute_copynumbers_input }
+} else {
+    inframe_unique_out_2
+      .phase (qcs_final_3) { it[-1] }
+      .map { [ it[0][1], it[1][0], it[0][2] ] }
+      .set { compute_copynumbers_input }
+}
 
 
 process compute_copynumbers {
