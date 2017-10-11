@@ -251,6 +251,9 @@ process consensus {
     '''
 }
 
+
+allow_stop_codons = params.do_frame_correction ? "false" : "true"
+
 process inframe_unique_hqcs {
 
     tag { label }
@@ -271,7 +274,7 @@ process inframe_unique_hqcs {
 
     # inframe
     !{params.python} !{params.script_dir}/filter_fastx.py \
-      inframe fasta fasta false \
+      inframe fasta fasta !{allow_stop_codons} \
       < consensus.fasta > consensus.inframe.fasta
 
     # unique
