@@ -266,7 +266,7 @@ process inframe_unique_hqcs {
     set 'consensus.fasta.gz', label from consensus_out
 
     output:
-    set '*.consensus.inframe.fasta.gz', '*.consensus.fasta.gz', label into inframe_unique_out_1, inframe_unique_out_2
+    set '*.consensus.fasta.gz', '*.consensus.unique.fasta.gz', label into inframe_unique_out_1, inframe_unique_out_2
 
     shell:
     '''
@@ -279,7 +279,7 @@ process inframe_unique_hqcs {
 
     # unique
     !{params.usearch} --fastx_uniques consensus.inframe.fasta \
-      --fastaout !{label}.consensus.inframe.fasta \
+      --fastaout !{label}.consensus.unique.fasta \
       --threads !{params.cpus}
 
     cp consensus.fasta !{label}.consensus.fasta
@@ -305,7 +305,7 @@ process frame_correction {
     set 'consensus.fasta.gz', 'consensus.db.fasta.gz', label from inframe_unique_out_1
 
     output:
-    set '*.consensus.inframe.corrected.fasta.gz', label into frame_correction_out
+    set '*.consensus.unique.corrected.fasta.gz', label into frame_correction_out
 
     shell:
     '''
@@ -338,7 +338,7 @@ process frame_correction {
 
     # deduplicate
     !{params.usearch} --fastx_uniques corrected.inframe.fasta \
-      --fastaout !{label}.consensus.inframe.corrected.fasta \
+      --fastaout !{label}.consensus.unique.corrected.fasta \
       --threads !{params.cpus}
 
     rm -f consensus.fasta
