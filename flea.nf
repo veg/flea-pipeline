@@ -233,6 +233,7 @@ process consensus {
             number=$(echo ${1} | cut -d '_' -f 2)
 
             !{params.python} !{params.script_dir}/DNAcons.py \
+              --seed 0 \
 	      -o ${1}.consensus.fasta \
               --name !{label}_consensus_${number} \
 	      ${1}.sampled.aligned.fasta
@@ -586,7 +587,9 @@ process mrca {
       > oldest_seqs.fasta
 
     !{params.python} !{params.script_dir}/DNAcons.py \
-      --keep-gaps --codon \
+      --seed 0 \
+      --keep-gaps \
+      --codon \
       --copynumbers \
       --name MRCA \
       -o mrca.fasta \

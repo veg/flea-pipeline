@@ -56,6 +56,8 @@ def consensus(seqs, copies=None, codon=False, seed=None):
     for i, elt in enumerate(cons):
         assert(elt in ambi[i][1])
     cons = ''.join(cons)
+    if len(cons) != aln_len:
+        raise Exception('consensus has wrong length')
     return cons, ambi
 
 
@@ -65,9 +67,10 @@ def consensus(seqs, copies=None, codon=False, seed=None):
 @click.option('--ambifile')
 @click.option('--copynumbers', help='seq id ends with copynumber')
 @click.option('--name', help='record id for the fasta output')
-@click.option('--codon', help='do codon consensus.')
-@click.option('--keep-gaps', is_flag=True, help=' Do not ungap the consensus')
-@click.option('-v', '--verbose')
+@click.option('--codon', is_flag=True, help='do codon consensus.')
+@click.option('--keep-gaps', is_flag=True, help='keep gaps in consensus')
+@click.option('--seed', default=None, help='seed rng for breaking ties')
+@click.option('-v', '--verbose', is_flag=True)
 def consfile(filename, outfile=None, ambifile=None, copynumbers=False,
              name=None, codon=False, keep_gaps=False, verbose=False, seed=None):
     """Computes a consensus sequence and writes it to a file.
