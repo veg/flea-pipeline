@@ -61,6 +61,9 @@ max_qcs_len = reflen_2
     .map { n -> Math.round(n * (2.0 - params.qcs_length_coeff.toBigDecimal())) }
 
 
+compress_cmd = """for i in `find . ! -type l | grep -E "\\.fasta\$|\\.fastq\$|\\.txt\$|\\.dst\$"`; do gzip "\$i" ; done"""
+
+
 // TODO: train head/tail HMM on all sequences from all time points
 hmm_train_flag = (params.train_hmm ? '--train' : '')
 process quality_pipeline {
@@ -70,6 +73,8 @@ process quality_pipeline {
     publishDir params.results_dir
 
     time params.slow_time
+
+    afterScript compress_cmd
 
     input:
     set 'ccs.fastq', label from input_channel
@@ -137,9 +142,6 @@ process quality_pipeline {
       length fastq fastq \
       !{minlen} !{maxlen} \
       < filtered.fastq > !{label}.qcs.fastq
-
-    # compress all files
-    for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
     '''
 }
 
@@ -195,6 +197,8 @@ process consensus {
 
     time params.slow_time
 
+    afterScript compress_cmd
+
     input:
     set 'clusters.uc', 'qcs.fastq.gz', label from consensus_input
 
@@ -237,9 +241,7 @@ process consensus {
 
     cat *.consensus.fasta > !{label}.all_consensus.fasta
 
-    # gzip everything
     rm -f qcs.fastq
-    for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
     '''
 }
 
@@ -249,13 +251,13 @@ process inframe_unique_hqcs {
 
     publishDir params.results_dir
 
-    time params.slow_time
+    afterScript compress_cmd
 
     input:
     set 'consensus.fasta.gz', label from consensus_out
 
     output:
-    set '*.inframe.unique.fasta.gz', label into inframe_unique_out
+    set 'consensus.fasta.gz', 'consensus.db.fasta.gz', label into inframe_unique_out
 
     shell:
     '''
@@ -268,13 +270,38 @@ process inframe_unique_hqcs {
 
     # unique
     !{params.usearch} --fastx_uniques consensus.inframe.fasta \
-      --fastaout consensus.inframe.unique.db.fasta \
+      --fastaout consensus.db.fasta \
       --threads !{params.cpus}
 
-    # search
-    if [ '!{params.do_frame_correction}' = 'true' ]; then
+    rm -f consensus.fasta
+    '''
+}
+
+process frame_correction {
+
+    tag { label }
+
+    publishDir params.results_dir
+
+    time params.slow_time
+
+    afterScript compress_cmd
+
+    input:
+    set 'consensus.fasta.gz', 'consensus.db.fasta.gz', label from inframe_unique_out
+
+    output:
+    set '*.hqcs.fasta.gz', label into frame_correction_out
+
+    shell:
+    if( params.do_frame_correction )
+        '''
+        zcat consensus.fasta.gz > consensus.fasta
+        zcat consensus.db.fasta.gz > consensus.db.fasta
+
+        # search
         !{params.usearch} --usearch_global consensus.fasta \
-          --db consensus.inframe.unique.db.fasta \
+          --db consensus.db.fasta \
           --fastapairs pairfile.fasta \
           --userout calnfile.txt \
           --userfields caln \
@@ -292,24 +319,25 @@ process inframe_unique_hqcs {
           --calns=calnfile.txt \
           pairfile.fasta corrected.fasta
 
-        # compute inframe
+        # filter inframe
         !{params.python} !{params.script_dir}/filter_fastx.py \
           inframe fasta fasta true < corrected.fasta > corrected.inframe.fasta
 
-        # unique seqs
+        # deduplicate
         !{params.usearch} --fastx_uniques corrected.inframe.fasta \
-          --fastaout !{label}.inframe.unique.fasta \
+          --fastaout !{label}.hqcs.fasta \
           --threads !{params.cpus}
+
+        rm -f consensus.fasta
+        rm -f consensus.db.fasta
+        '''
     else
-        mv consensus.inframe.unique.db.fasta !{label}.inframe.unique.fasta
-    fi
-    # gzip everything
-    rm -f consensus.fasta
-    for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip -f "$i" ; done
-    '''
+        '''
+        zcat consensus.db.fasta.gz > !{label}.hqcs.fasta
+        '''
 }
 
-inframe_unique_out
+frame_correction_out
   .phase (qcs_final_3) { it[1] }
   .map { [ it[0][0], it[1][0], it[0][1] ] }
   .set { compute_copynumbers_input }
@@ -320,6 +348,8 @@ process compute_copynumbers {
     tag { label }
 
     time params.slow_time
+
+    afterScript compress_cmd
 
     input:
     set 'hqcs.fasta.gz', 'qcs.fastq.gz', label from compute_copynumbers_input
@@ -360,15 +390,15 @@ process compute_copynumbers {
       copynumber fasta fasta copynumber_file.txt \
       < hqcs.fasta > hqcs.filtered.fasta
 
-    # gzip everything
     rm -f hqcs.fasta
-    for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
     '''
 }
 
 process merge_timepoints {
 
     publishDir params.results_dir
+
+    afterScript compress_cmd
 
     executor 'local'
     cpus 1
@@ -388,11 +418,6 @@ process merge_timepoints {
     ${params.python} ${params.script_dir}/filter_fastx.py \
       add_copynumber fasta fasta merged_copynumbers.txt \
       < merged_hqcs.fasta > all_hqcs.fasta
-
-    # gzip everything
-    gzip merged_hqcs.fasta
-    gzip all_hqcs.fasta
-    gzip merged_copynumbers.txt
     """
 }
 
@@ -404,6 +429,8 @@ process alignment_pipeline {
     publishDir params.results_dir
 
     time params.slow_time
+
+    afterScript compress_cmd
 
     input:
     file 'hqcs.fasta.gz' from merged_hqcs_out
@@ -426,9 +453,7 @@ process alignment_pipeline {
     !{params.python} !{params.script_dir}/backtranslate.py \
       msa.aa.fasta hqcs.fasta msa.fasta
 
-    # compress everything
     rm -f hqcs.fasta
-    for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
     '''
 }
 
@@ -524,6 +549,8 @@ process mrca {
 
     time params.slow_time
 
+    afterScript compress_cmd
+
     when:
     params.do_analysis
 
@@ -551,8 +578,6 @@ process mrca {
 
     !{params.python} !{params.script_dir}/translate.py --gapped \
       < mrca.fasta > mrca_translated.fasta
-
-    for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
     '''
 }
 
@@ -686,6 +711,8 @@ process manifold_embedding {
 
     time params.slow_time
 
+    afterScript compress_cmd
+
     when:
     params.do_analysis
 
@@ -703,7 +730,6 @@ process manifold_embedding {
       --n-jobs 1 dmatrix.dst manifold.json
 
     rm -f msa.fasta
-    gzip dmatrix.dst
     """
 }
 
@@ -712,6 +738,8 @@ process manifold_embedding {
 process reconstruct_ancestors {
 
     time params.slow_time
+
+    afterScript compress_cmd
 
     when:
     params.do_analysis
@@ -741,9 +769,7 @@ process reconstruct_ancestors {
 
     cat msa.aa.fasta ancestors.aa.fasta > 'msa.aa.ancestors.fasta'
 
-    # compress all
     rm -f msa.fasta msa.aa.fasta
-    for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
     '''
 }
 
@@ -945,7 +971,7 @@ process fubar {
     time params.crazy_time
 
     when:
-    params.do_analysis && params.do_evo_history
+    params.do_analysis && params.do_fubar
 
     input:
     file 'msa.no_stops.fasta.gz' from msa_no_stops
@@ -975,6 +1001,8 @@ process diagnose {
     publishDir params.results_dir
 
     time params.crazy_time
+
+    afterScript compress_cmd
 
     input:
     file 'qcs*.fastq.gz' from qcs_final_4.map{ it[0] }.collect()
@@ -1043,8 +1071,6 @@ process diagnose {
     !{params.python} !{params.script_dir}/diagnose.py \
       hqcs.msa.aa.fasta qcs.msa.aa.fasta diagnosis_results
 
-    # gzip all
     rm -f hqcs.msa.fasta hqcs.msa.aa.fasta hqcs.fasta
-    for i in `find . ! -type l | grep -E "\\.fasta$|\\.fastq$|\\.txt$"`; do gzip "$i" ; done
     '''
 }
