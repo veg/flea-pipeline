@@ -167,8 +167,13 @@ process cluster {
     '''
     zcat qcs.fastq.gz > qcs.fastq
 
+    # sort by error rate and length
+    !{params.python} !{params.script_dir}/filter_fastx.py \
+      sort fastq fastq \
+      < qcs.fastq > qcs.sorted.fastq
+
     # cluster
-    !{params.usearch} --cluster_fast qcs.fastq \
+    !{params.usearch} --cluster_fast qcs.sorted.fastq \
       -uc !{label}.clusters.uc \
       --id !{params.cluster_identity} \
       --minsl !{params.min_length_ratio} \
@@ -179,6 +184,7 @@ process cluster {
       --threads !{params.cpus}
 
     rm -f qcs.fastq
+    rm -f qcs.sorted.fastq
     '''
 }
 

@@ -3,6 +3,8 @@
 import sys
 import re
 
+import numpy as np
+
 import click
 
 from Bio import SeqIO
@@ -101,7 +103,8 @@ def main(mode, informat, outformat, params):
         if min_n <= n <= max_n:
             result = records
         elif n > max_n:
-            records = iter_sample(records, max_n)
+            # records = iter_sample(records, max_n)
+            records = list(records)[:max_n]
         else:
             records = ()
     elif mode == "length":
@@ -139,10 +142,22 @@ def main(mode, informat, outformat, params):
         abfile = params[0]
         abdict = parse_copynumbers(abfile)
         result = (replace_id(r, id_with_copynumber(r.id, abdict[r.id])) for r in records)
+    elif mode == "sort":
+        # sort by errors
+        result = sorted(records, key=record_key)
     else:
         raise Exception('unknown mode: {}'.format(mode))
     SeqIO.write(result, sys.stdout, outformat)
-    
+
+
+def phred_to_p(q):
+    return 10 ** (-q / 10.0)
+
+
+def record_key(r):
+    errors = list(phred_to_p(q) for q in r.letter_annotations['phred_quality'])
+    return (sum(errors), max(errors), np.mean(errors))
+
 
 if __name__ == '__main__':
     main()
