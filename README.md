@@ -1,11 +1,12 @@
 Dependencies
 ------------
 - Nextflow
-- GNU parallel
+- Python
 - usearch
 - mafft
-- Python
-
+- HyPhy
+- TN93
+- GNU parallel
 
 Install Python scripts
 ----------------------
