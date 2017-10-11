@@ -144,4 +144,4 @@ if __name__ == "__main__":
     ungap = not keep_gap
     consfile(filename, outfile, copynumber_file=copynumber_file,
              ambifile=ambifile, id_str=id_str, codon=codon, ungap=ungap,
-             verbose=verbose)
+             verbose=verbose, seed=0)

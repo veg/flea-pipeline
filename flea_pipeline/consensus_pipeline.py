@@ -40,8 +40,14 @@ def record_key(r):
 def sort_seqs(infile, outfile):
     format = get_format(infile)
     records = list(SeqIO.parse(infile, format))
-    result = sorted(records, key=record_key)
+    result = sorted(records, reverse=True, key=record_key)
+
+    # result = sorted(records, reverse=True, key=record_key)
+    # state = np.random.RandomState(seed=0)
+    # state.shuffle(result)
+
     SeqIO.write(result, outfile, format)
+
 
 @must_work()
 @report_wrapper
