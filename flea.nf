@@ -208,7 +208,7 @@ process consensus {
     set 'clusters.uc', 'qcs.fastq.gz', label from consensus_input
 
     output:
-    set '*.all_consensus.fasta.gz', label into consensus_out
+    set 'cluster_consensus.fasta.gz', label into consensus_out
 
     shell:
     '''
@@ -240,7 +240,7 @@ process consensus {
     # run in parallel
     !{params.parallel} -j !{params.cpus} 'doconsensus {}' ::: *_raw.fasta
 
-    cat *.consensus.fasta > !{label}.all_consensus.fasta
+    cat *.consensus.fasta > cluster_consensus.fasta
 
     rm -f qcs.fastq
     '''
