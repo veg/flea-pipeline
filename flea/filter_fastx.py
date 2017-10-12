@@ -144,6 +144,9 @@ def main(mode, informat, outformat, params):
         result = (replace_id(r, id_with_copynumber(r.id, abdict[r.id])) for r in records)
     elif mode == "sort":
         # sort by errors
+        result = sorted(records, key=record_key)
+    elif mode == "rev_sort":
+        # sort by errors
         result = sorted(records, reverse=True, key=record_key)
     elif mode == "shuffle":
         # sort first, to ensure seeded shuffle is deterministic
