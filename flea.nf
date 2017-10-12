@@ -220,7 +220,8 @@ process consensus {
     # function sample clusters and do mafft consensus
     doconsensus() {
         !{params.python} !{params.script_dir}/filter_fastx.py \
-          sample fasta fasta 0 !{params.max_cluster_size} \
+          sample fasta fasta \
+          !{params.min_cluster_size} !{params.max_cluster_size} \
           < ${1} > ${1}.sampled.fasta
 
         !{params.mafft} --ep 0.5 --quiet --preservecase \
@@ -241,6 +242,14 @@ process consensus {
     !{params.parallel} -j !{params.cpus} 'doconsensus {}' ::: *_raw.fasta
 
     cat *.consensus.fasta > cluster_consensus.fasta
+
+    # check that all sequences are present
+    n_expected=`ls *_raw.fasta | wc -l`
+    n_found=`grep ">" cluster_consensus.fasta | wc -l`
+    if [ "$n_expected" -ne "$n_found" ]; then
+        echo "ERROR: some consensus sequences are missing"
+        exit 1
+    fi
 
     rm -f qcs.fastq
     '''
