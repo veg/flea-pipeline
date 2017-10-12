@@ -220,25 +220,20 @@ process consensus {
     # function sample clusters and do mafft consensus
     doconsensus() {
         !{params.python} !{params.script_dir}/filter_fastx.py \
-          sample fasta fasta \
-          !{params.min_cluster_size} !{params.max_cluster_size} \
+          sample fasta fasta 0 !{params.max_cluster_size} \
           < ${1} > ${1}.sampled.fasta
 
-        if [ -s ${1}.sampled.fasta ]
-        then
-            !{params.mafft} --ep 0.5 --quiet --preservecase \
-              ${1}.sampled.fasta > ${1}.sampled.aligned.fasta
+        !{params.mafft} --ep 0.5 --quiet --preservecase \
+          ${1}.sampled.fasta > ${1}.sampled.aligned.fasta
 
-	    # get cluster number so we can put it in the record id
-            number=$(echo ${1} | cut -d '_' -f 2)
+        # get cluster number so we can put it in the record id
+        number=$(echo ${1} | cut -d '_' -f 2)
 
-            !{params.python} !{params.script_dir}/DNAcons.py \
-              --seed 0 \
-	      -o ${1}.consensus.fasta \
-              --name !{label}_consensus_${number} \
-	      ${1}.sampled.aligned.fasta
-        fi
-
+        !{params.python} !{params.script_dir}/DNAcons.py \
+          --seed 0 \
+          -o ${1}.consensus.fasta \
+          --name !{label}_consensus_${number} \
+          ${1}.sampled.aligned.fasta
     }
     export -f doconsensus
 
