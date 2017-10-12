@@ -104,9 +104,9 @@ def main(mode, informat, outformat, params):
             result = records
         elif n > max_n:
             # records = iter_sample(records, max_n)
-            records = list(records)[:max_n]
+            result = records[:max_n]
         else:
-            records = ()
+            result = ()
     elif mode == "length":
         # filter out sequences that fall outside length limits
         min_length, max_length = map(int, params)
