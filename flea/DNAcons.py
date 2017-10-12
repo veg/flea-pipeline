@@ -25,7 +25,7 @@ from flea.util import id_to_copynumber
 def _column_consensus(counter, seed=None):
     r = random
     if seed is not None:
-        r = random.Random(seed)
+        r = random.Random(int(seed))
     max_count = max(counter.values())
     cands = list(sorted(elt for elt, count in counter.items()
                         if count == max_count))
@@ -65,14 +65,14 @@ def consensus(seqs, copies=None, codon=False, seed=None):
 @click.argument('filename')
 @click.option('-o', '--outfile')
 @click.option('--ambifile')
-@click.option('--copynumbers', help='seq id ends with copynumber')
-@click.option('--name', help='record id for the fasta output')
+@click.option('--copynumbers', is_flag=True, help='seq id ends with copynumber')
 @click.option('--codon', is_flag=True, help='do codon consensus.')
 @click.option('--keep-gaps', is_flag=True, help='keep gaps in consensus')
-@click.option('--seed', default=None, help='seed rng for breaking ties')
+@click.option('--name', help='record id for the fasta output')
+@click.option('--seed', type=int, help='seed rng for breaking ties')
 @click.option('-v', '--verbose', is_flag=True)
 def consfile(filename, outfile=None, ambifile=None, copynumbers=False,
-             name=None, codon=False, keep_gaps=False, verbose=False, seed=None):
+             codon=False, keep_gaps=False, name=None, verbose=False, seed=None):
     """Computes a consensus sequence and writes it to a file.
 
     Breaks ties independently for each position by choosing randomly

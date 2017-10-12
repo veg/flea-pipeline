@@ -28,7 +28,7 @@ np.set_printoptions(suppress=True)
 @click.argument('hqcsfile')
 @click.argument('qcsfile')
 @click.argument('result_path')
-@click.option('-c', '--cutoff', default=0.1)
+@click.option('-c', '--cutoff', type=float, default=0.1)
 def diagnose(hqcsfile, qcsfile, result_path, cutoff):
     def out(f):
         return os.path.join(result_path, f)

@@ -45,9 +45,9 @@ def parse_ucfile(infile):
 @click.command()
 @click.argument('ucfile')
 @click.argument('outdir')
-@click.option('--minsize', default=1, help="minimum cluster size")
+@click.option('--minsize', type=int, default=1, help="minimum cluster size")
 @click.option('--fasta', is_flag=True, help='write to FASTA instead of FASTQ')
-@click.option('-v', '--verbose')
+@click.option('-v', '--verbose', is_flag=True)
 def cluster_fastq(ucfile, outdir, minsize, fasta, verbose):
     records = list(SeqIO.parse(sys.stdin, 'fastq'))
     rdict = dict((r.id, r) for r in records)

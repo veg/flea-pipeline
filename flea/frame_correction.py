@@ -222,7 +222,7 @@ def write_correction_result(n_seqs, n_fixed, outfile):
 @click.command()
 @click.argument('infile')
 @click.argument('outfile')
-@click.option('--keep', help='eo not discard sequences, even with bad inserts')
+@click.option('--keep', is_flag=True, help='eo not discard sequences, even with bad inserts')
 @click.option('--deletion-strategy', help='correct single deletions')
 @click.option('--calns', help='file with run-length encoded alignment summaries')
 @click.option('--discard', help='file to print discarded alignments')
