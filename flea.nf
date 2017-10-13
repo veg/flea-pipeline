@@ -213,13 +213,13 @@ process consensus {
     '''
     zcat qcs.fastq.gz | \
     !{params.python} !{params.script_dir}/cluster_fastq.py \
-      --minsize !{params.min_cluster_size} --fasta \
+      --minsize !{params.min_cluster_size} \
       clusters.uc .
 
     # function sample clusters and do mafft consensus
     doconsensus() {
         !{params.python} !{params.script_dir}/filter_fastx.py \
-          sample fasta fasta \
+          sample fastq fasta \
           !{params.min_cluster_size} !{params.max_cluster_size} \
           < ${1} > ${1}.sampled.fasta
 
@@ -238,12 +238,12 @@ process consensus {
     export -f doconsensus
 
     # run in parallel
-    !{params.parallel} -j !{params.cpus} 'doconsensus {}' ::: *_raw.fasta
+    !{params.parallel} -j !{params.cpus} 'doconsensus {}' ::: *_raw.fastq
 
     cat *.consensus.fasta > !{label}.clusters.consensus.fasta
 
     # check that all sequences are present
-    n_expected=`ls *_raw.fasta | wc -l`
+    n_expected=`ls *_raw.fastq | wc -l`
     n_found=`grep ">" !{label}.clusters.consensus.fasta | wc -l`
     if [ "$n_expected" -ne "$n_found" ]; then
         echo "ERROR: some consensus sequences are missing"
