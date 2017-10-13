@@ -103,8 +103,8 @@ def main(mode, informat, outformat, params):
         if min_n <= n <= max_n:
             result = records
         elif n > max_n:
-            # records = iter_sample(records, max_n)
-            result = records[:max_n]
+            # take best sequences
+            result = sorted(records, key=record_key)[0:max_n]
         else:
             result = ()
     elif mode == "length":
@@ -150,7 +150,7 @@ def main(mode, informat, outformat, params):
         result = sorted(records, reverse=True, key=record_key)
     elif mode == "shuffle":
         # sort first, to ensure seeded shuffle is deterministic
-        result = sorted(records, reverse=True, key=record_key)
+        result = sorted(records, key=record_key)
         state = np.random.RandomState(seed=0)
         state.shuffle(result)
     else:
