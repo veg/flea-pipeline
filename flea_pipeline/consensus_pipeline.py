@@ -200,8 +200,8 @@ def sample_clusters(infile, outfile):
     records = SeqIO.parse(infile, format)
     maxsize = int(globals_.config.get('Parameters', 'max_cluster_size'))
     if n > maxsize:
-        # records = iter_sample(records, maxsize)
-        records = list(records)[:maxsize]
+        # take best sequences
+        records = sorted(records, key=record_key)[:max_n]
     SeqIO.write(records, outfile, format)
 
 
@@ -589,9 +589,9 @@ def make_consensus_pipeline(name=None):
                                                     output='.hq.fasta')
 
         inframe_consensus_task = pipeline.transform(inframe_nostops,
-                                                  input=consensus_quality_task,
-                                                  filter=suffix('.fasta'),
-                                                  output='.inframe.fasta')
+                                                    input=consensus_quality_task,
+                                                    filter=suffix('.fasta'),
+                                                    output='.inframe.fasta')
 
         unique_consensus_task = pipeline.transform(filter_unique,
                                                    name="unique_consensus",
