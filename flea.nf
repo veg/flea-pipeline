@@ -167,7 +167,7 @@ process cluster {
     '''
     zcat qcs.fastq.gz > qcs.fastq
 
-    # sort by error rate and length
+    # sort by error rate
     !{params.python} !{params.script_dir}/filter_fastx.py \
       !{params.before_cluster} fastq fastq \
       < qcs.fastq > qcs.sorted.fastq
@@ -183,7 +183,6 @@ process cluster {
       --threads !{params.cpus}
 
     rm -f qcs.fastq
-    rm -f qcs.sorted.fastq
     '''
 }
 
@@ -208,7 +207,7 @@ process consensus {
     set 'clusters.uc', 'qcs.fastq.gz', label from consensus_input
 
     output:
-    set 'cluster_consensus.fasta.gz', label into consensus_out
+    set '*.clusters.consensus.fasta.gz', label into consensus_out
 
     shell:
     '''
@@ -241,11 +240,11 @@ process consensus {
     # run in parallel
     !{params.parallel} -j !{params.cpus} 'doconsensus {}' ::: *_raw.fasta
 
-    cat *.consensus.fasta > cluster_consensus.fasta
+    cat *.consensus.fasta > !{label}.clusters.consensus.fasta
 
     # check that all sequences are present
     n_expected=`ls *_raw.fasta | wc -l`
-    n_found=`grep ">" cluster_consensus.fasta | wc -l`
+    n_found=`grep ">" !{label}.clusters.consensus.fasta | wc -l`
     if [ "$n_expected" -ne "$n_found" ]; then
         echo "ERROR: some consensus sequences are missing"
         exit 1
