@@ -109,6 +109,7 @@ process quality_pipeline {
     !{params.usearch} --usearch_global no_runs.fasta \
       --db !{params.contaminants_db} \
       --notmatched uncontam.fasta \
+      --matched contam.fasta \
       --id !{params.contaminant_identity} \
       --strand both \
       --qmask none \
