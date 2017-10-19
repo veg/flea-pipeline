@@ -52,6 +52,7 @@ def main(aln_file, mrca_file, coords_file, metadata,
         alignment_coords = json.load(handle)['coordinates']
     ref_coords = open(ref_coords).read().strip().split()
     cmap = dict((c, i) for i, c in enumerate(ref_coords))
+    cmap[-1] = 0
     ref_result = ''.join(list(rstr[cmap[c]] for c in alignment_coords))
     result['Reference'] = ref_result
 
