@@ -96,13 +96,13 @@ process quality_pipeline {
       --threads !{params.cpus}
 
     # trim ends
-    !{params.python} !{params.script_dir}/trim_tails.py \
+    !{params.python} !{workflow.projectDir}/flea/trim_tails.py \
       --n-jobs !{params.cpus} --fastq \
       !{hmm_train_flag} --max-iters !{params.train_hmm_max_iters} \
       qfiltered.fastq trimmed.fastq
 
     # filter runs
-    !{params.python} !{params.script_dir}/filter_fastx.py \
+    !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
       runs fastq fasta !{params.run_length} < trimmed.fastq > no_runs.fasta
 
     # filter against contaminants
@@ -134,12 +134,12 @@ process quality_pipeline {
     # use trimmed.fastq since that was the last fastq file in the pipeline.
     # any sequences filtered out of `no_runs` won't make it through the database
     # searches, so it will get filtered out here again.
-    !{params.python} !{params.script_dir}/filter_fastx.py \
+    !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
       userout fastq fastq userout.txt \
       < trimmed.fastq > filtered.fastq
 
     # length filter
-    !{params.python} !{params.script_dir}/filter_fastx.py \
+    !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
       length fastq fastq \
       !{minlen} !{maxlen} \
       < filtered.fastq > !{label}.qcs.fastq
@@ -169,7 +169,7 @@ process cluster {
     zcat qcs.fastq.gz > qcs.fastq
 
     # sort by error rate
-    !{params.python} !{params.script_dir}/filter_fastx.py \
+    !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
       !{params.before_cluster} fastq fastq \
       < qcs.fastq > qcs.sorted.fastq
 
@@ -213,13 +213,13 @@ process consensus {
     shell:
     '''
     zcat qcs.fastq.gz | \
-    !{params.python} !{params.script_dir}/cluster_fastq.py \
+    !{params.python} !{workflow.projectDir}/flea/cluster_fastq.py \
       --minsize !{params.min_cluster_size} \
       clusters.uc .
 
     # function sample clusters and do mafft consensus
     doconsensus() {
-        !{params.python} !{params.script_dir}/filter_fastx.py \
+        !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
           sample fastq fasta \
           !{params.min_cluster_size} !{params.max_cluster_size} \
           < ${1} > ${1}.sampled.fasta
@@ -230,7 +230,7 @@ process consensus {
         # get cluster number so we can put it in the record id
         number=$(echo ${1} | cut -d '_' -f 2)
 
-        !{params.python} !{params.script_dir}/DNAcons.py \
+        !{params.python} !{workflow.projectDir}/flea/DNAcons.py \
           --seed 0 \
           -o ${1}.consensus.fasta \
           --name !{label}_consensus_${number} \
@@ -277,7 +277,7 @@ process inframe_unique_hqcs {
     zcat consensus.fasta.gz > consensus.fasta
 
     # inframe
-    !{params.python} !{params.script_dir}/filter_fastx.py \
+    !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
       inframe fasta fasta !{allow_stop_codons} \
       < consensus.fasta > consensus.inframe.fasta
 
@@ -331,13 +331,13 @@ process frame_correction {
       --threads !{params.cpus}
 
     # frame correction
-    !{params.python} !{params.script_dir}/frame_correction.py \
+    !{params.python} !{workflow.projectDir}/flea/frame_correction.py \
       --deletion-strategy=reference \
       --calns=calnfile.txt \
       pairfile.fasta corrected.fasta
 
     # filter inframe
-    !{params.python} !{params.script_dir}/filter_fastx.py \
+    !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
       inframe fasta fasta true < corrected.fasta > corrected.inframe.fasta
 
     # deduplicate
@@ -388,7 +388,7 @@ process compute_copynumbers {
 
     # convert to fasta for usearch
     zcat qcs.fastq.gz | \
-      !{params.python} !{params.script_dir}/filter_fastx.py \
+      !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
       convert fastq fasta > qcs.fasta
 
     # search for pairs
@@ -406,11 +406,11 @@ process compute_copynumbers {
       --threads !{params.cpus}
 
     # write copynumber file
-    !{params.python} !{params.script_dir}/write_copynumbers.py \
+    !{params.python} !{workflow.projectDir}/flea/write_copynumbers.py \
       < pairfile.txt > copynumber_file.txt
 
     # filter out HQCS with 0 copynumber
-    !{params.python} !{params.script_dir}/filter_fastx.py \
+    !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
       copynumber fasta fasta copynumber_file.txt \
       < hqcs.fasta > hqcs.filtered.fasta
 
@@ -439,7 +439,7 @@ process merge_timepoints {
     zcat copynumber*.txt.gz > merged_copynumbers.txt
 
     # add copynumbers to ids, for evo_history
-    ${params.python} ${params.script_dir}/filter_fastx.py \
+    ${params.python} ${workflow.projectDir}/flea/filter_fastx.py \
       add_copynumber fasta fasta merged_copynumbers.txt \
       < merged_hqcs.fasta > all_hqcs.fasta
     """
@@ -467,14 +467,14 @@ process alignment_pipeline {
     '''
     zcat hqcs.fasta.gz > hqcs.fasta
 
-    !{params.python} !{params.script_dir}/translate.py \
+    !{params.python} !{workflow.projectDir}/flea/translate.py \
       < hqcs.fasta > hqcs_protein.fasta
 
     !{params.mafft} --ep 0.5 --quiet --preservecase \
       --thread !{params.cpus} \
       hqcs_protein.fasta > msa.aa.fasta
 
-    !{params.python} !{params.script_dir}/backtranslate.py \
+    !{params.python} !{workflow.projectDir}/flea/backtranslate.py \
       msa.aa.fasta hqcs.fasta msa.fasta
 
     rm -f hqcs.fasta
@@ -589,11 +589,11 @@ process mrca {
     shell:
     '''
     zcat msa.fasta.gz | \
-    !{params.python} !{params.script_dir}/filter_fastx.py \
+    !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
       prefix fasta fasta !{oldest_label} \
       > oldest_seqs.fasta
 
-    !{params.python} !{params.script_dir}/DNAcons.py \
+    !{params.python} !{workflow.projectDir}/flea/DNAcons.py \
       --seed 0 \
       --keep-gaps \
       --codon \
@@ -602,7 +602,7 @@ process mrca {
       -o mrca.fasta \
       oldest_seqs.fasta
 
-    !{params.python} !{params.script_dir}/translate.py --gapped \
+    !{params.python} !{workflow.projectDir}/flea/translate.py --gapped \
       < mrca.fasta > mrca_translated.fasta
     '''
 }
@@ -724,7 +724,7 @@ process js_divergence {
     """
     zcat msa.aa.fasta.gz > msa.aa.fasta
 
-    ${params.python} ${params.script_dir}/js_divergence.py \
+    ${params.python} ${workflow.projectDir}/flea/js_divergence.py \
       msa.aa.fasta metadata js_divergence.json
 
     rm -f msa.aa.fasta
@@ -752,7 +752,7 @@ process manifold_embedding {
     zcat msa.fasta.gz > msa.fasta
     ${params.tn93} -t ${params.tn93_threshold} -o dmatrix.dst msa.fasta
 
-    ${params.python} ${params.script_dir}/manifold_embed.py \
+    ${params.python} ${workflow.projectDir}/flea/manifold_embed.py \
       --n-jobs 1 dmatrix.dst manifold.json
 
     rm -f msa.fasta
@@ -788,9 +788,9 @@ process reconstruct_ancestors {
     echo $(pwd)/ancestors.fasta >> stdin
     echo HKY85 >> stdin
     echo 2 >> stdin
-    !{params.hyphy} !{params.hyphy_dir}/reconstructAncestors.bf < stdin
+    !{params.hyphy} !{workflow.projectDir}/hyphy_scripts/reconstructAncestors.bf < stdin
 
-    !{params.python} !{params.script_dir}/translate.py --gapped \
+    !{params.python} !{workflow.projectDir}/flea/translate.py --gapped \
       < ancestors.fasta > ancestors.aa.fasta
 
     cat msa.aa.fasta ancestors.aa.fasta > 'msa.aa.ancestors.fasta'
@@ -820,7 +820,7 @@ process coordinates_json {
       --thread ${params.cpus} \
       pair.fasta > aligned.fasta
 
-    ${params.python} ${params.script_dir}/coordinates_json.py \
+    ${params.python} ${workflow.projectDir}/flea/coordinates_json.py \
       mrca.aa.fasta aligned.fasta ${params.reference_coordinates} coordinates.json
 
     rm -f mrca.aa.fasta
@@ -845,7 +845,7 @@ process sequences_json {
     """
     zcat msa.fasta.gz > msa.fasta
     zcat mrca.fasta.gz > mrca.fasta
-    ${params.python} ${params.script_dir}/sequences_json.py \
+    ${params.python} ${workflow.projectDir}/flea/sequences_json.py \
       msa.fasta mrca.fasta coordinates.json metadata \
       ${params.reference_protein} ${params.reference_coordinates} \
       sequences.json
@@ -867,7 +867,7 @@ process replace_stop_codons {
 
     """
     zcat msa.fasta.gz |
-    ${params.python} ${params.script_dir}/filter_fastx.py \
+    ${params.python} ${workflow.projectDir}/flea/filter_fastx.py \
       stop_codons fasta fasta | gzip > msa.no_stops.fasta.gz
     """
 }
@@ -919,7 +919,7 @@ process region_coords {
     shell:
     '''
     zcat mrca.fasta.gz > mrca.fasta
-    !{params.hyphy} !{params.hyphy_dir}/HXB2partsSplitter.bf \
+    !{params.hyphy} !{workflow.projectDir}/hyphy_scripts/HXB2partsSplitter.bf \
       $(pwd)/mrca.fasta $(pwd)/region_coords.json
     rm -f mrca.fasta
     '''
@@ -949,7 +949,7 @@ process evo_history {
     '''
     zcat msa.no_stops.fasta.gz > msa.no_stops.fasta
 
-    !{params.hyphympi} !{params.hyphy_dir}/obtainEvolutionaryHistory.bf \
+    !{params.hyphympi} !{workflow.projectDir}/hyphy_scripts/obtainEvolutionaryHistory.bf \
       $(pwd)/msa.no_stops.fasta $(pwd)/dates.json $(pwd)/region_coords.json $(pwd)/rates_pheno.tsv
 
     rm -f msa.no_stops.fasta
@@ -1012,7 +1012,7 @@ process fubar {
     zcat msa.no_stops.fasta.gz > msa.no_stops.fasta
     zcat mrca.fasta.gz > mrca.fasta
 
-    !{params.hyphympi} !{params.hyphy_dir}/runFUBAR.bf \
+    !{params.hyphympi} !{workflow.projectDir}/hyphy_scripts/runFUBAR.bf \
       $(pwd)/msa.no_stops.fasta $(pwd)/dates.json $(pwd)/mrca.fasta $(pwd)/ $(pwd)/rates.json
 
     rm -f msa.no_stops.fasta mrca.fasta
@@ -1050,7 +1050,7 @@ process diagnose {
 
     # convert to fasta
     zcat qcs*.fastq.gz |
-      !{params.python} !{params.script_dir}/filter_fastx.py \
+      !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
         convert fastq fasta > qcs.fasta
 
     # search for pairs
@@ -1069,7 +1069,7 @@ process diagnose {
 
     # combine pairs
     mkdir alignments
-    !{params.python} !{params.script_dir}/pairs_to_fasta.py \
+    !{params.python} !{workflow.projectDir}/flea/pairs_to_fasta.py \
       qcs.fasta hqcs.fasta pairfile.txt alignments
 
     # align and insert gaps
@@ -1080,21 +1080,21 @@ process diagnose {
       '!{params.bam2msa} {} {}.fasta' ::: alignments/*.bam
 
     !{params.parallel} -j !{params.cpus} \
-      '!{params.python} !{params.script_dir}/insert_gaps.py {} hqcs.msa.fasta {}.gapped' ::: alignments/*.bam.fasta
+      '!{params.python} !{workflow.projectDir}/flea/insert_gaps.py {} hqcs.msa.fasta {}.gapped' ::: alignments/*.bam.fasta
 
     # merge all
     cat alignments/*gapped > qcs.msa.fasta
 
     # replace gapped codons
-    !{params.python} !{params.script_dir}/filter_fastx.py \
+    !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
       gap_codons fasta fasta < qcs.msa.fasta > qcs.msa.nogaps.fasta
 
-    !{params.python} !{params.script_dir}/translate.py --gapped \
+    !{params.python} !{workflow.projectDir}/flea/translate.py --gapped \
       < qcs.msa.nogaps.fasta > qcs.msa.aa.fasta
 
     # run diagnosis
     mkdir diagnosis_results
-    !{params.python} !{params.script_dir}/diagnose.py \
+    !{params.python} !{workflow.projectDir}/flea/diagnose.py \
       hqcs.msa.aa.fasta qcs.msa.aa.fasta diagnosis_results
 
     rm -f hqcs.msa.fasta hqcs.msa.aa.fasta hqcs.fasta
