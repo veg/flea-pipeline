@@ -25,7 +25,7 @@ params.results_dir = "results"
 
 // TODO: how to avoid duplicating?
 Channel.fromPath(params.infile)
-    .into { metadata_1; metadata_2; metadata_3; metadata_4; metadata_5 }
+    .into { metadata_1; metadata_2; metadata_3; metadata_4; metadata_5; metadata_6 }
 
 
 // read input metadata into tuples
@@ -774,6 +774,7 @@ process manifold_embedding {
 
     input:
     file 'msa.fasta.gz' from msa_out
+    file 'metadata' from metadata_4
 
     output:
     file 'manifold.json' into manifold_json_out
@@ -783,7 +784,7 @@ process manifold_embedding {
     ${params.tn93} -t ${params.tn93_threshold} -o dmatrix.dst msa.fasta
 
     ${params.python} ${workflow.projectDir}/flea/manifold_embed.py \
-      --n-jobs 1 dmatrix.dst manifold.json
+      --n-jobs 1 dmatrix.dst metadata manifold.json
 
     rm -f msa.fasta
     """
@@ -867,7 +868,7 @@ process sequences_json {
     file 'msa.fasta.gz' from msa_aa_ancestors_out
     file 'mrca.fasta.gz' from mrca_translated_2
     file 'coordinates.json' from coordinates_json_out
-    file 'metadata' from metadata_4
+    file 'metadata' from metadata_5
 
     output:
     file 'sequences.json' into sequences_json_out
@@ -910,7 +911,7 @@ process seq_dates {
 
     input:
     file 'msa.fasta.gz' from msa_out
-    file 'metadata' from metadata_5
+    file 'metadata' from metadata_6
 
     output:
     file 'dates.json' into seq_dates_1, seq_dates_2
