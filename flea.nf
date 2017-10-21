@@ -270,7 +270,9 @@ process inframe_unique_hqcs {
     set 'consensus.fasta.gz', label from consensus_out
 
     output:
-    set '*.consensus.fasta.gz', '*.consensus.unique.fasta.gz', label into inframe_unique_out_1, inframe_unique_out_2
+    set '*.consensus.fasta.gz', '*.consensus.unique.fasta.gz', label into inframe_unique_out_1,
+        inframe_unique_out_2,
+        inframe_unique_out_3
 
     shell:
     '''
@@ -292,6 +294,33 @@ process inframe_unique_hqcs {
     '''
 }
 
+
+inframe_unique_out_1
+  .map { it -> it[1] }
+  .set { inframe_unique_dbs }
+
+
+process make_inframe_db {
+
+    publishDir params.results_dir
+
+    afterScript compress_cmd
+
+    when:
+    params.do_frame_correction
+
+    input:
+    file '*.consensus.unique.fasta.gz' from inframe_unique_dbs.collect()
+
+    output:
+    file 'inframedb.fasta.gz' into inframe_db_out
+
+    shell:
+    '''
+    zcat *.consensus.unique.fasta.gz > inframedb.fasta
+    '''
+}
+
 process frame_correction {
 
     tag { label }
@@ -306,7 +335,8 @@ process frame_correction {
     params.do_frame_correction
 
     input:
-    set 'consensus.fasta.gz', 'consensus.db.fasta.gz', label from inframe_unique_out_1
+    set 'consensus.fasta.gz', 'unused.db.fasta.gz', label from inframe_unique_out_2
+    file 'inframedb.fasta.gz' from inframe_db_out
 
     output:
     set '*.consensus.unique.corrected.fasta.gz', label into frame_correction_out
@@ -314,11 +344,11 @@ process frame_correction {
     shell:
     '''
     zcat consensus.fasta.gz > consensus.fasta
-    zcat consensus.db.fasta.gz > consensus.db.fasta
+    zcat inframedb.fasta.gz > inframedb.fasta
 
     # search
     !{params.usearch} --usearch_global consensus.fasta \
-      --db consensus.db.fasta \
+      --db inframedb.fasta \
       --fastapairs pairfile.fasta \
       --userout calnfile.txt \
       --userfields caln \
@@ -360,7 +390,7 @@ if( params.do_frame_correction ) {
       .map { [ it[0][0], it[1][0], it[0][1] ] }
       .set { compute_copynumbers_input }
 } else {
-    inframe_unique_out_2
+    inframe_unique_out_3
       .phase (qcs_final_3) { it[-1] }
       .map { [ it[0][1], it[1][0], it[0][2] ] }
       .set { compute_copynumbers_input }
