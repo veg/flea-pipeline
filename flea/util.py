@@ -241,12 +241,12 @@ def extend_coordinates(coordinates, seq, gap=None):
     if sum(1 for c in seq if c != gap) != len(coordinates):
         raise Exception('coordinates do not match source')
     coords_gen = iter(coordinates)
-    cur = -1
+    coord = None
     result = []
     for char in seq:
         if char != gap:
-            cur = next(coords_gen)
-        result.append(cur)
+            coord = next(coords_gen)
+        result.append(1 if coord is None else coord)
     return result
 
 
