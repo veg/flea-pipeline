@@ -29,6 +29,10 @@ def parse_file(infile):
 
 
 def weighted_median(values, weights):
+    if len(values) == 0:
+        raise Exception('cannot compute median of empty elt')
+    if len(values) != len(weights):
+        raise Exception('values and weights must have equal length')
     values = np.array(values)
 
     weights = np.array(weights)
@@ -40,7 +44,7 @@ def weighted_median(values, weights):
     weights = weights[indices]
 
     weight_sum = 0
-    result = None
+    result = values[0]
     for val, weight in zip(values, weights):
         weight_sum += weight
         if weight_sum < 0.5:
