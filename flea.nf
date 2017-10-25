@@ -614,7 +614,7 @@ process mrca {
 
     output:
     file 'mrca.fasta.gz' into mrca_1, mrca_2, mrca_3
-    file 'mrca_translated.fasta.gz' into mrca_translated_1, mrca_translated_2
+    file 'mrca_translated.fasta.gz' into mrca_translated_1, mrca_translated_2, mrca_translated_3
 
     shell:
     '''
@@ -746,6 +746,7 @@ process js_divergence {
 
     input:
     file 'msa.aa.fasta.gz' from msa_aa_out
+    file 'mrca.aa.fasta.gz' from mrca_translated_1
     file 'metadata' from metadata_3
 
     output:
@@ -753,11 +754,12 @@ process js_divergence {
 
     """
     zcat msa.aa.fasta.gz > msa.aa.fasta
+    zcat mrca.aa.fasta.gz > mrca.aa.fasta
 
     ${params.python} ${workflow.projectDir}/flea/js_divergence.py \
-      msa.aa.fasta metadata js_divergence.json
+      msa.aa.fasta mrca.aa.fasta metadata js_divergence.json
 
-    rm -f msa.aa.fasta
+    rm -f msa.aa.fasta mrca.aa.fasta
     """
 }
 
@@ -838,7 +840,7 @@ process coordinates_json {
     params.do_analysis
 
     input:
-    file 'mrca.aa.fasta.gz' from mrca_translated_1
+    file 'mrca.aa.fasta.gz' from mrca_translated_2
 
     output:
     file 'coordinates.json' into coordinates_json_out
@@ -866,7 +868,7 @@ process sequences_json {
 
     input:
     file 'msa.fasta.gz' from msa_aa_ancestors_out
-    file 'mrca.fasta.gz' from mrca_translated_2
+    file 'mrca.fasta.gz' from mrca_translated_3
     file 'coordinates.json' from coordinates_json_out
     file 'metadata' from metadata_5
 
@@ -958,6 +960,8 @@ process region_coords {
 
 
 process evo_history {
+
+    publishDir params.results_dir
 
     // need to make module command available on compute node
     beforeScript params.module_script
