@@ -721,7 +721,7 @@ process tree_json {
     file 'tree.txt' from rooted_tree_1
 
     output:
-    file 'trees.json' into tree_json_out
+    file 'trees.json' into trees_json_out
 
     """
     #!${params.python}
@@ -750,7 +750,7 @@ process js_divergence {
     file 'metadata' from metadata_3
 
     output:
-    file 'js_divergence.json' into js_divergence_json
+    file 'js_divergence.json' into js_divergence_json_out
 
     """
     zcat msa.aa.fasta.gz > msa.aa.fasta
@@ -843,7 +843,7 @@ process coordinates_json {
     file 'mrca.aa.fasta.gz' from mrca_translated_2
 
     output:
-    file 'coordinates.json' into coordinates_json_out
+    file 'coordinates.json' into coordinates_json_out_1, coordinates_json_out_2
 
     """
     zcat mrca.aa.fasta.gz > mrca.aa.fasta
@@ -869,7 +869,7 @@ process sequences_json {
     input:
     file 'msa.fasta.gz' from msa_aa_ancestors_out
     file 'mrca.fasta.gz' from mrca_translated_3
-    file 'coordinates.json' from coordinates_json_out
+    file 'coordinates.json' from coordinates_json_out_1
     file 'metadata' from metadata_5
 
     output:
@@ -1040,7 +1040,7 @@ process fubar {
     file 'mrca.fasta.gz' from mrca_3
 
     output:
-    file 'rates.json' into rates_json
+    file 'rates.json' into rates_json_out
 
     shell:
     '''
@@ -1052,6 +1052,43 @@ process fubar {
 
     rm -f msa.no_stops.fasta mrca.fasta
     '''
+}
+
+// rates_pheno_maybe = params.do_evo_history ? rates_pheno_json_out : Channel.empty()
+// rates_maybe = params.do_fubar ? rates_json_out : Channel.empty()
+
+Channel.empty()
+        .mix(
+             coordinates_json_out_2,
+             copynumbers_json_out,
+             dates_json_out,
+             js_divergence_json_out,
+             manifold_json_out,
+             sequences_json_out,
+             trees_json_out,
+             rates_pheno_json_out,
+             rates_json_out
+             )
+  .flatten()
+  .collect()
+  .into { json_inputs_1; json_inputs_2 }
+
+json_inputs_2.subscribe {  println "Got: $it"  }
+
+// TODO: why is this not waiting for dependencies to finish?
+process combine_results {
+    publishDir params.results_dir
+
+    input:
+    file '*' from json_inputs_1
+
+    output:
+    file 'session.json' into session_json
+
+    """
+    ${params.python} ${workflow.projectDir}/flea/convert_jsons.py .
+    """
+
 }
 
 /* ************************************************************************** */

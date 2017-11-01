@@ -153,6 +153,9 @@ def main(mode, informat, outformat, params):
         result = sorted(records, key=record_key)
         state = np.random.RandomState(seed=0)
         state.shuffle(result)
+    elif mode == "none":
+        # do nothing
+        result = records
     else:
         raise Exception('unknown mode: {}'.format(mode))
     SeqIO.write(result, sys.stdout, outformat)
