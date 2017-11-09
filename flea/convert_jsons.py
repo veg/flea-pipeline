@@ -1,5 +1,5 @@
 import json
-from os.path import join
+from os.path import join, exists
 import sys
 
 import numpy as np
@@ -61,107 +61,111 @@ def main(dirname):
         } for k, v in js_divergence.items())
     })
 
-    with open(join(dirname, 'rates.json')) as handle:
-        rates = json.load(handle)
+    if exists(join(dirname, 'rates.json')):
+        with open(join(dirname, 'rates.json')) as handle:
+            rates = json.load(handle)
 
-    protein_metrics['single'].append({
-        'name': "Entropy",
-        'paired': False,
-        'data': list({
-            'date': k,
-            'values': list(row[4] for row in v)
-        } for k, v in rates.items())
-    })
+        protein_metrics['single'].append({
+            'name': "Entropy",
+            'paired': False,
+            'data': list({
+                'date': k,
+                'values': list(row[4] for row in v)
+            } for k, v in rates.items())
+        })
 
-    dnds = {
-        'name': 'dNdS',
-        'paired': True,
-        'data': []
-    }
-    dnds['data'].append({
-        'name': "Mean dS",
-        'data': list({
-            'date': k,
-            'values': list(row[1] for row in v)
-        } for k, v in rates.items())
-    })
-    dnds['data'].append({
-        'name': "Mean dN",
-        'data': list({
-            'date': k,
-            'values': list(row[0] for row in v)
-        } for k, v in rates.items())
-    })
-    protein_metrics['paired'].append(dnds)
+        dnds = {
+            'name': 'dNdS',
+            'paired': True,
+            'data': []
+        }
+        dnds['data'].append({
+            'name': "Mean dS",
+            'data': list({
+                'date': k,
+                'values': list(row[1] for row in v)
+            } for k, v in rates.items())
+        })
+        dnds['data'].append({
+            'name': "Mean dN",
+            'data': list({
+                'date': k,
+                'values': list(row[0] for row in v)
+            } for k, v in rates.items())
+        })
+        protein_metrics['paired'].append(dnds)
+
     result['protein_metrics'] = protein_metrics
 
     # combine all region metrics
-    with open(join(dirname, 'rates_pheno.json')) as handle:
-        rates_pheno = json.load(handle)
+    if exists(join(dirname, 'rates_pheno.json')):
+        with open(join(dirname, 'rates_pheno.json')) as handle:
+            rates_pheno = json.load(handle)
 
-    regions = []
-    for region in rates_pheno:
-        regions.append({
-            'name': region['Segment'],
-            'date': region['Date'],
-            'evo_metrics': [
-                {
-                    'name': 'S diversity',
-                    'value': float(region['s_diversity'])
-                },
-                {
-                    'name': 'nS diversity',
-                    'value': float(region['ns_diversity'])
-                },
-                {
-                    'name': 'Total diversity',
-                    'value': float(region['total_diversity'])
-                },
-                {
-                    'name': 'dS diversity',
-                    'value': float(region['ds_diversity'])
-                },
-                {
-                    'name': 'dN diversity',
-                    'value': float(region['dn_diversity'])
-                },
-                {
-                    'name': 'S divergence',
-                    'value': float(region['s_divergence'])
-                },
-                {
-                    'name': 'nS divergence',
-                    'value': float(region['ns_divergence'])
-                },
-                {
-                    'name': 'Total divergence',
-                    'value': float(region['total_divergence'])
-                },
-                {
-                    'name': 'dS divergence',
-                    'value': float(region['ds_divergence'])
-                },
-                {
-                    'name': 'dN divergence',
-                    'value': float(region['dn_divergence'])
-                }
-            ],
-            'pheno_metrics': [
-                {
-                    'name': 'Length',
-                    'value': float(region['Length'])
-                },
-                {
-                    'name': 'PNGS',
-                    'value': float(region['PNGS'])
-                },
-                {
-                    'name': 'Isoelectric Point',
-                    'value': float(region['IsoelectricPoint'])
-                }
-            ]
-        })
-    result['region_metrics'] = regions
+        regions = []
+        for region in rates_pheno:
+            regions.append({
+                'name': region['Segment'],
+                'date': region['Date'],
+                'evo_metrics': [
+                    {
+                        'name': 'S diversity',
+                        'value': float(region['s_diversity'])
+                    },
+                    {
+                        'name': 'nS diversity',
+                        'value': float(region['ns_diversity'])
+                    },
+                    {
+                        'name': 'Total diversity',
+                        'value': float(region['total_diversity'])
+                    },
+                    {
+                        'name': 'dS diversity',
+                        'value': float(region['ds_diversity'])
+                    },
+                    {
+                        'name': 'dN diversity',
+                        'value': float(region['dn_diversity'])
+                    },
+                    {
+                        'name': 'S divergence',
+                        'value': float(region['s_divergence'])
+                    },
+                    {
+                        'name': 'nS divergence',
+                        'value': float(region['ns_divergence'])
+                    },
+                    {
+                        'name': 'Total divergence',
+                        'value': float(region['total_divergence'])
+                    },
+                    {
+                        'name': 'dS divergence',
+                        'value': float(region['ds_divergence'])
+                    },
+                    {
+                        'name': 'dN divergence',
+                        'value': float(region['dn_divergence'])
+                    }
+                ],
+                'pheno_metrics': [
+                    {
+                        'name': 'Length',
+                        'value': float(region['Length'])
+                    },
+                    {
+                        'name': 'PNGS',
+                        'value': float(region['PNGS'])
+                    },
+                    {
+                        'name': 'Isoelectric Point',
+                        'value': float(region['IsoelectricPoint'])
+                    }
+                ]
+            })
+        result['region_metrics'] = regions
+
     with open(join(dirname, 'session.json'), 'w') as handle:
         json.dump(result, handle, sort_keys=True, indent=2)
         
