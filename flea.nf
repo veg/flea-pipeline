@@ -490,7 +490,7 @@ process alignment_pipeline {
     file 'hqcs.fasta.gz' from merged_hqcs_out
 
     output:
-    file 'msa.fasta.gz' into msa_out
+    file 'msa.fasta.gz' into msa_out, msa_out_2
     file 'msa.aa.fasta.gz' into msa_aa_out
 
     shell:
@@ -613,7 +613,7 @@ process mrca {
     val oldest_label
 
     output:
-    file 'mrca.fasta.gz' into mrca_1, mrca_2, mrca_3
+    file 'mrca.fasta.gz' into mrca_1, mrca_2, mrca_3, mrca_4
     file 'mrca_translated.fasta.gz' into mrca_translated_1, mrca_translated_2, mrca_translated_3
 
     shell:
@@ -687,7 +687,7 @@ process reroot {
     file 'tree.txt' from tree_out
 
     output:
-    file 'tree.rooted.txt' into rooted_tree_1, rooted_tree_2
+    file 'tree.rooted.txt' into rooted_tree_1, rooted_tree_2, rooted_tree_3
 
     """
     #!${params.python}
@@ -810,6 +810,7 @@ process reconstruct_ancestors {
 
     output:
     file 'msa.aa.ancestors.fasta.gz' into msa_aa_ancestors_out
+    file 'ancestors.fasta.gz' into ancestors_out
 
     shell:
     '''
@@ -1054,9 +1055,6 @@ process fubar {
     '''
 }
 
-// rates_pheno_maybe = params.do_evo_history ? rates_pheno_json_out : Channel.empty()
-// rates_maybe = params.do_fubar ? rates_json_out : Channel.empty()
-
 Channel.empty()
         .mix(
              coordinates_json_out_2,
@@ -1071,11 +1069,8 @@ Channel.empty()
              )
   .flatten()
   .collect()
-  .into { json_inputs_1; json_inputs_2 }
+  .set { json_inputs }
 
-json_inputs_2.subscribe {  println "Got: $it"  }
-
-// TODO: why is this not waiting for dependencies to finish?
 process combine_results {
     publishDir params.results_dir
 
@@ -1083,7 +1078,7 @@ process combine_results {
     cpus 1
 
     input:
-    file '*' from json_inputs_1
+    file '*' from json_inputs
 
     output:
     file 'session.json' into session_json
@@ -1091,8 +1086,43 @@ process combine_results {
     """
     ${params.python} ${workflow.projectDir}/flea/convert_jsons.py .
     """
-
 }
+
+Channel.empty()
+        .mix(
+             ancestors_out,
+	     mrca_4,
+             msa_out_2,
+             rooted_tree_3,
+             )
+  .flatten()
+  .collect()
+  .set { zip_inputs }
+
+process zip_results {
+    publishDir params.results_dir
+
+    executor 'local'
+    cpus 1
+
+    input:
+    file '*' from zip_inputs
+
+    output:
+    file 'session.zip' into session_zip
+
+    """
+    zcat msa.fasta.gz > msa.fasta
+    zcat mrca.fasta.gz > mrca.fasta
+    zcat ancestors.fasta.gz > ancestors.fasta
+
+    zip session.zip *.txt *.fasta
+
+    rm -rf *.fasta
+    """
+}
+
+
 
 /* ************************************************************************** */
 /* DIAGNOSIS SUB-PIPELINE */
