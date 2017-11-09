@@ -1079,6 +1079,9 @@ json_inputs_2.subscribe {  println "Got: $it"  }
 process combine_results {
     publishDir params.results_dir
 
+    executor 'local'
+    cpus 1
+
     input:
     file '*' from json_inputs_1
 

@@ -102,7 +102,7 @@ def main(dirname):
     regions = []
     for region in rates_pheno:
         regions.append({
-            'name': region['Region'],
+            'name': region['Segment'],
             'date': region['Date'],
             'evo_metrics': [
                 {
