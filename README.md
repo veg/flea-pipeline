@@ -1,47 +1,40 @@
-Python dependencies
--------------------
-Listed in `requirements.txt`.
-
-Install with `pip install -r requirements.txt`.
-
-Then run `pip install -r requirements2.txt`. This is done seperately
-because BioExt needs NumPy to be present.
-
-
-3rd party dependencies
-----------------------
-- usearch (version >= 8.0.1623)
-- mafft
-
-
-Installation
+Dependencies
 ------------
+- Nextflow
+- Python
+- usearch
+- mafft
+- HyPhy
+- TN93
+- GNU parallel
 
-`python setup.py install`
+Install Python scripts
+----------------------
+
+FLEA comes with a `flea` Python package containing scripts used
+throughout the pipeline. To install requirements and the scripts
+themselves (virtualenv recommended):
+
+    pip install -r requirements.txt
+    pip install -r requirements2.txt
+    python setup.py install
+
+To test:
+
+    python setup.py nosetests
 
 
 Usage
 -----
-1. Copy `flea.config.tpl` to `flea.config` in your data directory.
+Write a control file containing a list of fastq files, their sequence ids, and
+their dates, seperated by spaces.
 
-2. Edit other parameters in `flea.config`.
-
-3. Run the whole pipeline with `flea.py <control file>`.
-
-The `<control file>` argument is a file containing a list of fasta
-files, their sequence ids, and their dates, seperated by spaces.
-
-    <file> <id> <date>
-    <file> <id> <date>
+    <file> <label> <date>
+    <file> <label> <date>
     ....
 
 Dates must be in 'YYYYMMDD' format.
 
-If no config file is specified, we look for it in in the data
-directory.
+Run the pipeline with Nextflow:
 
-
-Testing
--------
-
-`python setup.py nosetests`
+    nextflow path/to/flea.nf --infile path/to/metadata --results_dir path/to/results

@@ -6,7 +6,7 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet import IUPAC
 from Bio.Alphabet import Gapped
 
-from flea_pipeline.backtranslate import back_translate_gapped
+from flea.backtranslate import back_translate_gapped
 
 
 class TestBacktranslate(unittest.TestCase):

@@ -1,23 +1,8 @@
 #!/usr/bin/env python
 
-"""
-Prints a consensus sequence.
+"""Prints a consensus sequence.
 
 Sequences must be aligned, and all the same length'
-
-Usage:
-  DNAcons.py [options] <infile>
-  DNAcons.py -h | --help
-
-Options:
-  -v --verbose            Print progress to STDERR
-  --keep-gaps             Do not ungap the consensus
-  --copynumbers=<STRING>  File containing "<id>\t<num>" lines.
-  --id=<STRING>           Record id for the fasta output
-  -o --outfile=<STRING>   Name of output file
-  --ambifile=<STRING>
-  --codon                 Do codon alignment.
-  -h --help               Show this screen
 
 """
 
@@ -25,23 +10,22 @@ import sys
 import random
 from collections import defaultdict
 
-from docopt import docopt
+import click
 
 from Bio.Seq import Seq
-from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqIO.FastaIO import FastaWriter
 from Bio import AlignIO
-from Bio.Align import AlignInfo
 from Bio.Alphabet import IUPAC
 
-from flea_pipeline.util import grouper
+from flea.util import grouper
+from flea.util import id_to_copynumber
 
 
-def _column_consensus(counter, seed=None, codon=False):
+def _column_consensus(counter, seed=None):
     r = random
     if seed is not None:
-        r = random.Random(seed)
+        r = random.Random(int(seed))
     max_count = max(counter.values())
     cands = list(sorted(elt for elt, count in counter.items()
                         if count == max_count))
@@ -63,20 +47,32 @@ def consensus(seqs, copies=None, codon=False, seed=None):
     if copies is None:
         copies = [1] * len(seqs)
     counters = list(defaultdict(lambda: 0) for _ in range(len(seqs[0])))
-    for seq, cn in zip(seqs, copies):
+    for seq, copynumber in zip(seqs, copies):
         for column, elt in enumerate(seq):
-            counters[column][elt] += cn
-    pairs = (_column_consensus(c, seed, codon) for c in counters)
+            counters[column][elt] += copynumber
+    pairs = (_column_consensus(c, seed) for c in counters)
     cons, ambi = zip(*pairs)
     assert(len(cons) == len(ambi))
     for i, elt in enumerate(cons):
         assert(elt in ambi[i][1])
     cons = ''.join(cons)
+    if len(cons) != aln_len:
+        raise Exception('consensus has wrong length')
     return cons, ambi
 
 
-def consfile(filename, outfile=None, ambifile=None, copynumber_file=None,
-             id_str=None, codon=False, ungap=True, verbose=False, seed=None):
+@click.command()
+@click.argument('filename')
+@click.option('-o', '--outfile')
+@click.option('--ambifile')
+@click.option('--copynumbers', is_flag=True, help='seq id ends with copynumber')
+@click.option('--codon', is_flag=True, help='do codon consensus.')
+@click.option('--keep-gaps', is_flag=True, help='keep gaps in consensus')
+@click.option('--name', help='record id for the fasta output')
+@click.option('--seed', type=int, help='seed rng for breaking ties')
+@click.option('-v', '--verbose', is_flag=True)
+def consfile(filename, outfile=None, ambifile=None, copynumbers=False,
+             codon=False, keep_gaps=False, name=None, verbose=False, seed=None):
     """Computes a consensus sequence and writes it to a file.
 
     Breaks ties independently for each position by choosing randomly
@@ -88,16 +84,13 @@ def consfile(filename, outfile=None, ambifile=None, copynumber_file=None,
     <0-index position> <frequency> <candidates>
 
     """
-    alignment = AlignIO.read(filename, "fasta")
+    ungap = not keep_gaps
+    alignment = list(AlignIO.read(filename, "fasta"))
     seqs = list(r.seq for r in alignment)
-    if copynumber_file is None:
-        copies = None
+    if copynumbers:
+        copies = list(id_to_copynumber(r.id) for r in alignment)
     else:
-        with open(copynumber_file) as handle:
-            lines = handle.read().strip().split('\n')
-            pairs = list(e.split() for e in lines)
-            cdict = dict((key, int(val)) for key, val in pairs)
-            copies = list(cdict[r.id] for r in alignment)
+        copies = None
     _consensus, ambiguous = consensus(seqs, copies, codon=codon, seed=seed)
     if ungap:
         # cannot just call _consensus.ungap('-'), because that will
@@ -110,14 +103,14 @@ def consfile(filename, outfile=None, ambifile=None, copynumber_file=None,
 
     # use the first entry for the name, just so know what is what later
     rec = alignment[0]
-    if id_str is None:
-        id_str = "{}_cons".format(rec.name)
+    if name is None:
+        name = "{}_cons".format(rec.name)
     if outfile is None:
         outfile = "{}.cons.fasta".format(filename)
     with open(outfile, 'w') as handle:
         writer = FastaWriter(handle, wrap=None)
         writer.write_header()
-        newrecord = SeqRecord(Seq(str(_consensus), IUPAC.unambiguous_dna), id=id_str, description="")
+        newrecord = SeqRecord(Seq(str(_consensus), IUPAC.unambiguous_dna), id=name, description="")
         writer.write_record(newrecord)
     if ambifile is not None:
         with open(ambifile, 'w') as handle:
@@ -130,20 +123,8 @@ def consfile(filename, outfile=None, ambifile=None, copynumber_file=None,
                     assert(chosen in cands)
                     handle.write('{} {} {}\n'.format(i, freq, cands))
     if verbose:
-        sys.stderr.write('Consensus written with name {}.\n'.format(id_str))
+        sys.stderr.write('Consensus written with name {}.\n'.format(name))
 
 
 if __name__ == "__main__":
-    args = docopt(__doc__)
-    filename = args["<infile>"]
-    copynumber_file = args["--copynumbers"]
-    verbose = args["--verbose"]
-    id_str = args["--id"]
-    outfile = args["--outfile"]
-    ambifile = args['--ambifile']
-    keep_gap = args["--keep-gaps"]
-    codon = args["--codon"]
-    ungap = not keep_gap
-    consfile(filename, outfile, copynumber_file=copynumber_file,
-             ambifile=ambifile, id_str=id_str, codon=codon, ungap=ungap,
-             verbose=verbose)
+    consfile()

@@ -1,0 +1,9 @@
+biopython
+click
+Cython
+networkx==1.9
+numpy
+pandas
+pomegranate
+scipy
+scikit-learn

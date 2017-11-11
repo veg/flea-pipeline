@@ -3,14 +3,6 @@
 """
 Publish a run to test.datamonkey.org.
 
-Usage:
-  publish [options] <directory> [<target>]
-  publish -h | --help
-
-Options:
-  --dry-run  Print command and exit.
-  -h --help  Show this screen.
-
 """
 
 import os
@@ -21,7 +13,7 @@ import getpass
 import subprocess
 import shlex
 
-from docopt import docopt
+import click
 
 DEFAULT_HOST = "test.datamonkey.org"
 DEFAULT_PATH = "/var/www/html/veg/FLEA3"
@@ -57,15 +49,16 @@ def strip_trailing_slash(directory):
     return directory
 
 
-if __name__ == "__main__":
-    args = docopt(__doc__)
-    directory = args["<directory>"]
+@click.command()
+@click.argument(directory)
+@click.argument(target)
+@click.option('--dry-run', is_flag=True)
+def main(directory, target, dry_run=False):
     directory = strip_trailing_slash(directory)
 
     local_user = getpass.getuser()
     local_host = socket.gethostname()
 
-    target = args["<target>"]
     if target is None:
         target = "{}@{}:{}".format(local_user, DEFAULT_HOST, DEFAULT_PATH)
     if "@" in target:
@@ -98,8 +91,12 @@ if __name__ == "__main__":
     rsync_cmd = RSYNC_CMD.format(src=src, remote_user=remote_user,
                                  remote_host=remote_host,
                                  dest_path=dest_path)
-    if args["--dry-run"]:
+    if dry_run:
         print(rsync_cmd)
     else:
         result = call(rsync_cmd)
         print("view results at http://test.datamonkey.org:5062/{}/".format(dir_name))
+
+
+if __name__ == "__main__":
+    main()

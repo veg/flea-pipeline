@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 from setuptools import setup, find_packages
-from flea_pipeline import __version__
+from flea import __version__
 
-setup(name='flea-pipeline',
+setup(name='flea',
       version=__version__,
-      description='Full-length envelope analyzer',
+      description='Helper scripts for FLEA pipeline.',
       author='Kemal Eren',
       author_email='kemal@kemaleren.com',
       packages=find_packages(exclude="test"),
@@ -14,5 +14,22 @@ setup(name='flea-pipeline',
         'nose',
         'coverage',
         ],
-      scripts=['flea_pipeline/flea.py', 'scripts/publish.py'],
-     )
+      scripts=[
+        'flea/backtranslate.py',
+        'flea/cluster_fastq.py',
+        'flea/coordinates_json.py',
+        'flea/frame_correction.py',
+        'flea/diagnose.py',
+        'flea/DNAcons.py',
+        'flea/filter_fastx.py',
+        'flea/insert_gaps.py',
+        'flea/js_divergence.py',
+        'flea/manifold_embed.py',
+        'flea/pairs_to_fasta.py',
+        'flea/sequences_json.py',
+        'flea/translate.py',
+        'flea/trim_tails.py',
+        'flea/write_copynumbers.py',
+        'scripts/publish.py',
+        ],
+      )
