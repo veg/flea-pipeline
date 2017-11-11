@@ -985,7 +985,7 @@ process evo_history {
     '''
     zcat msa.no_stops.fasta.gz > msa.no_stops.fasta
 
-    !{params.hyphympi} !{workflow.projectDir}/hyphy_scripts/obtainEvolutionaryHistory.bf \
+    !{params.hyphy} !{workflow.projectDir}/hyphy_scripts/obtainEvolutionaryHistory.bf \
       $(pwd)/msa.no_stops.fasta $(pwd)/dates.json $(pwd)/region_coords.json $(pwd)/rates_pheno.tsv
 
     rm -f msa.no_stops.fasta
