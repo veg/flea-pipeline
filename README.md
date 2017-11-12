@@ -13,19 +13,14 @@ following results:
 
 - a multiple sequence alignment of high-quality consensus sequences
   for each time point
-
 - a maximum-likelihood phylogenetic tree, inferred using
   [FastTree](http://www.microbesonline.org/fasttree/)
-
 - the most recent common ancestor (MRCA) and other inferred ancestor
   sequences
-
 - a two-dimensional embedding that respects TN93 sequence distances
-
 - per-site selection pressure, inferred using
   [FUBAR](https://veg.github.io/hyphy-site/methods/selection-methods/),
   and other per-site evolutionary metrics
-
 - per-segment evolutionary and phenotypic metrics, inferred using
   [HyPhy](http://www.hyphy.org/)
 
@@ -33,6 +28,11 @@ The pipeline logic is implemented in
 [Nextflow](https://www.nextflow.io/). A full description of the
 pipeline has been submitted for publication. A link to the journal
 article will be added here when it is available.
+
+See also:
+
+- [flea-server](https://github.com/veg/flea-server)
+- [flea-web-app](https://github.com/veg/flea-web-app)
 
 Setup
 =====
@@ -108,7 +108,10 @@ steps. The two files that contain the final results are:
 
 - `session.json`: a JSON file to be visualized with
   [`flea-web-app`](https://github.com/veg/flea-web-app).
-
 - `session.zip`: a zip file with FASTA files for the consensus
   sequences, ancestors, and MRCA, and a Newick file containing the
   rooted phylogenetic tree.
+
+These files can be served with
+[flea-server](https://github.com/veg/flea-server) and visualized with
+[flea-web-app](https://github.com/veg/flea-web-app).
