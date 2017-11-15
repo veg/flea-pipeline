@@ -1,6 +1,9 @@
 biopython
+click
 Cython
-docopt
-matplotlib
+networkx==1.9
 numpy
-ruffus
+pandas
+pomegranate
+scipy
+scikit-learn

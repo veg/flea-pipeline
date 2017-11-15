@@ -2,25 +2,17 @@
 """
 Translate DNA reads from a fasta file.
 
-Usage:
-  translate.py [options] <infile> <outfile>
-  translate.py -h | --help
-
-Options:
-  -g --gapped   Allow gaps.  [default: False]
-  -h --help     Show this screen.
-
 """
 
 import sys
 
-from docopt import docopt
+import click
 
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.Alphabet import IUPAC, Gapped
 
-from flea_pipeline.util import insert_gaps
+from flea.util import insert_gaps
 
 
 def _translate(record, gapped=False):
@@ -43,8 +35,11 @@ def translate(infile, outfile, gapped=False):
     SeqIO.write(result, outfile, "fasta")
 
 
+@click.command()
+@click.option('-g', '--gapped', is_flag=True, help='allow gaps')
+def main(gapped):
+    translate(sys.stdin, sys.stdout, gapped)
+
+
 if __name__ == "__main__":
-    args = docopt(__doc__)
-    infile = args["<infile>"]
-    outfile = args["<outfile>"]
-    translate(infile, outfile, args['--gapped'])
+    main()

@@ -1,1 +1,1 @@
--e git+git@github.com:trident01/BioExt-1.git@daf52aac578758c998fd3657e0a160853c506207#egg=bioext-origin_HEAD
+-e git+https://github.com/trident01/BioExt-1.git@daf52aac578758c998fd3657e0a160853c506207#egg=bioext-origin_HEAD

@@ -8,36 +8,20 @@ The input file should contain pairs of aligned sequences and references.
 Discards sequences that cannot be corrected, because they contain
 insertions of length >3 that is not a multiple of three.
 
-Usage:
-  correct_shifts.py [options] <infile> <outfile>
-  correct_shifts.py -h
-
-Options:
-  --keep            Do not discard sequences, even with bad inserts [default: True]
-  --correct-dels    Correct single deletion w/ reference base [default: True]
-  --calns=<FILE>    File with run-length encoded alignment summaries
-  --discard=<FILE>  File to print discarded alignments
-  --summary=<FILE>  File to print correction summaries
-  -v --verbose      Print summary [default: False]
-  -h --help         Show this screen
-
 """
 
 from itertools import groupby, repeat
 from itertools import zip_longest
 from functools import partial
-import sys
 import re
 
-from docopt import docopt
+import click
 
 from Bio import SeqIO
-from Bio.SeqIO.FastaIO import FastaWriter
 
-from flea_pipeline.util import grouper
-from flea_pipeline.util import new_record_seq_str
-from flea_pipeline.util import genlen
-from flea_pipeline.util import nth
+from flea.util import grouper
+from flea.util import new_record_seq_str
+from flea.util import nth
 
 
 def first_index(target, it):
@@ -121,18 +105,20 @@ def alignment_slice(caln):
     return start, stop
 
 
-def correct_shifts(seq, ref, caln=None, gap_char=None, keep=True, correct=True):
+def correct_frame(seq, ref, caln=None, gap_char=None, keep=True, deletion_strategy=None):
     """Correct frameshifts relative to a reference.
 
     keep: bool
         If True, keep sequences even if they could not be totally
         corrected. Otherwise, discard the whole sequence.
 
-    correct: bool
-        If True, replace single delections with the base from the
-        reference.
-
     """
+    if deletion_strategy is None:
+        deletion_strategy = 'reference'
+    strategies = ['reference', 'n', 'discard']
+    if deletion_strategy not in strategies:
+        raise Exception('unknown strategy')
+
     # FIXME: make this codon-aware
     if gap_char is None:
         gap_char = '-'
@@ -157,8 +143,14 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=True, correct=True):
             if len(subseq) % 3 == 0:
                 index += len(subseq)
                 continue  # keep codon deletions
-            elif len(subseq) == 1 and correct:
-                result.append(subref)
+            elif len(subseq) == 1:
+                if deletion_strategy == 'reference':
+                    result.append(subref)
+                elif deletion_strategy == 'n':
+                    result.append('N')
+                else:
+                    # give up
+                    return '', index
             elif keep:
                 result.append('N' * (len(subseq) % 3))
             else:
@@ -185,9 +177,9 @@ def correct_shifts(seq, ref, caln=None, gap_char=None, keep=True, correct=True):
     return result, -1
 
 
-def correct_shifts_fasta(infile, outfile, calnfile=None,
+def correct_frames_fasta(infile, outfile, calnfile=None,
                          discardfile=None,
-                         alphabet=None, keep=True, correct=True):
+                         alphabet=None, keep=True, deletion_strategy=None):
     """Correct all the pairs in a fasta file.
 
     Returns (n_seqs, n_fixed)
@@ -199,8 +191,8 @@ def correct_shifts_fasta(infile, outfile, calnfile=None,
     else:
         with open(calnfile) as handle:
             calns = handle.read().strip().split()
-    results = list(correct_shifts(seq.seq, ref.seq, caln,
-                                  keep=keep, correct=correct)
+    results = list(correct_frame(seq.seq, ref.seq, caln,
+                                 keep=keep, deletion_strategy=deletion_strategy)
                    for (seq, ref), caln in zip(pairs, calns))
 
     keep = list(new_record_seq_str(seq, result)
@@ -227,17 +219,21 @@ def write_correction_result(n_seqs, n_fixed, outfile):
         handle.write('discarded {}/{} ({:.2f}%)'
                      ' sequences\n'.format(n_dropped, n_seqs, percent))
 
+@click.command()
+@click.argument('infile')
+@click.argument('outfile')
+@click.option('--keep', is_flag=True, help='eo not discard sequences, even with bad inserts')
+@click.option('--deletion-strategy', help='correct single deletions')
+@click.option('--calns', help='file with run-length encoded alignment summaries')
+@click.option('--discard', help='file to print discarded alignments')
+@click.option('--summary', help='file to print correction summaries')
+def main(infile, outfile, keep, deletion_strategy, calns, discard, summary):
+    n_seqs, n_fixed = correct_frames_fasta(infile, outfile, discardfile=discard,
+                                           calnfile=calns, keep=keep,
+                                           deletion_strategy=deletion_strategy)
+    if summary:
+        write_correction_result(n_seqs, n_fixed, summary)
+
 
 if __name__ == "__main__":
-    args = docopt(__doc__)
-    infile = args["<infile>"]
-    outfile = args["<outfile>"]
-    keep = args['--keep']
-    correct = args['--correct-dels']
-    calnfile = args['--calns']
-    discardfile = args['--discard']
-    n_seqs, n_fixed = correct_shifts_fasta(infile, outfile, discardfile=discardfile,
-                                           calnfile=calnfile, keep=keep,
-                                           correct=correct)
-    if args['--summary']:
-        write_correction_result(n_seqs, n_fixed, args['--summary'])
+    main()

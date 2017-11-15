@@ -1,34 +1,33 @@
-Python dependencies
--------------------
-pip-tools is used to list requirements and pin versions.
-
-Install pip-tools. Then just run 'pip-sync requirements.txt'
-
-Then run `pip install -r requirements2.txt`. This is done seperately
-because BioExt needs NumPy to be present.
-
-
-3rd party dependencies
-----------------------
-- usearch (version >= 8.1.1861)
-- mafft
-
-
-Installation
+Dependencies
 ------------
-`python setup.py install`
+- Nextflow
+- Python
+- usearch
+- mafft
+- HyPhy
+- TN93
+- GNU parallel
+
+Install Python scripts
+----------------------
+
+FLEA comes with a `flea` Python package containing scripts used
+throughout the pipeline. To install requirements and the scripts
+themselves (virtualenv recommended):
+
+    pip install -r requirements.txt
+    pip install -r requirements2.txt
+    python setup.py install
+
+To test:
+
+    python setup.py nosetests
 
 
 Usage
 -----
-1. Copy `flea.config.tpl` to `flea.config` in your data directory.
-
-2. Edit other parameters in `flea.config`.
-
-3. Run the whole pipeline with `flea.py <control file>`.
-
-The `<control file>` argument is a file containing a list of fasta
-files, their sequence ids, and their dates, seperated by spaces.
+Write a control file containing a list of fastq files, their sequence ids, and
+their dates, seperated by spaces.
 
     <file> <label> <date>
     <file> <label> <date>
@@ -36,30 +35,6 @@ files, their sequence ids, and their dates, seperated by spaces.
 
 Dates must be in 'YYYYMMDD' format.
 
-If no config file is specified, we look for it in in the data
-directory.
+Run the pipeline with Nextflow:
 
-Pre-existing alignment
-----------------------
-
-Control file should contain:
-
-    <prefix> <label> <date>
-    <prefix> <label> <date>
-    ...
-
-where each sequence id begins with a timepoint-unique `<prefix>`.
-
-Run with the option `--alignment <alignment file>`.
-
-Also, optionally add the option `--copynumbers <copynumber file>`,
-where each line of the copynumbers file contains a tab-seperated
-sequence id and integer:
-
-    <sequence id>\t<integer>
-    ...
-
-Testing
--------
-
-`python setup.py nosetests`
+    nextflow path/to/flea.nf --infile path/to/metadata --results_dir path/to/results

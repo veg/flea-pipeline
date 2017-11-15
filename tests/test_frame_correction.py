@@ -1,13 +1,14 @@
 import unittest
 
-from flea_pipeline.correct_shifts import correct_shifts
+from flea.correct_frames import correct_frame
 
-class TestCorrectShifts(unittest.TestCase):
+class TestCorrectFrames(unittest.TestCase):
 
-    def _test(self, seq, ref, expected, keep=False, correct=False):
-        self.assertEquals(correct_shifts(seq, ref, keep=keep, correct=correct)[0], expected)
+    def _test(self, seq, ref, expected, keep=False, deletion_strategy='discard'):
+        self.assertEquals(correct_frame(seq, ref, keep=keep,
+                                         deletion_strategy=deletion_strategy)[0], expected)
 
-    def test_correct_shifts(self):
+    def test_correct_frames(self):
         cases = (
             # deletions
             ('AC---T', 'ACGACG', 'ACT'),
@@ -20,7 +21,7 @@ class TestCorrectShifts(unittest.TestCase):
             ('ACAAAAG', 'AC----G', ''),
             ('ACAAACCCG', 'AC------G', 'ACAAACCCG'),
 
-            # both; keep=False
+            # both
             ('AG-GTTT', 'ACC-TTT', ''),
         )
         for seq, ref, expected in cases:
@@ -40,7 +41,8 @@ class TestCorrectShifts(unittest.TestCase):
             ('AC-TTTT', 'ACCTTT-', 'ACNTTT'),
         )
         for seq, ref, expected in cases:
-            self._test(seq, ref, expected, keep=True)
+            self._test(seq, ref, expected, keep=True,
+                       deletion_strategy='n')
 
     def test_correct(self):
         cases = (
@@ -48,17 +50,17 @@ class TestCorrectShifts(unittest.TestCase):
             ('AC-ACG', 'ACGACG', 'ACGACG'),
         )
         for seq, ref, expected in cases:
-            self._test(seq, ref, expected, correct=True)
+            self._test(seq, ref, expected, deletion_strategy='reference')
 
     def test_mismatched_lengths(self):
         seq = 'AC'
         ref = 'ACC'
-        self.assertRaises(ValueError, correct_shifts, seq, ref)
+        self.assertRaises(ValueError, correct_frames, seq, ref)
 
     def test_reference_length(self):
         seq = 'AC'
         ref = 'ACCC'
-        self.assertRaises(ValueError, correct_shifts, seq, ref)
+        self.assertRaises(ValueError, correct_frames, seq, ref)
 
 
 if __name__ == '__main__':

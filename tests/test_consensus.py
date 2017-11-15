@@ -10,9 +10,9 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet import IUPAC
 from Bio.Alphabet import Gapped
 
-from flea_pipeline.DNAcons import _column_consensus
-from flea_pipeline.DNAcons import consensus
-from flea_pipeline.DNAcons import consfile
+from flea.DNAcons import _column_consensus
+from flea.DNAcons import consensus
+from flea.DNAcons import consfile
 
 
 class TestConsensus(unittest.TestCase):
@@ -54,30 +54,28 @@ class TestConsensus(unittest.TestCase):
         self.assertEquals(ambi, ((0.6, ['a']), (0.4, ['b']), (0.6, ['c'])))
 
     def test_weighted_codon(self):
-        result, ambi = consensus(['aacddd', 'accddd', 'bbbddd'], copies=[3, 3, 4], codon=True, seed=0)
+        result, ambi = consensus(['aacddd', 'accddd', 'bbbddd'],
+                                 copies=[3, 3, 4], codon=True, seed=0)
         self.assertEquals(result, 'bbbddd')
         self.assertEquals(ambi, ((0.4, ['bbb']), (1.0, ['ddd'])))
 
-    def consfile_helper(self, seqs, expected, copynumbers, expected_ambi, ungap, codon=False):
+    def consfile_helper(self, seqs, expected, copynumbers, expected_ambi,
+                        ungap, codon=False, do_copynumber=False):
         records = list(SeqRecord(Seq(s, alphabet=Gapped(IUPAC.unambiguous_dna)),
-                                 id="seq_{}".format(i))
-                       for i, s in enumerate(seqs))
-        cdict = dict((r.id, n) for r, n in zip(records, copynumbers))
+                                 id="seq_{}_n_{}".format(i, n))
+                       for i, (s, n) in enumerate(zip(seqs, copynumbers)))
         wdir = tempfile.mkdtemp()
         try:
             infile = os.path.join(wdir, 'seqs.fasta')
-            copynumber_file = os.path.join(wdir, 'copynumbers')
             outfile = os.path.join(wdir, 'cons.fasta')
             ambifile = os.path.join(wdir, 'cons.info')
             SeqIO.write(records, infile, 'fasta')
             SeqIO.write(records, infile, 'fasta')
-            with open(copynumber_file, 'w') as handle:
-                for k, val in cdict.items():
-                    handle.write("{}\t{}\n".format(k, val))
 
             consfile(infile, outfile, ambifile=ambifile,
-                     copynumber_file=copynumber_file,
-                     ungap=ungap, codon=codon, seed=0)
+                     ungap=ungap, codon=codon,
+                     do_copynumber=do_copynumber,
+                     seed=0)
 
             records = list(SeqIO.parse(outfile, 'fasta'))
             self.assertEquals(len(records), 1)
@@ -111,8 +109,9 @@ class TestConsensus(unittest.TestCase):
         self.consfile_helper(seqs, expected, copynumbers, exp_ambi, ungap=True)
 
     def test_consfile_codon(self):
-        seqs = ["aac", "acc", "bbb"]
+        seqs = ["adc", "aec", "bbb"]
         expected = 'bbb'
         copynumbers = [2, 2, 3]
         exp_ambi = ""
-        self.consfile_helper(seqs, expected, copynumbers, exp_ambi, ungap=True, codon=True)
+        self.consfile_helper(seqs, expected, copynumbers, exp_ambi, ungap=True,
+                             codon=True, do_copynumber=True)
