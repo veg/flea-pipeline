@@ -12,7 +12,7 @@ joblib==0.11              # via pomegranate
 networkx==1.9
 numpy==1.13.3
 pandas==0.20.3
-pomegranate==0.7.7
+pomegranate==0.8.1
 python-dateutil==2.6.1    # via pandas
 pytz==2017.2              # via pandas
 scikit-learn==0.19.0
