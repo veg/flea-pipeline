@@ -820,7 +820,7 @@ process reconstruct_ancestors {
     echo $(pwd)/msa.fasta >> stdin
     echo $(pwd)/tree.rooted.txt >> stdin
     echo $(pwd)/ancestors.fasta >> stdin
-    echo HKY85 >> stdin
+    echo GRM >> stdin
     echo 2 >> stdin
     !{params.hyphy} !{workflow.projectDir}/hyphy_scripts/reconstructAncestors.bf < stdin
 
