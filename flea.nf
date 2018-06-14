@@ -1112,9 +1112,9 @@ process zip_results {
     file 'session.zip' into session_zip
 
     """
-    zcat msa.fasta.gz > msa.fasta
-    zcat mrca.fasta.gz > mrca.fasta
-    zcat ancestors.fasta.gz > ancestors.fasta
+    if [ -f "msa.fasta.gz" ]; then zcat msa.fasta.gz > msa.fasta; fi
+    if [ -f "mrca.fasta.gz" ]; then zcat mrca.fasta.gz > mrca.fasta; fi
+    if [ -f "ancestors.fasta.gz" ]; then zcat ancestors.fasta.gz > ancestors.fasta; fi
 
     zip session.zip *.txt *.fasta
 
