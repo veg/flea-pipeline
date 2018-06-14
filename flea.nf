@@ -70,7 +70,7 @@ process quality_pipeline {
 
     tag { label }
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     time params.slow_time
 
@@ -154,7 +154,7 @@ process cluster {
 
     tag { label }
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     time params.slow_time
 
@@ -198,7 +198,7 @@ process consensus {
 
     tag { label }
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     time params.slow_time
 
@@ -262,7 +262,7 @@ process inframe_unique_hqcs {
 
     tag { label }
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     afterScript compress_cmd
 
@@ -302,7 +302,7 @@ inframe_unique_out_1
 
 process make_inframe_db {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     afterScript compress_cmd
 
@@ -325,7 +325,7 @@ process frame_correction {
 
     tag { label }
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     time params.slow_time
 
@@ -450,7 +450,7 @@ process compute_copynumbers {
 
 process merge_timepoints {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     afterScript compress_cmd
 
@@ -480,7 +480,7 @@ process merge_timepoints {
 
 process alignment_pipeline {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     time params.slow_time
 
@@ -516,7 +516,7 @@ process alignment_pipeline {
 
 process dates_json_task {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     executor 'local'
     cpus 1
@@ -544,7 +544,7 @@ process dates_json_task {
 
 process copynumbers_json {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     executor 'local'
     cpus 1
@@ -709,7 +709,7 @@ process reroot {
 
 process tree_json {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     executor 'local'
     cpus 1
@@ -737,7 +737,7 @@ process tree_json {
 
 process js_divergence {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     time params.slow_time
 
@@ -765,7 +765,7 @@ process js_divergence {
 
 process manifold_embedding {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     time params.slow_time
 
@@ -835,7 +835,7 @@ process reconstruct_ancestors {
 
 process coordinates_json {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     when:
     params.do_analysis
@@ -862,7 +862,7 @@ process coordinates_json {
 }
 
 process sequences_json {
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     when:
     params.do_analysis
@@ -939,7 +939,7 @@ process seq_dates {
 
 process region_coords {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     when:
     params.do_analysis
@@ -962,7 +962,7 @@ process region_coords {
 
 process evo_history {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     // need to make module command available on compute node
     beforeScript params.module_script
@@ -994,7 +994,7 @@ process evo_history {
 
 process rates_pheno_json {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     when:
     params.do_analysis && params.do_evo_history
@@ -1024,7 +1024,7 @@ process rates_pheno_json {
 
 process fubar {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     // need to make module command available on compute node
     beforeScript params.module_script
@@ -1072,7 +1072,7 @@ Channel.empty()
   .set { json_inputs }
 
 process combine_results {
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     executor 'local'
     cpus 1
@@ -1100,7 +1100,7 @@ Channel.empty()
   .set { zip_inputs }
 
 process zip_results {
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     executor 'local'
     cpus 1
@@ -1129,7 +1129,7 @@ process zip_results {
 
 process diagnose {
 
-    publishDir params.results_dir
+    publishDir params.results_dir, mode: params.publishMode
 
     time params.crazy_time
 
