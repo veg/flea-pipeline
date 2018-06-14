@@ -19,14 +19,17 @@ vim: syntax=groovy
 // TODO: combine all time points for inframe db for frame correction
 
 
+compress_cmd = """for i in `find . ! -type l | grep -E "\\.fasta\$|\\.fastq\$|\\.txt\$|\\.dst\$"`; do gzip "\$i" ; done"""
+
 params.infile = "$HOME/flea/data/P018/data/metadata"
+params.msafile = ""
 params.results_dir = "results"
 
+params.do_pre_analysis = params.msafile == ""
 
 // TODO: how to avoid duplicating?
 Channel.fromPath(params.infile)
     .into { metadata_1; metadata_2; metadata_3; metadata_4; metadata_5; metadata_6 }
-
 
 // read input metadata into tuples
 input_files = []
@@ -44,6 +47,7 @@ infile
 
 input_channel = Channel.from(input_files)
 
+
 /* ************************************************************************** */
 /* QUALITY SUB-PIPELINE */
 
@@ -60,15 +64,14 @@ min_qcs_len = reflen_1
 max_qcs_len = reflen_2
     .map { n -> Math.round(n * (2.0 - params.qcs_length_coeff.toBigDecimal())) }
 
-
-compress_cmd = """for i in `find . ! -type l | grep -E "\\.fasta\$|\\.fastq\$|\\.txt\$|\\.dst\$"`; do gzip "\$i" ; done"""
-
-
 // TODO: train head/tail HMM on all sequences from all time points
 hmm_train_flag = (params.train_hmm ? '--train' : '')
 process quality_pipeline {
 
     tag { label }
+
+    when:
+    params.do_pre_analysis
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -146,6 +149,7 @@ process quality_pipeline {
     '''
 }
 
+
 /* ************************************************************************** */
 /* CONSENSUS SUB-PIPELINE */
 
@@ -153,6 +157,9 @@ process quality_pipeline {
 process cluster {
 
     tag { label }
+
+    when:
+    params.do_pre_analysis
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -197,6 +204,9 @@ cluster_out
 process consensus {
 
     tag { label }
+
+    when:
+    params.do_pre_analysis
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -262,6 +272,9 @@ process inframe_unique_hqcs {
 
     tag { label }
 
+    when:
+    params.do_pre_analysis
+
     publishDir params.results_dir, mode: params.publishMode
 
     afterScript compress_cmd
@@ -302,12 +315,12 @@ inframe_unique_out_1
 
 process make_inframe_db {
 
+    when:
+    params.do_pre_analysis && params.do_frame_correction
+
     publishDir params.results_dir, mode: params.publishMode
 
     afterScript compress_cmd
-
-    when:
-    params.do_frame_correction
 
     input:
     file '*.consensus.unique.fasta.gz' from inframe_unique_dbs.collect()
@@ -323,6 +336,9 @@ process make_inframe_db {
 
 process frame_correction {
 
+    when:
+    params.do_pre_analysis && params.do_frame_correction
+
     tag { label }
 
     publishDir params.results_dir, mode: params.publishMode
@@ -330,9 +346,6 @@ process frame_correction {
     time params.slow_time
 
     afterScript compress_cmd
-
-    when:
-    params.do_frame_correction
 
     input:
     set 'consensus.fasta.gz', 'unused.db.fasta.gz', label from inframe_unique_out_2
@@ -399,6 +412,9 @@ if( params.do_frame_correction ) {
 
 process compute_copynumbers {
 
+    when:
+    params.do_pre_analysis
+
     tag { label }
 
     time params.slow_time
@@ -450,6 +466,9 @@ process compute_copynumbers {
 
 process merge_timepoints {
 
+    when:
+    params.do_pre_analysis
+
     publishDir params.results_dir, mode: params.publishMode
 
     afterScript compress_cmd
@@ -475,10 +494,14 @@ process merge_timepoints {
     """
 }
 
+
 /* ************************************************************************** */
 /* ALIGNMENT SUB-PIPELINE */
 
 process alignment_pipeline {
+
+    when:
+    params.do_pre_analysis
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -490,8 +513,7 @@ process alignment_pipeline {
     file 'hqcs.fasta.gz' from merged_hqcs_out
 
     output:
-    file 'msa.fasta.gz' into msa_out, msa_out_2
-    file 'msa.aa.fasta.gz' into msa_aa_out
+    file 'msa.fasta.gz' into alignment_output
 
     shell:
     '''
@@ -513,6 +535,12 @@ process alignment_pipeline {
 
 /* ************************************************************************** */
 /* ANALYSIS SUB-PIPELINE */
+
+if (!params.do_pre_analysis) {
+   alignment_output = Channel.value(params.msafile)
+}
+
+(msa_out, msa_out_2, msa_out_3) = alignment_output.separate(3) { a -> [a, a, a] }
 
 process dates_json_task {
 
@@ -734,6 +762,33 @@ process tree_json {
         json.dump(result, handle, separators=(",\\n", ":"))
     """
 }
+
+process translate_msa {
+
+    publishDir params.results_dir, mode: params.publishMode
+
+    time params.slow_time
+
+    afterScript compress_cmd
+
+    input:
+    file 'msa.fasta.gz' from msa_out_2
+
+    output:
+    file 'msa.aa.fasta.gz' into msa_aa_out
+
+    shell:
+    '''
+    zcat msa.fasta.gz > msa.fasta
+
+    !{params.python} !{workflow.projectDir}/flea/translate.py \
+      --gapped \
+      < msa.fasta > msa.aa.fasta
+
+    rm -f msa.fasta
+    '''
+}
+
 
 process js_divergence {
 
@@ -1091,8 +1146,8 @@ process combine_results {
 Channel.empty()
         .mix(
              ancestors_out,
-	     mrca_4,
-             msa_out_2,
+             mrca_4,
+             msa_out_3,
              rooted_tree_3,
              )
   .flatten()
