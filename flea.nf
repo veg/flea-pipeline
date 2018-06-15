@@ -196,8 +196,7 @@ process cluster {
 
 
 cluster_out
-  .phase (qcs_final_2) { it[1] }
-  .map { [ it[0][0], it[1][0], it[0][1] ] }
+  .join (qcs_final_2, by: 1)
   .set { consensus_input }
 
 
@@ -213,7 +212,7 @@ process consensus {
     time params.slow_time
 
     input:
-    set 'clusters.uc', 'qcs.fastq.gz', label from consensus_input
+    set label, 'clusters.uc', 'qcs.fastq.gz' from consensus_input
 
     output:
     set '*.clusters.consensus.fasta.gz', label into consensus_out
@@ -398,16 +397,13 @@ process frame_correction {
 // doesn't update the symlinks downstream.
 if( params.do_frame_correction ) {
     frame_correction_out
-      .phase (qcs_final_3) { it[1] }
-      .map { [ it[0][0], it[1][0], it[0][1] ] }
+      .join (qcs_final_3, by: 1)
       .set { compute_copynumbers_input }
 } else {
     inframe_unique_out_3
-      .phase (qcs_final_3) { it[-1] }
-      .map { [ it[0][1], it[1][0], it[0][2] ] }
+      .join (qcs_final_3, by: -1)
       .set { compute_copynumbers_input }
 }
-
 
 process compute_copynumbers {
 
@@ -419,7 +415,7 @@ process compute_copynumbers {
     time params.slow_time
 
     input:
-    set 'hqcs.fasta.gz', 'qcs.fastq.gz', label from compute_copynumbers_input
+    set label, 'hqcs.fasta.gz', 'qcs.fastq.gz' from compute_copynumbers_input
 
     output:
     file 'hqcs.filtered.fasta.gz' into hqcs_files
@@ -539,7 +535,7 @@ if (!params.do_pre_analysis) {
    alignment_output = Channel.value(params.msafile)
 }
 
-(msa_out_1, msa_out_2, msa_out_3, msa_out_4, msa_out_5, msa_out_6, msa_out_7, msa_out_8, msa_out_9) = alignment_output.separate(9) { a -> [a, a, a, a, a, a, a, a, a] }
+alignment_output.into{ msa_out_1; msa_out_2; msa_out_3; msa_out_4; msa_out_5; msa_out_6; msa_out_7; msa_out_8; msa_out_9 }
 
 process dates_json_task {
 
