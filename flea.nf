@@ -1168,16 +1168,20 @@ process combine_results {
     """
 }
 
-Channel.empty()
-        .mix(
-             ancestors_out,
-             mrca_4,
-             msa_out_8,
-             rooted_tree_3,
-             )
-  .flatten()
-  .collect()
-  .set { zip_inputs }
+if( params.do_analysis ) {
+  Channel.empty()
+    .mix(
+      ancestors_out,
+      mrca_4,
+      msa_out_8,
+      rooted_tree_3,
+    )
+    .flatten()
+    .collect()
+    .set { zip_inputs }
+} else {
+  zip_inputs = Channel.empty()
+}
 
 process zip_results {
     publishDir params.results_dir, mode: params.publishMode
