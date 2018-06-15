@@ -12,14 +12,13 @@ vim: syntax=groovy
 */
 
 
+// TODO: use afterScript for compress_cmd (wasn't working)
 // TODO: how launch with web ui and monitor progress
 // TODO: progressively retry with longer times, if there is a timeout
 // TODO: update tests
 // TODO: tune maxaccepts and maxrejects
 // TODO: combine all time points for inframe db for frame correction
 
-
-compress_cmd = """for i in `find . ! -type l | grep -E "\\.fasta\$|\\.fastq\$|\\.txt\$|\\.dst\$"`; do gzip "\$i" ; done"""
 
 params.infile = "$HOME/flea/data/P018/data/metadata"
 params.msafile = ""
@@ -47,6 +46,7 @@ infile
 
 input_channel = Channel.from(input_files)
 
+compress_cmd = """for i in `find . ! -type l | grep -E "\\.fasta\$|\\.fastq\$|\\.txt\$|\\.dst\$"`; do gzip "\$i" ; done"""
 
 /* ************************************************************************** */
 /* QUALITY SUB-PIPELINE */
@@ -76,8 +76,6 @@ process quality_pipeline {
     publishDir params.results_dir, mode: params.publishMode
 
     time params.slow_time
-
-    afterScript compress_cmd
 
     input:
     set 'ccs.fastq', label from input_channel
@@ -146,6 +144,8 @@ process quality_pipeline {
       length fastq fastq \
       !{minlen} !{maxlen} \
       < filtered.fastq > !{label}.qcs.fastq
+
+    !{compress_cmd}
     '''
 }
 
@@ -212,8 +212,6 @@ process consensus {
 
     time params.slow_time
 
-    afterScript compress_cmd
-
     input:
     set 'clusters.uc', 'qcs.fastq.gz', label from consensus_input
 
@@ -262,6 +260,8 @@ process consensus {
     fi
 
     rm -f qcs.fastq
+
+    !{compress_cmd}
     '''
 }
 
@@ -276,8 +276,6 @@ process inframe_unique_hqcs {
     params.do_pre_analysis
 
     publishDir params.results_dir, mode: params.publishMode
-
-    afterScript compress_cmd
 
     input:
     set 'consensus.fasta.gz', label from consensus_out
@@ -304,6 +302,8 @@ process inframe_unique_hqcs {
     cp consensus.fasta !{label}.consensus.fasta
 
     rm -f consensus.fasta
+
+    !{compress_cmd}
     '''
 }
 
@@ -320,8 +320,6 @@ process make_inframe_db {
 
     publishDir params.results_dir, mode: params.publishMode
 
-    afterScript compress_cmd
-
     input:
     file '*.consensus.unique.fasta.gz' from inframe_unique_dbs.collect()
 
@@ -331,6 +329,7 @@ process make_inframe_db {
     shell:
     '''
     zcat *.consensus.unique.fasta.gz > inframedb.fasta
+    !{compress_cmd}
     '''
 }
 
@@ -344,8 +343,6 @@ process frame_correction {
     publishDir params.results_dir, mode: params.publishMode
 
     time params.slow_time
-
-    afterScript compress_cmd
 
     input:
     set 'consensus.fasta.gz', 'unused.db.fasta.gz', label from inframe_unique_out_2
@@ -389,7 +386,9 @@ process frame_correction {
       --threads !{params.cpus}
 
     rm -f consensus.fasta
-    rm -f consensus.db.fasta
+    rm -f inframedb.fasta
+
+    !{compress_cmd}
     '''
 }
 
@@ -418,8 +417,6 @@ process compute_copynumbers {
     tag { label }
 
     time params.slow_time
-
-    afterScript compress_cmd
 
     input:
     set 'hqcs.fasta.gz', 'qcs.fastq.gz', label from compute_copynumbers_input
@@ -461,6 +458,7 @@ process compute_copynumbers {
       < hqcs.fasta > hqcs.filtered.fasta
 
     rm -f hqcs.fasta
+    !{compress_cmd}
     '''
 }
 
@@ -470,8 +468,6 @@ process merge_timepoints {
     params.do_pre_analysis
 
     publishDir params.results_dir, mode: params.publishMode
-
-    afterScript compress_cmd
 
     executor 'local'
     cpus 1
@@ -483,15 +479,18 @@ process merge_timepoints {
     output:
     file 'all_hqcs.fasta.gz' into merged_hqcs_out
 
-    """
+    shell:
+    '''
     zcat hqcs*.fastq.gz > merged_hqcs.fasta
     zcat copynumber*.txt.gz > merged_copynumbers.txt
 
     # add copynumbers to ids, for evo_history
-    ${params.python} ${workflow.projectDir}/flea/filter_fastx.py \
+    !{params.python} !{workflow.projectDir}/flea/filter_fastx.py \
       add_copynumber fasta fasta merged_copynumbers.txt \
       < merged_hqcs.fasta > all_hqcs.fasta
-    """
+
+    !{compress_cmd}
+    '''
 }
 
 
@@ -506,8 +505,6 @@ process alignment_pipeline {
     publishDir params.results_dir, mode: params.publishMode
 
     time params.slow_time
-
-    afterScript compress_cmd
 
     input:
     file 'hqcs.fasta.gz' from merged_hqcs_out
@@ -530,6 +527,8 @@ process alignment_pipeline {
       msa.aa.fasta hqcs.fasta msa.fasta
 
     rm -f hqcs.fasta
+
+    !{compress_cmd}
     '''
 }
 
@@ -540,7 +539,7 @@ if (!params.do_pre_analysis) {
    alignment_output = Channel.value(params.msafile)
 }
 
-(msa_out, msa_out_2, msa_out_3) = alignment_output.separate(3) { a -> [a, a, a] }
+(msa_out_1, msa_out_2, msa_out_3, msa_out_4, msa_out_5, msa_out_6, msa_out_7, msa_out_8, msa_out_9) = alignment_output.separate(9) { a -> [a, a, a, a, a, a, a, a, a] }
 
 process dates_json_task {
 
@@ -581,7 +580,7 @@ process copynumbers_json {
     params.do_analysis
 
     input:
-    file 'msa.fasta.gz' from msa_out
+    file 'msa.fasta.gz' from msa_out_1
 
     output:
     file 'copynumbers.json' into copynumbers_json_out
@@ -631,13 +630,11 @@ process mrca {
 
     time params.slow_time
 
-    afterScript compress_cmd
-
     when:
     params.do_analysis
 
     input:
-    file 'msa.fasta.gz' from msa_out
+    file 'msa.fasta.gz' from msa_out_2
     val oldest_label
 
     output:
@@ -662,6 +659,8 @@ process mrca {
 
     !{params.python} !{workflow.projectDir}/flea/translate.py --gapped \
       < mrca.fasta > mrca_translated.fasta
+
+    !{compress_cmd}
     '''
 }
 
@@ -676,7 +675,7 @@ process add_mrca {
 
     input:
     file 'mrca.fasta.gz' from mrca_1
-    file 'msa.fasta.gz' from msa_out
+    file 'msa.fasta.gz' from msa_out_3
 
     output:
     file 'msa_with_mrca.fasta.gz' into msa_with_mrca_1, msa_with_mrca_2
@@ -769,13 +768,11 @@ process translate_msa {
 
     time params.slow_time
 
-    afterScript compress_cmd
-
     input:
-    file 'msa.fasta.gz' from msa_out_2
+    file 'msa.fasta.gz' from msa_out_4
 
     output:
-    file 'msa.aa.fasta.gz' into msa_aa_out
+    file 'msa.aa.fasta.gz' into msa_aa_out_1, msa_aa_out_2, msa_aa_out_3
 
     shell:
     '''
@@ -786,6 +783,8 @@ process translate_msa {
       < msa.fasta > msa.aa.fasta
 
     rm -f msa.fasta
+
+    !{compress_cmd}
     '''
 }
 
@@ -800,7 +799,7 @@ process js_divergence {
     params.do_analysis
 
     input:
-    file 'msa.aa.fasta.gz' from msa_aa_out
+    file 'msa.aa.fasta.gz' from msa_aa_out_1
     file 'mrca.aa.fasta.gz' from mrca_translated_1
     file 'metadata' from metadata_3
 
@@ -824,27 +823,28 @@ process manifold_embedding {
 
     time params.slow_time
 
-    afterScript compress_cmd
-
     when:
     params.do_analysis
 
     input:
-    file 'msa.fasta.gz' from msa_out
+    file 'msa.fasta.gz' from msa_out_5
     file 'metadata' from metadata_4
 
     output:
     file 'manifold.json' into manifold_json_out
 
-    """
+    shell:
+    '''
     zcat msa.fasta.gz > msa.fasta
-    ${params.tn93} -t ${params.tn93_threshold} -o dmatrix.dst msa.fasta
+    !{params.tn93} -t !{params.tn93_threshold} -o dmatrix.dst msa.fasta
 
-    ${params.python} ${workflow.projectDir}/flea/manifold_embed.py \
+    !{params.python} !{workflow.projectDir}/flea/manifold_embed.py \
       --n-jobs 1 dmatrix.dst metadata manifold.json
 
     rm -f msa.fasta
-    """
+
+    !{compress_cmd}
+    '''
 }
 
 // TODO: avoid full paths
@@ -853,14 +853,12 @@ process reconstruct_ancestors {
 
     time params.slow_time
 
-    afterScript compress_cmd
-
     when:
     params.do_analysis
 
     input:
     file 'msa.fasta.gz' from msa_with_mrca_2
-    file 'msa.aa.fasta.gz' from msa_aa_out
+    file 'msa.aa.fasta.gz' from msa_aa_out_2
     file 'tree.rooted.txt' from rooted_tree_2
 
     output:
@@ -885,6 +883,8 @@ process reconstruct_ancestors {
     cat msa.aa.fasta ancestors.aa.fasta > 'msa.aa.ancestors.fasta'
 
     rm -f msa.fasta msa.aa.fasta
+
+    !{compress_cmd}
     '''
 }
 
@@ -949,10 +949,10 @@ process replace_stop_codons {
     params.do_analysis
 
     input:
-    file 'msa.fasta.gz' from msa_out
+    file 'msa.fasta.gz' from msa_out_6
 
     output:
-    file 'msa.no_stops.fasta.gz' into msa_no_stops
+    file 'msa.no_stops.fasta.gz' into msa_no_stops_1, msa_no_stops_2
 
     """
     zcat msa.fasta.gz |
@@ -968,7 +968,7 @@ process seq_dates {
     params.do_analysis
 
     input:
-    file 'msa.fasta.gz' from msa_out
+    file 'msa.fasta.gz' from msa_out_7
     file 'metadata' from metadata_6
 
     output:
@@ -1029,7 +1029,7 @@ process evo_history {
     params.do_analysis && params.do_evo_history
 
     input:
-    file 'msa.no_stops.fasta.gz' from msa_no_stops
+    file 'msa.no_stops.fasta.gz' from msa_no_stops_1
     file 'dates.json' from seq_dates_1
     file 'region_coords.json' from region_coords_json
 
@@ -1091,7 +1091,7 @@ process fubar {
     params.do_analysis && params.do_fubar
 
     input:
-    file 'msa.no_stops.fasta.gz' from msa_no_stops
+    file 'msa.no_stops.fasta.gz' from msa_no_stops_2
     file 'dates.json' from seq_dates_2
     file 'mrca.fasta.gz' from mrca_3
 
@@ -1147,7 +1147,7 @@ Channel.empty()
         .mix(
              ancestors_out,
              mrca_4,
-             msa_out_3,
+             msa_out_8,
              rooted_tree_3,
              )
   .flatten()
@@ -1188,13 +1188,11 @@ process diagnose {
 
     time params.crazy_time
 
-    afterScript compress_cmd
-
     input:
     file 'qcs*.fastq.gz' from qcs_final_4.map{ it[0] }.collect()
     file 'hqcs.fasta.gz' from merged_hqcs_out
-    file 'hqcs.msa.fasta.gz' from msa_out
-    file 'hqcs.msa.aa.fasta.gz' from msa_aa_out
+    file 'hqcs.msa.fasta.gz' from msa_out_9
+    file 'hqcs.msa.aa.fasta.gz' from msa_aa_out_3
 
     output:
     file 'diagnosis_results/*' into diagnosis_results
@@ -1258,5 +1256,7 @@ process diagnose {
       hqcs.msa.aa.fasta qcs.msa.aa.fasta diagnosis_results
 
     rm -f hqcs.msa.fasta hqcs.msa.aa.fasta hqcs.fasta
+
+    !{compress_cmd}
     '''
 }
