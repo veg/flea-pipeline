@@ -24,7 +24,7 @@ params.infile = "$HOME/flea/data/P018/data/metadata"
 params.msafile = ""
 params.results_dir = "results"
 
-params.do_pre_analysis = params.msafile == ""
+make_msa = params.msafile == ""
 
 // TODO: how to avoid duplicating?
 Channel.fromPath(params.infile)
@@ -71,7 +71,7 @@ process quality_pipeline {
     tag { label }
 
     when:
-    params.do_pre_analysis
+    make_msa
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -159,7 +159,7 @@ process cluster {
     tag { label }
 
     when:
-    params.do_pre_analysis
+    make_msa
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -205,7 +205,7 @@ process consensus {
     tag { label }
 
     when:
-    params.do_pre_analysis
+    make_msa
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -272,7 +272,7 @@ process inframe_unique_hqcs {
     tag { label }
 
     when:
-    params.do_pre_analysis
+    make_msa
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -315,7 +315,7 @@ inframe_unique_out_1
 process make_inframe_db {
 
     when:
-    params.do_pre_analysis && params.do_frame_correction
+    make_msa && params.do_frame_correction
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -335,7 +335,7 @@ process make_inframe_db {
 process frame_correction {
 
     when:
-    params.do_pre_analysis && params.do_frame_correction
+    make_msa && params.do_frame_correction
 
     tag { label }
 
@@ -395,6 +395,7 @@ process frame_correction {
 // NOTE: if previous steps are cached for both values of
 // `do_frame_correction`, changing the value of `do_frame_correction`
 // doesn't update the symlinks downstream.
+compute_copynumbers_input = Channel.create()
 if( params.do_frame_correction ) {
     frame_correction_out
       .join (qcs_final_3, by: 1)
@@ -408,7 +409,7 @@ if( params.do_frame_correction ) {
 process compute_copynumbers {
 
     when:
-    params.do_pre_analysis
+    make_msa
 
     tag { label }
 
@@ -461,7 +462,7 @@ process compute_copynumbers {
 process merge_timepoints {
 
     when:
-    params.do_pre_analysis
+    make_msa
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -496,7 +497,7 @@ process merge_timepoints {
 process alignment_pipeline {
 
     when:
-    params.do_pre_analysis
+    make_msa
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -531,11 +532,37 @@ process alignment_pipeline {
 /* ************************************************************************** */
 /* ANALYSIS SUB-PIPELINE */
 
-if (!params.do_pre_analysis) {
-   alignment_output = Channel.value(params.msafile)
+if( make_msa ) {
+  msa_file = Channel.value('not_used')
+} else {
+  msa_file = file(params.msafile)
 }
 
-alignment_output.into{ msa_out_1; msa_out_2; msa_out_3; msa_out_4; msa_out_5; msa_out_6; msa_out_7; msa_out_8; msa_out_9 }
+process gzip_msa {
+    executor 'local'
+    cpus 1
+
+    when:
+    !make_msa
+
+    input:
+    file 'msa.fasta' from msa_file
+
+    output:
+    file 'msa.fasta.gz' into gzipped_msa
+
+    """
+    gzip -c msa.fasta > msa.fasta.gz
+    """
+}
+
+msa_out = Channel.create()
+if( make_msa ) {
+  alignment_output.set{ msa_out }
+} else {
+  gzipped_msa.set{ msa_out }
+}
+msa_out.into{ msa_out_1; msa_out_2; msa_out_3; msa_out_4; msa_out_5; msa_out_6; msa_out_7; msa_out_8; msa_out_9 }
 
 process dates_json_task {
 
