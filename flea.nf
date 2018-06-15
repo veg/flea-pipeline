@@ -32,6 +32,7 @@ Channel.fromPath(params.infile)
 
 // read input metadata into tuples
 input_files = []
+visit_codes = []
 infile = file(params.infile)
 
 if( make_msa ) {
@@ -42,8 +43,17 @@ if( make_msa ) {
           tpfile = file(infile.parent / filename)
           mytuple = tuple(tpfile, timepoint_label)
           input_files.add(mytuple)
+	  visit_codes.add(timepoint_label)
       }
 }
+
+visit_codes_set = visit_codes as Set
+
+if(visit_codes.size() != visit_codes_set.size()) {
+  println "ERROR: visit codes must be unique"
+  System.exit(0)
+}
+
 
 input_channel = Channel.from(input_files)
 
