@@ -34,15 +34,16 @@ Channel.fromPath(params.infile)
 input_files = []
 infile = file(params.infile)
 
-infile
-    .readLines()
-    .each {
-        (filename, timepoint_label, date) = it.trim().split()
-        tpfile = file(infile.parent / filename)
-        mytuple = tuple(tpfile, timepoint_label)
-        input_files.add(mytuple)
-    }
-
+if( make_msa ) {
+  infile
+      .readLines()
+      .each {
+          (filename, timepoint_label, date) = it.trim().split()
+          tpfile = file(infile.parent / filename)
+          mytuple = tuple(tpfile, timepoint_label)
+          input_files.add(mytuple)
+      }
+}
 
 input_channel = Channel.from(input_files)
 
@@ -69,9 +70,6 @@ hmm_train_flag = (params.train_hmm ? '--train' : '')
 process quality_pipeline {
 
     tag { label }
-
-    when:
-    make_msa
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -158,9 +156,6 @@ process cluster {
 
     tag { label }
 
-    when:
-    make_msa
-
     publishDir params.results_dir, mode: params.publishMode
 
     time params.slow_time
@@ -203,9 +198,6 @@ cluster_out
 process consensus {
 
     tag { label }
-
-    when:
-    make_msa
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -271,9 +263,6 @@ process inframe_unique_hqcs {
 
     tag { label }
 
-    when:
-    make_msa
-
     publishDir params.results_dir, mode: params.publishMode
 
     input:
@@ -315,7 +304,7 @@ inframe_unique_out_1
 process make_inframe_db {
 
     when:
-    make_msa && params.do_frame_correction
+    params.do_frame_correction
 
     publishDir params.results_dir, mode: params.publishMode
 
@@ -335,7 +324,7 @@ process make_inframe_db {
 process frame_correction {
 
     when:
-    make_msa && params.do_frame_correction
+    params.do_frame_correction
 
     tag { label }
 
@@ -408,9 +397,6 @@ if( params.do_frame_correction ) {
 
 process compute_copynumbers {
 
-    when:
-    make_msa
-
     tag { label }
 
     time params.slow_time
@@ -461,9 +447,6 @@ process compute_copynumbers {
 
 process merge_timepoints {
 
-    when:
-    make_msa
-
     publishDir params.results_dir, mode: params.publishMode
 
     executor 'local'
@@ -495,9 +478,6 @@ process merge_timepoints {
 /* ALIGNMENT SUB-PIPELINE */
 
 process alignment_pipeline {
-
-    when:
-    make_msa
 
     publishDir params.results_dir, mode: params.publishMode
 
