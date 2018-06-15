@@ -762,7 +762,8 @@ process translate_msa {
 
     publishDir params.results_dir, mode: params.publishMode
 
-    time params.slow_time
+    when:
+    params.do_analysis
 
     input:
     file 'msa.fasta.gz' from msa_out_4
@@ -1123,6 +1124,9 @@ Channel.empty()
 process combine_results {
     publishDir params.results_dir, mode: params.publishMode
 
+    when:
+    params.do_analysis
+
     executor 'local'
     cpus 1
 
@@ -1150,6 +1154,9 @@ Channel.empty()
 
 process zip_results {
     publishDir params.results_dir, mode: params.publishMode
+
+    when:
+    params.do_analysis
 
     executor 'local'
     cpus 1
