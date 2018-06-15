@@ -1015,10 +1015,6 @@ process evo_history {
 
     publishDir params.results_dir, mode: params.publishMode
 
-    // need to make module command available on compute node
-    beforeScript params.module_script
-    module params.modules
-
     time params.slow_time
 
     when:
@@ -1034,6 +1030,9 @@ process evo_history {
 
     shell:
     '''
+    !{params.module_script}
+    module load !{params.modules}
+
     zcat msa.no_stops.fasta.gz > msa.no_stops.fasta
 
     !{params.hyphy} !{workflow.projectDir}/hyphy_scripts/obtainEvolutionaryHistory.bf \
@@ -1077,10 +1076,6 @@ process fubar {
 
     publishDir params.results_dir, mode: params.publishMode
 
-    // need to make module command available on compute node
-    beforeScript params.module_script
-    module params.modules
-
     time params.crazy_time
 
     when:
@@ -1096,6 +1091,9 @@ process fubar {
 
     shell:
     '''
+    !{params.module_script}
+    module load !{params.modules}
+
     zcat msa.no_stops.fasta.gz > msa.no_stops.fasta
     zcat mrca.fasta.gz > mrca.fasta
 
